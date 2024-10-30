@@ -26,19 +26,46 @@ Constants:
 """
 
 
-import concurrent
-from concurrent.futures import ThreadPoolExecutor
+
+"""
+This script is the main entry point for executing trading strategies using the provided configuration.
+Functions:
+    main(): Initializes MetaTrader 5, loads strategy configurations, schedules strategy execution, and manages the execution loop.
+    on_minute(): Executes trading strategies on every minute.
+    execute_strategy(): Executes a single strategy based on the current minute.
+Modules:   
+    strategy: Contains the Strategy class used for executing trading strategies.
+    schedule: Used for scheduling tasks at specific intervals.
+    time: Provides time-related functions.
+    datetime: Supplies classes for manipulating dates and times.
+    pandas: Provides data structures for working with data.
+    pprint: Provides pretty-printing of data structures.
+    concurrent: Provides support for asynchronous execution.
+    sys: Provides access to some variables used or maintained by the interpreter and to functions that interact strongly with the interpreter.
+    os: Provides a way of using operating system dependent functionality.
+    constants: Contains constants used throughout the project.
+    symbols: Contains the Symbol class used for storing symbol data.
+    utils: Contains utility functions used throughout the project.
+    Pyro5: Provides a way to create remote objects in Python - used for initializing the TradingPlatform class.
+Constants:
+    run_mode (list): Specifies the modes in which the trading strategies can run, either 'live' or 'demo'.
+    cores (int): Number of cores to use for parallel processing.
+    strategy_timeout (int): Time limit in seconds for executing a strategy.
+    pytest_count (int): Number of times the pytest module has been run.
+"""
+
+
 import schedule
 import time
 import pandas as pd
 
 
 from .strategy import Strategy
-from .utils import (write_balance_performance_file, TradeHour, is_new_bar, BarsTFs, TimeBar,
-                    wait_for_new_minute, catch_i_times_with_s_seconds_delay, print_hashtaged_msg)
+from .utils import (write_balance_performance_file, TradeHour, is_new_bar, TimeBar,
+                    wait_for_new_minute, print_hashtaged_msg)
 from .symbols import Symbol, Timeframe
 
-from .mt5_client import account_info, shutdown
+from .mt5_client import account_info, shutdown, last_error
 
 
 
@@ -68,19 +95,21 @@ def on_minute(strategies, trade_hour,time_bar, symbols, account_info_dict):
     # Fetch rates for all symbols and timeframes - the metho will only update the rates if a new bar has started
     time_bar.update_tf_bar()
     Timeframe.fetch_new_bar_rates(symbols ,time_bar) # Fetch new bar rates for all symbols and all *new* timeframes
-    account_info = account_info()
+    account_info_dict = account_info()
+
 
     # Check if a new hour has started - if so, start new hour logic
     new_hour = trade_hour.is_new_hour()
     if new_hour:
         print(f"New hour: {trade_hour.current_hour}, day: {trade_hour.current_day}")
-        account_info = account_info()
+        account_info_dict = account_info()
         
         if account_info is not None:
             write_balance_performance_file(account_info_dict)
         # failed to get account info
         else:
             print_hashtaged_msg(3, "Failed to get account info", "Failed to get account info, error code =", last_error())
+    
     def execute_strategy(strategy, symbols, time_bar, new_hour, account_info_dict):
         if is_new_bar(strategy.timeframe, time_bar):
             print(f"New bar detected for strategy:{strategy.strategy_num}-{strategy.strategy_name} strategy timeframe: {strategy.str_timeframe}")
@@ -90,23 +119,12 @@ def on_minute(strategies, trade_hour,time_bar, symbols, account_info_dict):
         if new_hour:
             strategy.write_strategy_performance_file(account_info_dict)
 
-    # Implement parallel execution for strategies
-    with ThreadPoolExecutor(max_workers=cores) as executor:
-        futures = [executor.submit(execute_strategy, strategy, symbols, time_bar, new_hour, account_info_dict) for strategy in strategies.values()]
-        for future in futures:
-            try:
-                #TODO: return the timeout to 50 seconds
-                future.result(timeout=strategy_timeout)  # Wait for all futures to complete with a timeout of under 1 minute
-            except concurrent.futures.TimeoutError:
-                print("A strategy execution timed out.")
+    [execute_strategy(strategy, symbols, time_bar, new_hour, account_info_dict) for strategy in strategies.values()]
+
     if time_bar.check_last_minute_of_hour():
         print_hashtaged_msg(5, "on_minute", "Last minute of the hour, waiting for new hour to start...")
         wait_for_new_minute(time_bar) # Rebalance once an hour - Make sure that each run of on_minute is at the start of a new minute
         on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict) # Run once immediately (at the start of the new hour)
-
-
-
-
 
 
 
@@ -119,8 +137,7 @@ def main():
     print_hashtaged_msg(1, "Initializing MST50", "Initializing MST50...")
     # Initialize MetaTrader 5 connection, strategies, and symbols
     #TODO: redo the initialization of the MT5 connection using Pyro5
-    mt5_server = Pyro5.api.Proxy("PYRO:trading.platform.MT5Server@localhost:9090")
-    mt5 = mt5_server.initialize_mt5()
+    #initialize_mt5()
     strategies = Strategy.initialize_strategies(run_mode)
     symbols = Symbol.initialize_symbols(strategies)
 
@@ -141,7 +158,7 @@ def main():
     ############################################
    # wait_for_new_minute(time_bar) # Make sure that each run of on_minute is at the start of a new minute
     on_minute(strategies, trade_hour,time_bar, symbols, account_info_dict) # Run once immediately
-    schedule.every(1).minutes.do(on_minute,mt5 = mt5, strategies=strategies, trade_hour=trade_hour, time_bar=time_bar, symbols=symbols, account_info_dict=account_info_dict)
+    schedule.every(1).minutes.do(on_minute, strategies=strategies, trade_hour=trade_hour, time_bar=time_bar, symbols=symbols, account_info_dict=account_info_dict)
 
     print_hashtaged_msg(1, "Initialization Complete", "All initializations completed successfully., waiting for new minute to start executing strategies...")
     # run: execute strategies

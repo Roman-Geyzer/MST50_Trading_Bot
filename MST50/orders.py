@@ -133,8 +133,8 @@ def get_trade_direction(trade_type):
         raise ValueError(f"Invalid trade type: {trade_type}")
 
 def calculate_sl_tp(price, direction,sl_method, sl_param, tp_method, tp_param, symbol):
-    symbol_info = symbol_info(symbol)
-    point = symbol_info.point
+    symbol_i = symbol_info(symbol)
+    point = symbol_i['point']
 
     sl = calculate_sl(price, direction, sl_method, sl_param, symbol, point)
     if tp_method == 'UseRR_TP':

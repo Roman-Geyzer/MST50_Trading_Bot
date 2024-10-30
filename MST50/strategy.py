@@ -17,8 +17,8 @@ from .candles import CandlePatterns
 from .plotting import plot_bars
 
 from .mt5_client import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, 
-                         positions_get, order_send, order_modify, symbol_info_tick, symbol_info, copy_rates,
-                         history_deals_get) 
+                         positions_get, order_send, symbol_info_tick, symbol_info, copy_rates,
+                         history_deals_get, symbol_select, last_error) 
 
 class Strategy:
     """
@@ -507,10 +507,10 @@ class Strategy:
         """
         #TODO: update this method to use the correct parameters (using dict in orders.py)
         # this is true for market
-        if direction == TRADE_DIRECTION.BUY.value:
-            return symbol_info_tick(symbol).ask
-        elif direction == TRADE_DIRECTION.SELL.value:
-            return symbol_info_tick(symbol).bid
+        if direction == TRADE_DIRECTION.BUY:
+            return symbol_info_tick(symbol)['ask']
+        elif direction == TRADE_DIRECTION.SELL:
+            return symbol_info_tick(symbol)['bid']
         else:
             raise ValueError("Invalid trade direction")
 
@@ -525,13 +525,13 @@ class Strategy:
             direction Either DIRECTION_BUY or DIRECTION_SELL.
         """
         # Get symbol info
-        symbol_info = symbol_info(symbol)
-        if symbol_info is None:
+        symbol_i = symbol_info(symbol)
+        if symbol_i is None:
             print(f"Symbol {symbol} not found")
             return
 
         # Ensure the symbol is visible in Market Watch
-        if not symbol_info.visible:
+        if not symbol_i['visible']:
             if not symbol_select(symbol, True):
                 print(f"Failed to select symbol {symbol}")
                 return
