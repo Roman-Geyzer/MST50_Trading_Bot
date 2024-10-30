@@ -84,14 +84,21 @@ class Strategy:
 
         self.sl_method = strategy_config['sl_method']
         self.sl_param = strategy_config['sl_param']
+        if self.sl_method in {'UseCandels_SL'}:
+            self.sl_param = int(self.sl_param)
 
         self.tp_method = strategy_config['tp_method']
         self.tp_param = strategy_config['tp_param']
+        if self.tp_method in {'UseCandels_TP'}:
+            self.tp_param = int(self.tp_param)
 
         self.exit_params = strategy_config.get('exit_params', {})
 
         self.trail_method = strategy_config['trail_method']
         self.trail_param = strategy_config['trail_param']
+        if self.trail_method in {'UseCandels_Trail'}:
+            self.trail_param = int(self.trail_param)
+        self.trail_both_directions = strategy_config['trail_both_directions']
         self.trail_enabled = self.check_trail_active()
 
 
@@ -436,6 +443,8 @@ class Strategy:
             request["position"] = ticket
         else: # open trade
             request['magic'] = magic_num
+            request["sl"] = sl
+            request["tp"] = tp
             if trade_data['action'] == TRADE_ACTIONS['PENDING']:
                 request["type_time"] = ORDER_TIME['GTC']
                 request["expiration"] = get_future_time(symbol, self.timeframe, time.now(), self.trade_limit_order_expiration_bars)        #TimeCurrent(dt_struct) + PendingOrdersExpirationBars * PeriodSeconds(0);
@@ -510,8 +519,7 @@ class Strategy:
         returns:
             prict (float): The current price for the symbol.
         """
-        #TODO: update this method to use the correct parameters (using dict in orders.py)
-        # this is true for market
+
         if direction == TRADE_DIRECTION.BUY or direction == TRADE_DIRECTION.BUY.value:
             return symbol_info_tick(symbol)['ask']
         elif direction == TRADE_DIRECTION.SELL or direction == TRADE_DIRECTION.SELL.value:
@@ -519,7 +527,6 @@ class Strategy:
         else:
             raise ValueError("Invalid trade direction")
 
-    #TODOadd trade method and implement it
     #TODO: add indicator trade data and implement logic when and how to use it
     def place_order(self, direction, symbol):
         """
@@ -648,14 +655,10 @@ class Strategy:
                 self.document_closed_trade(trade_id)
                 continue
 
-            position = position[0]
-            current_price = position.price_current
-            direction = position.type  # BUY or SELL
-
             self.monitor_open_trade(symbol, rates_df, trade_id, position)
 
 
-    def monitor_open_trade(self, symbol, rates_df, trade_id, position):
+    def monitor_open_trade(self, symbol_str, rates_df, trade_id, position):
         """
         Monitor single open trade and update its Stop Loss (SL) and Take Profit (TP) based on trailing strategies.
         Parameters:
@@ -663,18 +666,18 @@ class Strategy:
             rates_df (pd.DataFrame): DataFrame containing historical rates.
         """
         # TODO: update after updating the calculate_trail
-        price = position.price_current
-        direction = position.type  # BUY or SELL
-        trail_method = self.trade_method
-        trail_param = self.trail_param
-        point = symbol_info(symbol).point
-        new_sl, new_tp = calculate_trail(price, direction, trail_method,trail_param, symbol, point)
-        if new_sl or new_tp:
-            self.update_trade(trade_id = trade_id, position = position, new_sl=new_sl, new_tp=new_tp)
+        price = position['price_current']
+        current_sl = position['sl']
+        direction = position['type']  # BUY or SELL
+        point = symbol_info(symbol_str)['point']
+        print_with_info(f"self.trail_method: {self.trail_method}, self.trail_param: {self.trail_param}")
+        new_sl = calculate_trail(price, current_sl, self.trail_both_directions, direction, self.trail_method, self.trail_param, symbol_str, point, rates_df)
+        if new_sl:
+            self.update_trade(trade_id = trade_id, position = position, new_sl=new_sl)
 
 
 
-    def update_trade(self, trade_id, position, new_sl=None, new_tp=None):
+    def update_trade(self, trade_id, position, new_sl=None):
         """
         Update an open trade's SL and/or TP.
         
@@ -691,7 +694,7 @@ class Strategy:
             "symbol": symbol,
             "position": trade_id,
             "sl": new_sl if new_sl is not None else position.sl,
-            "tp": new_tp if new_tp is not None else position.tp,
+            "tp": position.tp,
             "magic": position.magic,
             "comment": f"Modify SL/TP by strategy {self.strategy_num}",
         }
@@ -705,7 +708,7 @@ class Strategy:
         if result['retcode'] != TRADE_ACTIONS['DONE']:
             print_hashtaged_msg(1, f"Failed to update trade {trade_id}. Retcode: {result['retcode']}")
         else:
-            print(f"Successfully updated trade {trade_id}. New SL: {new_sl}, New TP: {new_tp}")
+            print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
 
     def get_total_open_trades(self, symbol):
         """

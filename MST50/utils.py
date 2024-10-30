@@ -411,6 +411,7 @@ def load_config(file_namd_path = "Z:\Desktop\Fulfillment\Forex - Algo trading\Py
             'sl_param': safe_float_convert(row['sl_param']),
             'trail_method': row['trail_method'],
             'trail_param': safe_float_convert(row['trail_param']),
+            'trail_both_directions': str_to_bool(row['trail_both_directions']),
             'tp_method': row['tp_method'],
             'tp_param': safe_float_convert(row['tp_param']),
             'indicator': row['indicator'],

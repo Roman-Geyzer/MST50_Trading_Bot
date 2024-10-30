@@ -30,7 +30,7 @@ from .mt5_client import (TIMEFRAMES, ORDER_TYPES, TRADE_ACTIONS, ORDER_TIME,
                         symbol_info, symbol_info_tick, account_info)
 from .constants import TRADE_DIRECTION
 import time
-
+from .utils import print_with_info
 
 
 
@@ -379,7 +379,23 @@ old gpt code:
 
 """
 
-def calculate_trail(price, direction, trail_method, trail_param, symbol, point):
+def check_trail_conditions(current_price, direction, trail_price,current_sl, both_sides_trail):
+    price_to_compare = current_price
+    if direction == TRADE_DIRECTION.BUY: 
+        if both_sides_trail:
+            price_to_compare = current_sl
+        if price_to_compare > trail_price:
+            return trail_price
+        return None # no change to SL
+    if direction == TRADE_DIRECTION.SELL:
+        if both_sides_trail:
+            price_to_compare = current_sl
+        if price_to_compare < trail_price:
+            return trail_price
+        return None
+    return None
+
+def calculate_trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
     """
     Calculate the trailing stop price using trail_method based on the given parameters.
     Args:
@@ -392,6 +408,7 @@ def calculate_trail(price, direction, trail_method, trail_param, symbol, point):
     Returns:
         float: Calculated trailing stop price.
     """
+    print_with_info(f"Calculating trailing stop using method: {trail_method}", levels_up=2)
     # Look up the trail method function based on the method name
     trail_method = trail_methods.get(trail_method)
     if trail_method is None:
@@ -399,9 +416,9 @@ def calculate_trail(price, direction, trail_method, trail_param, symbol, point):
     
     #TODO: this need more work, maybe send the position object to the trail method instead of price and direction
     # Call the trail method function with the provided parameters
-    return trail_method(price, direction, trail_param, symbol, point)
+    return trail_method(price,current_sl,both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df)
 
-def UsePerc_Trail(price, direction, trail_param, symbol, point):
+def UsePerc_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
     if direction == TRADE_DIRECTION.BUY: 
         trail = price - trail_param * point
     elif direction == TRADE_DIRECTION.SELL:
@@ -410,26 +427,23 @@ def UsePerc_Trail(price, direction, trail_param, symbol, point):
         raise ValueError(f"Invalid trade direction: {direction}")
     return trail
 
-def UseCandels_Trail(price, direction, trail_param, symbol, point):
+def UseCandels_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
+    trail_price = rates_df.iloc[-trail_param]['close']
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    
+
+def UseSR_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
     pass
 
-def UseSR_Trail(price, direction, trail_param, symbol, point):
+def UseTrend_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
     pass
 
-def UseTrend_Trail(price, direction, trail_param, symbol, point):
+def UseMA_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
     pass
 
-def UseMA_Trail(price, direction, trail_param, symbol, point):
-    pass
-
-def UseFixed_Trail(price, direction, trail_param, symbol, point):
-    if direction == TRADE_DIRECTION.BUY: 
-        trail = price - trail_param * point
-    elif direction == TRADE_DIRECTION.SELL:
-        trail = price + trail_param * point
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return trail
+def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
+    trail_price = price - trail_param * point
+    return check_trail_conditions(price, direction, trail_price,current_sl, both_sides_trail)
 
 trail_methods = {
     'UsePerc_Trail': UsePerc_Trail,
