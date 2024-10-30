@@ -17,6 +17,7 @@ ORDER_TYPES = constants['ORDER_TYPES']
 TRADE_ACTIONS = constants['TRADE_ACTIONS']
 ORDER_TIME = constants['ORDER_TIME']
 ORDER_FILLING = constants['ORDER_FILLING']
+TRADE_RETCODES = constants['TRADE_RETCODES']
 
 # Define the data types for the structured array
 dtype = [
@@ -55,6 +56,8 @@ def positions_get(ticket=None):
     positions_list = mt5_server.positions_get(ticket)
     if positions_list is None:
         return None
+    if ticket is not None:
+        return positions_list[0] # Dictionary with native types
     return positions_list  # List of dictionaries with native types
 
 def symbol_info_tick(symbol):

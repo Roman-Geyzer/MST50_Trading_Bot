@@ -4,12 +4,13 @@ plotting.py module defines functions for plotting charts using OHLC data from a 
 """
 
 import pandas as pd
+import os
 import plotly.graph_objects as go
-import kaleido # Required for static image export
 from datetime import datetime
 from .symbols import Timeframe
+from .utils import print_with_info
 
-def plot_bars(timeframe_obj, trades=None, show=True, save_path=None):
+def plot_bars(timeframe_obj, trades=None, show=True, save_path=None, msg = None):
     """
     Plots the bar chart using OHLC data from a Timeframe instance and annotates trades if provided.
 
@@ -22,9 +23,9 @@ def plot_bars(timeframe_obj, trades=None, show=True, save_path=None):
     # Extract rates DataFrame, symbol, and timeframe from the Timeframe instance
     rates_df = timeframe_obj.get_rates()
     symbol = timeframe_obj.get_symbol_str()
-    timeframe_str = timeframe_obj.get_timeframe_str()
+    timeframe_str = timeframe_obj.get_tf_str()
     if rates_df is None or len(rates_df) == 0:
-        print(f"No rates data available for {symbol}, {timeframe_str}.")
+        print_with_info(f"No rates data available for {symbol}, {timeframe_str}.")
         return
 
     # Prepare the DataFrame
@@ -74,11 +75,34 @@ def plot_bars(timeframe_obj, trades=None, show=True, save_path=None):
         yaxis_title='Price',
         xaxis_title='Date',
         xaxis_rangeslider_visible=False,
-        template='plotly_dark'  # You can choose different templates like 'plotly', 'ggplot2', etc.
-    )
+        template='plotly_dark',  # You can choose different templates like 'plotly', 'ggplot2', etc.
+        )
+    if msg:
+        fig.add_annotation(
+                xref="paper", yref="paper",
+                x=0.5, y=0.5,
+                text=msg,
+                showarrow=False,
+                font=dict(
+                    family="Courier New, monospace",
+                    size=16,
+                    color="white"
+                ),
+                align="center",
+                bordercolor="black",
+                borderwidth=2,
+                borderpad=4,
+                bgcolor="black",
+                opacity=0.8
+            )
+        
+
 
     # Save or Show
     if save_path:
+        save_dir = os.path.dirname(save_path)
+        if save_dir and not os.path.exists(save_dir):
+            os.makedirs(save_dir)
         # Plotly can save as HTML or static images (requires additional packages)
         if save_path.endswith('.html'):
             fig.write_html(save_path)

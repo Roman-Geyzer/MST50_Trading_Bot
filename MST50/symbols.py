@@ -1,10 +1,8 @@
 # symbols.py
 
 import pandas as pd
-import time
 from datetime import datetime
 from .utils import TimeBar, get_timeframe_string, attempt_i_times_with_s_seconds_delay, print_hashtaged_msg
-from .constants import BarsTFs
 from .mt5_client import TIMEFRAMES, copy_rates_from_pos
 
 class Symbol:
@@ -12,7 +10,7 @@ class Symbol:
     Class for storing symbol data.
     """
     def __init__(self, symbol, timeframes, strategies):
-        self.symbol = symbol
+        self.symbol_str = symbol
         self.M1 = None
         self.M5 = None
         self.M15 = None
@@ -22,36 +20,36 @@ class Symbol:
         self.D1 = None
         self.W1 = None
         if TIMEFRAMES['M1'] in timeframes:
-            self.M1 = Timeframe(TIMEFRAMES['M1'], self.symbol, strategies)
+            self.M1 = Timeframe(TIMEFRAMES['M1'],self, self.symbol_str, strategies)
         if TIMEFRAMES['M5'] in timeframes:
-            self.M5 = Timeframe(TIMEFRAMES['M5'], self.symbol, strategies)
+            self.M5 = Timeframe(TIMEFRAMES['M5'],self, self.symbol_str, strategies)
         if TIMEFRAMES['M15'] in timeframes:
-            self.M15 = Timeframe(TIMEFRAMES['M15'], self.symbol, strategies)
+            self.M15 = Timeframe(TIMEFRAMES['M15'],self, self.symbol_str, strategies)
         if TIMEFRAMES['M30'] in timeframes:
-            self.M30 = Timeframe(TIMEFRAMES['M30'], self.symbol, strategies)
+            self.M30 = Timeframe(TIMEFRAMES['M30'],self, self.symbol_str, strategies)
         if TIMEFRAMES['H1'] in timeframes:
-            self.H1 = Timeframe(TIMEFRAMES['H1'], self.symbol, strategies)
+            self.H1 = Timeframe(TIMEFRAMES['H1'],self, self.symbol_str, strategies)
         if TIMEFRAMES['H4'] in timeframes:
-            self.H4 = Timeframe(TIMEFRAMES['H4'], self.symbol, strategies)
+            self.H4 = Timeframe(TIMEFRAMES['H4'],self, self.symbol_str, strategies)
         if TIMEFRAMES['D1'] in timeframes:
-            self.D1 = Timeframe(TIMEFRAMES['D1'], self.symbol, strategies)
+            self.D1 = Timeframe(TIMEFRAMES['D1'],self, self.symbol_str, strategies)
         if TIMEFRAMES['W1'] in timeframes:
-            self.W1 = Timeframe(TIMEFRAMES['W1'], self.symbol, strategies)
+            self.W1 = Timeframe(TIMEFRAMES['W1'],self, self.symbol_str, strategies)
 
     def __repr__(self):
-        return f"Symbol({self.symbol}), M1: {self.M1}, M5: {self.M5}, M15: {self.M15}, M30: {self.M30}, H1: {self.H1}, H4: {self.H4}, D1: {self.D1}, W1: {self.W1}"
+        return f"Symbol({self.symbol_str}), M1: {self.M1}, M5: {self.M5}, M15: {self.M15}, M30: {self.M30}, H1: {self.H1}, H4: {self.H4}, D1: {self.D1}, W1: {self.W1}"
 
     def __str__(self):
-        return f"Symbol({self.symbol}), M1: {self.M1}, M5: {self.M5}, M15: {self.M15}, M30: {self.M30}, H1: {self.H1}, H4: {self.H4}, D1: {self.D1}, W1: {self.W1}"
+        return f"Symbol({self.symbol_str}), M1: {self.M1}, M5: {self.M5}, M15: {self.M15}, M30: {self.M30}, H1: {self.H1}, H4: {self.H4}, D1: {self.D1}, W1: {self.W1}"
     
     def __eq__(self, other):
-        return self.symbol == other.symbol
+        return self.symbol_str == other.symbol_str
     
     def __hash__(self):
-        return hash(self.symbol)
+        return hash(self.symbol_str)
     
     def get_symbol_str(self):
-        return self.symbol
+        return self.symbol_str
 
     @staticmethod
     def initialize_symbols(strategies):
@@ -115,18 +113,30 @@ class Symbol:
         """
         timeframe = get_timeframe_string(timeframe)
         return getattr(self, timeframe, None).rates_error_flag
+    
+    def get_tf_obj(self, timeframe):
+        """
+        Get rates for a specific timeframe.
+        Args:
+            timeframe (str): Timeframe to get rates for.
+        Returns:
+            DataFrame: DataFrame containing rates for the symbol and timeframe.
+        """
+        timeframe = get_timeframe_string(timeframe)
+        return getattr(self, timeframe, None)
 
 
 class Timeframe:
     """
     Class for storing timeframe data.
     """
-    def __init__(self, timeframe, symbol, strategies):
+    def __init__(self, timeframe, symbol,symbol_str, strategies):
         self.timeframe = timeframe
         self.symbol = symbol # Symbol object
-        self.length = self.calculate_tr_length(symbol, strategies)
+        self.symbol_str = symbol_str
+        self.length = self.calculate_tr_length(self.symbol_str, strategies)
         self.rates_error_flag = True
-        self.rates = self.fetch_rates(symbol) # DF of historical rates for the symbol and timeframe
+        self.rates = self.fetch_rates(symbol_str) # DF of historical rates for the symbol and timeframe
 
     def __repr__(self):
         return f"Timeframe({self.timeframe})"
@@ -143,10 +153,10 @@ class Timeframe:
     def fetch_rates(self, symbol):
         pass
     
-    def calculate_tr_length(self, symbol, strategies):
+    def calculate_tr_length(self, symbol_str, strategies):
         timeframe_length_in_strategies = [2]
         for strategy in strategies.values():
-            if symbol in strategy.symbols:
+            if symbol_str in strategy.symbols:
                 config = strategy.config
                 if self.timeframe == strategy.timeframe:
                     timeframe_length_in_strategies.append(strategy.sl_param)
@@ -189,7 +199,8 @@ class Timeframe:
             print_hashtaged_msg(3, f"Failed to get rates for symbol: {symbol}, timeframe {tf}, length {length}")
             return None
         self.rates_error_flag = False
-        return rates
+        rates_df = pd.DataFrame(rates, columns=['time', 'open', 'high', 'low', 'close', 'tick_volume', 'spread', 'real_volume'])
+        return rates_df
 
     @staticmethod
     def fetch_new_bar_rates(symbols, timebar: TimeBar):
@@ -208,7 +219,7 @@ class Timeframe:
             for tf in time_frames_list:
                 tf_obj = getattr(symbol, tf, None)
                 if tf_obj is not None and time_frames_list.index(tf) < time_frames_list.index(timebar.current_bar):
-                    tf_obj.rates = tf_obj.fetch_rates(symbol.symbol)
+                    tf_obj.rates = tf_obj.fetch_rates(symbol.symbol_str)
 
 
     def get_rates(self):
@@ -218,4 +229,4 @@ class Timeframe:
         return get_timeframe_string(self.timeframe)
     
     def get_symbol_str(self):
-        return self.symbol.get_symbol_str()
+        return self.symbol_str

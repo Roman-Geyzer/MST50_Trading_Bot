@@ -29,7 +29,9 @@ Functions:
 """
 
 import pandas as pd
-import os
+import inspect
+
+
 from .constants import (magic_number_base, performance_file, TIMEFRAME_MAGIC_NUMBER_MAPPING,
                        SYMBOL_MAGIC_NUMBER_MAPPING, TIMEFRAME_MT5_MAPPING, TIMEFRAME_STRING_MAPPING,
                        BarsTFs)
@@ -37,7 +39,6 @@ from datetime import datetime
 import time
 from .mt5_client import TIMEFRAMES, copy_rates_from
 import math
-from decimal import Decimal
 
 
 
@@ -485,8 +486,6 @@ def write_balance_performance_file(account_info_dict):
 
 
 
-
-
 def wait_for_new_minute(time_bar):
     """
     Wait for a new minute to start based on the TimeBar object.
@@ -498,6 +497,41 @@ def wait_for_new_minute(time_bar):
         pass
     else:
         print("New minute started.")
+
+
+
+
+def print_with_info(*args, levels_up=1, **kwargs):
+    """
+    Prints information about the call stack up to 'levels_up' levels.
+
+    Parameters:
+        *args: Variable length argument list to be printed after the stack info.
+        levels_up (int): Number of levels up the stack to print info for. Default is 1.
+        **kwargs: Arbitrary keyword arguments to be printed after the stack info.
+    """
+    frame = inspect.currentframe().f_back  # Start with the caller's frame
+    collected_info = []
+    
+    for level in range(1, levels_up + 1):
+        if frame:
+            module = frame.f_globals.get('__name__', '<unknown module>')
+            lineno = frame.f_lineno
+            collected_info.append(f"Level {level}: {module} : Line {lineno}")
+            frame = frame.f_back  # Move up the stack
+        else:
+            collected_info.append(f"Level {level}: <No further stack frames>")
+    
+    border = "*" * 100
+    separator = "-" * 100
+    print(border)
+    for info in collected_info:
+        print(info)
+        print(separator)
+    if args or kwargs:
+        print(*args, **kwargs)
+    print(border)
+
 
 
 def attempt_i_times_with_s_seconds_delay(i, s, loop_error_msg, func_check_func, func, args_tuple):
@@ -561,6 +595,7 @@ def print_hashtags():
 
 def print_hashtaged_msg(hashed_lines, *args):
     print("\n")
+    print_with_info(*args, levels_up=2)
     for _ in range(hashed_lines):
         print_hashtags()
     print_current_time()

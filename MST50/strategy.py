@@ -7,16 +7,16 @@ import time
 import os
 
 # Import utility functions and constants
-from .utils import (load_config, calculate_history_length, get_mt5_timeframe, get_final_magic_number, get_timeframe_string,
-                    print_current_time, print_hashtaged_msg, attempt_i_times_with_s_seconds_delay, get_future_time)
-from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_data, get_trade_direction, mt5_position_to_dict
+from .utils import (load_config,  get_final_magic_number, get_timeframe_string, print_with_info,
+                    print_hashtaged_msg, attempt_i_times_with_s_seconds_delay, get_future_time)
+from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_data, get_trade_direction
 from .indicators import Indicators
 from .constants import DEVIATION, TRADE_DIRECTION
 from .signals import RSISignal
 from .candles import CandlePatterns
 from .plotting import plot_bars
 
-from .mt5_client import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, 
+from .mt5_client import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
                          positions_get, order_send, symbol_info_tick, symbol_info, copy_rates,
                          history_deals_get, symbol_select, last_error) 
 
@@ -153,9 +153,8 @@ class Strategy:
             return open_trades
         compare_magic = self.magic_num // 1000
         for position in all_positions:
-            position_dict = position._asdict()  # Convert named tuple to dictionary
-            if position_dict['magic'] // 1000 == compare_magic:
-                open_trades[position_dict['ticket']] = position_dict
+            if position['magic'] // 1000 == compare_magic:
+                open_trades[position['ticket']] = position
         return open_trades
 
 
@@ -241,7 +240,8 @@ class Strategy:
             trade_id (int): The ticket number of the trade.
             trade_info (dict): Information about the trade.
         """
-        trade_info = history_deals_get(position=trade_id)
+        pass
+        #trade_info = history_deals_get(position=trade_id)
         #TODO: implement error handling and logging if trade_info is None
         #TODO: implement logic to document closed trades
 
@@ -269,7 +269,6 @@ class Strategy:
         This method writes the strategy's performance metrics to a file for tracking and analysis.
         """
         #TODO: Implement logic to write strategy performance to a file
-        print("Writing strategy performance to file")
 
     def check_trading_filters(self, symbol, rates_df):
         """
@@ -365,7 +364,13 @@ class Strategy:
         # Check the RSI signal before making a trade
         if not self.rsi_signal.check_rsi_signal(rsi_values[-1],final_decision): 
             return  # No trade if RSI filter fails
-        print(f"Final decision for {stra_symbol} is {final_decision}")
+        
+        msg = f"Final decision for {stra_symbol} is {final_decision}"
+        print_with_info(msg)
+        if final_decision == 'none':
+            print_hashtaged_msg(1, f"No trade decision for {stra_symbol}")
+            print(f"current_tf_candle_decision: {current_tf_candle_decision}")
+
         if final_decision == 'buy' and self.tradeP_long:
             self.close_all_trades(TRADE_DIRECTION.SELL, stra_symbol)
             if self.get_total_open_trades(stra_symbol) < self.config['tradeP_max_trades']: # Check if max trades reached
@@ -380,23 +385,19 @@ class Strategy:
         Close all trades in a specified direction for a given symbol.
         -1 for sell trades, 1 for buy trades, 0 for all trades.
         """
-        print_hashtaged_msg(1, f"Closing all {direction} trades for {symbol}")
+        print_with_info( f"Closing all {direction} trades for {symbol}",levels_up=2)
         trades = [trade for trade in self.open_trades.values() if trade['symbol'] == symbol]
         if trades is None:
             return
         for trade in trades:
             position = positions_get(ticket=trade['ticket'])
-            position = mt5_position_to_dict(position)
             if position is None:
                 print_hashtaged_msg(1, f"Trade {trade['ticket']} no longer exists in MT5.")
                 self.document_closed_trade(self.open_trades.pop(trade['ticket']))
                 continue
             position_direction = get_trade_direction(position['type'])
-            print(f"position_direction: {position_direction}")
-            print(f"direction: {direction}")
             if (TRADE_DIRECTION.BUY == position_direction and direction.value >= 0) or (TRADE_DIRECTION.SELL == position_direction and direction.value <= 0):
-                print("calling close_trade")
-                self.close_trade(position)
+                self.close_trade_loop(position)
 
     #TODO update this method to recive and updated per trade method
 
@@ -410,11 +411,10 @@ class Strategy:
         #TODO: update this method per the original mql5 code - need to use paremeters from the strategy config
         trade_data = get_mt5_trade_data(TRADE_DIRECTION(direction) , trade_type=self.trade_method)
         price = self.get_price(symbol, direction)
+        #round price to the nearest pip
+        price = round(price, symbol_info(symbol)['digits'])
         if ticket > 0:
             position = positions_get(ticket=ticket)
-            position = mt5_position_to_dict(position)
-            sl = position['sl']
-            tp = position['tp']
             volume = position['volume']
             magic_num = position['magic']
         else:
@@ -429,17 +429,16 @@ class Strategy:
             "type": trade_data['type'],
             "price": price,
             "deviation": DEVIATION,
-            "magic": magic_num,
             "comment": comment,
-            "type_filling": ORDER_FILLING['FOK'],
-            "sl": sl,
-            "tp": tp
         }
-        if trade_data['action'] == TRADE_ACTIONS['PENDING']:
-            request["type_time"] = ORDER_TIME['GTC']
-            request["expiration"] = get_future_time(symbol, self.timeframe, time.now(), self.trade_limit_order_expiration_bars)        #TimeCurrent(dt_struct) + PendingOrdersExpirationBars * PeriodSeconds(0);
-        if ticket > 0:  # close or update trade
+
+        if ticket > 0:  # close trade
             request["position"] = ticket
+        else: # open trade
+            request['magic'] = magic_num
+            if trade_data['action'] == TRADE_ACTIONS['PENDING']:
+                request["type_time"] = ORDER_TIME['GTC']
+                request["expiration"] = get_future_time(symbol, self.timeframe, time.now(), self.trade_limit_order_expiration_bars)        #TimeCurrent(dt_struct) + PendingOrdersExpirationBars * PeriodSeconds(0);
         return request
     
     def prep_and_order(self, direction, symbol, ticket, comment):
@@ -448,11 +447,10 @@ class Strategy:
         used in order to retry the order in case of failure
         """
         request = self.fill_request_data(direction, symbol, ticket, comment)
-        print("Sending order request with data:", request)
         result =  order_send(request)
-        if result.retcode == TRADE_ACTIONS['DONE']:
+        if result['retcode'] == TRADE_ACTIONS['DONE']:
             # Order succeeded, store trade info
-            print(f"Opened {direction} trade on {symbol}, ticket: {result.order}")
+            print(f"Opened {direction} trade on {symbol}, ticket: {result['order']}")
         return result
     
     def prep_and_close(self, direction, symbol, ticket, comment):
@@ -460,13 +458,17 @@ class Strategy:
         prepare and close
         used in order to retry the order in case of failure
         """
+        print(f"Closing trade {ticket} for {symbol}")
         close_direction = -(direction.value) # Close the the position so need the opposite direction
         request = self.fill_request_data(close_direction, symbol, ticket, comment)
+        print_with_info(f"calling order_send (to close) for trade: {ticket} ")
+        print(f"request info: {request}")
         result =  order_send(request)
+        print(f"result info: {result}")
         return result
 
     #TODO: update this method to collect data more methodically similar to place order
-    def close_trade(self, position):
+    def close_trade_loop(self, position):
         """
         Close an open trade.
 
@@ -475,26 +477,29 @@ class Strategy:
         """
 
         # Prepare close request and send the order
+        print_with_info(f"gathering info to close: {position['ticket']} for {position['symbol']}" , levels_up=2)
         def check_return_func(result):
             if not result:
                 return False
-            return result.retcode != TRADE_ACTIONS['DONE']
-        position = mt5_position_to_dict(position)
+            return result['retcode'] == TRADE_RETCODES['DONE']
         ticket = position['ticket']
         symbol = position['symbol']
         direction = get_trade_direction(position['type'])
         loop_error_msg = f"Failed to close {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}"
-        comment = f"Close {direction} trade {ticket} for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}"
+        comment = f"Close {direction.value}, strategy-{self.strategy_num}"
 
         result = attempt_i_times_with_s_seconds_delay(5, 0.1, loop_error_msg, check_return_func,
                                                     self.prep_and_close, (direction, symbol, ticket, comment))
         
         if not check_return_func(result):
-            print_hashtaged_msg(1, f"Failed to close position {position.ticket}, retcode={result.retcode}", result)
+            print_hashtaged_msg(1, f"Failed to close position {position['ticket']}, symbol: {position['symbol']}, strategy: {self.strategy_num}-{self.strategy_name}")
+            print(f"mt5.last_error: {last_error()}")
+
         else:
             # Position closed successfully, remove from open trades
-            self.open_trades.pop(position.ticket)
-            self.document_closed_trade(position.ticket)
+            print_with_info(f"Trade {position['ticket']} closed successfully.")
+            self.open_trades.pop(position['ticket'])
+            self.document_closed_trade(position['ticket'])
 
     def get_price(self, symbol, direction):
         """
@@ -507,9 +512,9 @@ class Strategy:
         """
         #TODO: update this method to use the correct parameters (using dict in orders.py)
         # this is true for market
-        if direction == TRADE_DIRECTION.BUY:
+        if direction == TRADE_DIRECTION.BUY or direction == TRADE_DIRECTION.BUY.value:
             return symbol_info_tick(symbol)['ask']
-        elif direction == TRADE_DIRECTION.SELL:
+        elif direction == TRADE_DIRECTION.SELL or direction == TRADE_DIRECTION.SELL.value:
             return symbol_info_tick(symbol)['bid']
         else:
             raise ValueError("Invalid trade direction")
@@ -540,7 +545,7 @@ class Strategy:
         def check_return_func(result):
             if not result:
                 return False
-            return result.retcode == TRADE_ACTIONS['DONE']
+            return result['retcode'] == TRADE_ACTIONS['DONE']
         
         loop_error_msg = f"Failed to open {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}"
         comment = f"{self.strategy_num}-{self.strategy_name}"
@@ -550,14 +555,17 @@ class Strategy:
         if not check_return_func(result):
             print_hashtaged_msg(1, f"Failed to open {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}")
             print("mt5.last_error:", last_error())
-
-        #TODO: update the log of the self.open_trades, use:
-        #             position = mt5.positions_get(ticket=trade['ticket'])
-        #             if position is None:
-        #                 raise ValueError(f"Trade {trade['ticket']} no longer exists in MT5.") - should not happen to a new trade
-        #           position = mt5_position_to_dict(position)
-        #                 self.document_closed_trade(position.ticket) or (position)
-        # 
+        else:
+            # Order succeeded, store trade info
+            trade_info = {
+                'symbol': symbol,
+                'time': time.time(),
+                'direction': direction,
+                'ticket': result['order']
+            }
+            self.open_trades[result['order']] = trade_info
+            msg = f"Opened {direction} trade on {symbol}, ticket: {result['order']}"
+            print_with_info(msg)
 
 
 
@@ -591,8 +599,7 @@ class Strategy:
                 self.document_closed_trade(trade_id)
                 continue
 
-            position = position[0]
-            profit = position.profit
+            profit = position['profit']
 
             # Check daily profit close condition
             if self.exit_params.get('exitP_daily_profit_close', False):
@@ -695,8 +702,8 @@ class Strategy:
         result = order_send(request)
         result = attempt_i_times_with_s_seconds_delay(5, 0.1, f"Order update failed for {symbol}, retrying...",
                                                     f"Order failed for {symbol}, quitting.", order_send, request)
-        if result.retcode != TRADE_ACTIONS['DONE']:
-            print_hashtaged_msg(1, f"Failed to update trade {trade_id}. Retcode: {result.retcode}")
+        if result['retcode'] != TRADE_ACTIONS['DONE']:
+            print_hashtaged_msg(1, f"Failed to update trade {trade_id}. Retcode: {result['retcode']}")
         else:
             print(f"Successfully updated trade {trade_id}. New SL: {new_sl}, New TP: {new_tp}")
 
@@ -730,7 +737,7 @@ class Strategy:
         """
         open_time = trade_info['time']
         trade_time = pd.to_datetime(open_time)
-        latest_bar_time = pd.to_datetime(rates_df['time'][-1], unit='s')
+        latest_bar_time = pd.to_datetime(rates_df['time'].iloc[-1], unit='s')
         time_diff = latest_bar_time - trade_time
         bar_duration = pd.Timedelta(minutes=1)  # Assuming 1-minute bars; adjust based on timeframe
         bars = int(time_diff / bar_duration)

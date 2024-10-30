@@ -54,19 +54,16 @@ Constants:
     pytest_count (int): Number of times the pytest module has been run.
 """
 
-
 import schedule
 import time
-import pandas as pd
 
 
 from .strategy import Strategy
 from .utils import (write_balance_performance_file, TradeHour, is_new_bar, TimeBar,
-                    wait_for_new_minute, print_hashtaged_msg)
+                    wait_for_new_minute, print_hashtaged_msg,print_with_info)
 from .symbols import Symbol, Timeframe
 
 from .mt5_client import account_info, shutdown, last_error
-
 
 
 
@@ -91,7 +88,7 @@ def on_minute(strategies, trade_hour,time_bar, symbols, account_info_dict):
         time_bar (TimeBar): TimeBar instance to track the current bar timeframe.
         symbols (dict): Dictionary containing symbol instances with their respective timeframes and rates.
     """
-    print_hashtaged_msg(5, "on_minute", "on_minute function started...")
+    print_hashtaged_msg(1, "on_minute", "on_minute function started...")
     # Fetch rates for all symbols and timeframes - the metho will only update the rates if a new bar has started
     time_bar.update_tf_bar()
     Timeframe.fetch_new_bar_rates(symbols ,time_bar) # Fetch new bar rates for all symbols and all *new* timeframes

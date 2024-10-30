@@ -94,17 +94,17 @@ def calculate_lot_size(symbol, trade_risk_percent, sl):
     """
     
     # Get the symbol tick value
-    n_tick_value = symbol_info_tick(symbol).bid
+    n_tick_value = symbol_info_tick(symbol)['bid']
     if sl == 0:
         sl = 1
     if n_tick_value == 0:
         n_tick_value = 0.00001
 
     # Get account balance
-    account_balance = account_info().balance
+    account_balance = account_info()['balance']
 
     # Point() in MQL5 refers to the tick size, so we'll use symbol_info().point to get the point size
-    point_size = symbol_info(symbol).point
+    point_size = symbol_info(symbol)['point']
 
     # Calculate lot size
     lot_size = (account_balance * trade_risk_percent / 100) / (sl / point_size * n_tick_value)
@@ -150,11 +150,10 @@ def calculate_sl_tp(price, direction,sl_method, sl_param, tp_method, tp_param, s
     tp = round(tp, decimal_places)
 
     return sl, tp
-
+#obsolete - since use of
+"""
 def mt5_position_to_dict(position):
-    """
     recives a position object (tuple) and returns a dictionary with the position data
-    """
     if isinstance(position, dict):
         return position
     position = position[0]
@@ -180,6 +179,8 @@ def mt5_position_to_dict(position):
         'external_id': position[18],
     }
     return position_dict
+#
+"""
 
 # SL methods:
 def calculate_sl(price, direction, sl_method_name, sl_param, symbol, point):

@@ -189,7 +189,7 @@ class Pattern:
         Returns:
             float: Upper wick size.
         """
-        candle = rates[-candle_i]
+        candle = rates.iloc[-candle_i]
         if Candle.candle_color(candle) == -1: # Red candle
             return candle['high'] - candle['open'] # Upper wick size of a red candle
         else:
@@ -207,7 +207,7 @@ class Pattern:
         Returns:
             float: Lower wick size.
         """
-        candle = rates[-candle_i]
+        candle = rates.iloc[-candle_i]
         if Candle.candle_color(candle) == -1: # Red candle
             return candle['close'] - candle['low'] # Lower wick size of a red candle
         else:
@@ -263,10 +263,10 @@ class Pattern:
     # Candlestick patterns static methods:
     @staticmethod
     def hhhc(rates, i):
-        return rates[-i]['close'] > rates[-i-1]['close'] and rates[-i]['high'] > rates[-i-1]['high']
+        return rates.iloc[-i]['close'] > rates.iloc[-i-1]['close'] and rates.iloc[-i]['high'] > rates.iloc[-i-1]['high']
     @staticmethod
     def lllc(rates, i):
-        return rates[-i]['close'] < rates[-i-1]['close'] and rates[-i]['low'] < rates[-i-1]['low']
+        return rates.iloc[-i]['close'] < rates.iloc[-i-1]['close'] and rates.iloc[-i]['low'] < rates.iloc[-i-1]['low']
 
 
 
@@ -282,12 +282,12 @@ class Pattern:
         Returns:
             int: Number of consecutive candles with the same color.
         """
-        base_color = Candle.candle_color(rates[-candle_i])
+        base_color = Candle.candle_color(rates.iloc[-candle_i])
         if base_color == 0:
             return 1
         count = 1
         while (candle_i + count) <= len(rates):
-            current_color = Candle.candle_color(rates[-(candle_i + count)])
+            current_color = Candle.candle_color(rates.iloc[-(candle_i + count)])
             if current_color == base_color:
                 count += 1
             else:
@@ -306,7 +306,7 @@ class Pattern:
         Returns:
             float: Absolute body size.
         """
-        candle = rates[-candle_i]
+        candle = rates.iloc[-candle_i]
         return abs(candle['close'] - candle['open'])
 
 
@@ -344,15 +344,15 @@ class Engulf(Pattern):
             True if Engulfing pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates[-1])
-            previous_color = Candle.candle_color(rates[-2])
+            current_color = Candle.candle_color(rates.iloc[-1])
+            previous_color = Candle.candle_color(rates.iloc[-2])
             if current_color == previous_color or current_color == 0 or previous_color == 0:
                 return False
 
-            current_open = rates[-1]['open']
-            current_close = rates[-1]['close']
-            previous_open = rates[-2]['open']
-            previous_close = rates[-2]['close']
+            current_open = rates.iloc[-1]['open']
+            current_close = rates.iloc[-1]['close']
+            previous_open = rates.iloc[-2]['open']
+            previous_close = rates.iloc[-2]['close']
 
             if current_color == 1 and current_open <= previous_close and current_close >= previous_open:
                 return True
@@ -373,7 +373,7 @@ class Engulf(Pattern):
             str: 'buy', 'sell', or 'none'.
         """
         if self.calculate_pattern(rates):
-            current_color = Candle.candle_color(rates[-1])
+            current_color = Candle.candle_color(rates.iloc[-1])
             if current_color == 1:
                 return 'buy'
             elif current_color == -1:
@@ -399,7 +399,7 @@ class Marubuzo(Pattern):
             True if Marubuzo pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates[-1])
+            current_color = Candle.candle_color(rates.iloc[-1])
             body = self.body_size(rates, 1)
             wick_ratio = self.wick_ratio(rates, 1)
             if current_color == 0:
@@ -421,7 +421,7 @@ class Marubuzo(Pattern):
             str: 'buy', 'sell', or None.
         """
         if self.calculate_pattern(rates):
-            current_color = Candle.candle_color(rates[-1])
+            current_color = Candle.candle_color(rates.iloc[-1])
             if current_color == 1:
                 return 'buy'
             elif current_color == -1:
@@ -447,8 +447,8 @@ class Out(Pattern):
             True if Out pattern is detected, False otherwise.
         """
         try:
-            current = rates[-1]
-            previous = rates[-2]
+            current = rates.iloc[-1]
+            previous = rates.iloc[-2]
             if current['high'] > previous['high'] and current['low'] < previous['low']:
                 return True
             return False
@@ -466,8 +466,8 @@ class Out(Pattern):
             str: 'both', or 'none'.
         """
         if self.calculate_pattern(rates):
-            current = rates[-1]
-            previous = rates[-2]
+            current = rates.iloc[-1]
+            previous = rates.iloc[-2]
             return 'both' if current['close'] > previous['close'] else 'sell'
         return None
 
@@ -491,9 +491,9 @@ class In(Pattern):
             True if InBar pattern is detected, False otherwise.
         """
         try:
-            current = rates[-1]
-            previous = rates[-2]
-            comparison = rates[-3]
+            current = rates.iloc[-1]
+            previous = rates.iloc[-2]
+            comparison = rates.iloc[-3]
             return current['high'] < previous['high'] and current['low'] > comparison['low']
         except IndexError:
             return False
@@ -617,7 +617,7 @@ class KangoroFull(Pattern):
             True if Full Kangoro pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates[-1])
+            current_color = Candle.candle_color(rates.iloc[-1])
             if current_color == 1:
                 return Pattern.lhll(rates,1) and Pattern.hhhl(rates,1)
             elif current_color == -1:
@@ -659,7 +659,7 @@ class KangoroPartial(Pattern):
             True if Partial Kangoro pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates[-1])
+            current_color = Candle.candle_color(rates.iloc[-1])
             if current_color == 1:
                 return self.lhll(rates,1)
             elif current_color == -1:
@@ -701,11 +701,11 @@ class Fakeout(Pattern):
             True if Fakeout pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates[-1])
-            previous_color = Candle.candle_color(rates[-2])
-            if current_color == 1 and rates[-1]['close'] < rates[-2]['high']:
+            current_color = Candle.candle_color(rates.iloc[-1])
+            previous_color = Candle.candle_color(rates.iloc[-2])
+            if current_color == 1 and rates.iloc[-1]['close'] < rates.iloc[-2]['high']:
                 return True
-            elif current_color == -1 and rates[-1]['close'] > rates[-2]['low']:
+            elif current_color == -1 and rates.iloc[-1]['close'] > rates.iloc[-2]['low']:
                 return True
             return False
         except IndexError:
@@ -782,9 +782,9 @@ class InsideBreakout(Pattern):
         try:
             if not self.in_bar(rates):
                 return False
-            if rates[-2]['close'] > rates[-4]['high']:
+            if rates.iloc[-2]['close'] > rates.iloc[-4]['high']:
                 return True
-            elif rates[-2]['close'] < rates[-4]['low']:
+            elif rates.iloc[-2]['close'] < rates.iloc[-4]['low']:
                 return True
             return False
         except IndexError:
@@ -932,7 +932,7 @@ class SameDirectionCandle(Candle):
         Returns:
             str: 'buy', 'sell', or 'none'.
         """
-        color = Candle.candle_color(rates[-1])
+        color = Candle.candle_color(rates.iloc[-1])
         if color == 1:
             return 'buy'
         elif color == -1:
@@ -956,7 +956,7 @@ class OppositeDirectionCandle(Candle):
         Returns:
             str: 'buy', 'sell', or 'none'.
         """
-        color = Candle.candle_color(rates[-1])
+        color = Candle.candle_color(rates.iloc[-1])
         if color == 1:
             return 'sell'
         elif color == -1:
@@ -980,7 +980,7 @@ class DojiCandle(Candle):
         Returns:
             str: both or 'none'.
         """
-        color = Candle.candle_color(rates[-1])
+        color = Candle.candle_color(rates.iloc[-1])
         if color == 0:
             return 'both'
         return 'none'

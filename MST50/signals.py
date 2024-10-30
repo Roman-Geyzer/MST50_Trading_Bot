@@ -20,13 +20,13 @@ class RSISignal:
         Calculate the RSI based on the given OHLC data (using the standard RSI calculation).
 
         Parameters:
-            rates (list): Historical price data (OHLC).
+            rates (df): Historical price data (OHLC).
 
         Returns:
             list: Calculated RSI values.
         """
         # Extract close prices from rates
-        close_prices = [bar['close'] for bar in rates]
+        close_prices = rates['close'].values
         if len(close_prices) < self.rsi_period + 1:
             return []
 
