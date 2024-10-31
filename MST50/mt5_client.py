@@ -47,7 +47,9 @@ def copy_rates(symbol, timeframe, count):
     return rates_array
 
 def order_send(request):
+    print(f"Sending order request: {request}")
     result = mt5_server.order_send(request)
+    print(f"returned result: {result}")
     if result is None:
         return None
     return result  # Already a dictionary with native types
@@ -93,6 +95,12 @@ def copy_rates_from_pos(symbol, timeframe, pos, count):
     # Convert list of dictionaries back to structured NumPy array
     rates_array = np.array([tuple(d.values()) for d in rates_list], dtype=dtype)
     return rates_array
+
+def symbol_info_tick(symbol):
+    tick = mt5_server.symbol_info_tick(symbol)
+    if tick is None:
+        return None
+    return tick  # Dictionary with native types
 
 def last_error():
     error = mt5_server.last_error()

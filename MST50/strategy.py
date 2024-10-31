@@ -96,7 +96,7 @@ class Strategy:
 
         self.trail_method = strategy_config['trail_method']
         self.trail_param = strategy_config['trail_param']
-        if self.trail_method in {'UseCandels_Trail'}:
+        if self.trail_method in {'UseCandels_Trail_Close' , 'UseCandels_Trail_Extreme'}:
             self.trail_param = int(self.trail_param)
         self.trail_both_directions = strategy_config['trail_both_directions']
         self.trail_enabled = self.check_trail_active()
@@ -310,6 +310,7 @@ class Strategy:
             return  # Exit the method early if fetching fails
 
         rates = symbol.get_tf_rates(self.timeframe)
+        tf_obj = symbol.get_tf_obj(self.timeframe)
 
         if not self.check_trading_filters(symbol, rates):
             return  # Exit the method early if trading filters fail
@@ -319,14 +320,14 @@ class Strategy:
         candle_decision_set = {'both'} # Set to store candle decisions from different timeframes, 'both' is used as a flag to use indicator decision
         if self.candle_patterns_active:
             if self.current_candle_patterns_active:
-                current_tf_candle_decision = self.current_tf_candle_patterns.make_trade_decision(rates)
+                current_tf_candle_decision = self.current_tf_candle_patterns.make_trade_decision(rates, tf_obj)
                 if not current_tf_candle_decision:
                     return # No trade if candle decision fails
                 else:
                     candle_decision_set.add(current_tf_candle_decision)
             if self.higher_candle_patterns_active:
                 higher_rates = symbol.get_tf_rates(self.higher_timeframe)
-                higher_tf_candle_decision = self.higher_tf_candle_patterns.make_trade_decision(higher_rates)
+                higher_tf_candle_decision = self.higher_tf_candle_patterns.make_trade_decision(higher_rates, tf_obj)
                 if not higher_tf_candle_decision:
                     return # No trade if candle decision fails
                 else:
@@ -334,7 +335,7 @@ class Strategy:
                 
             if self.lower_candle_patterns_active:
                 lower_rates = symbol.get_tf_rates(self.lower_timeframe)
-                lower_tf_candle_decision = self.lower_tf_candle_patterns.make_trade_decision(lower_rates)
+                lower_tf_candle_decision = self.lower_tf_candle_patterns.make_trade_decision(lower_rates, tf_obj)
                 if not lower_tf_candle_decision:
                     return # No trade if candle decision fails
                 else:
@@ -342,7 +343,7 @@ class Strategy:
 
         # Proceed with normal indicator-based trade decision
         if self.indicator.indicator_name != 0 : # Check if indicator is active
-            indicator_decision, indicator_trade_data = self.indicator.make_trade_decision(rates)
+            indicator_decision, indicator_trade_data = self.indicator.make_trade_decision(rates, tf_obj)
             if indicator_decision is None: 
                 return  # No trade if indicator fails
             if len(candle_decision_set) == 1:# Use indicator decision if candle decision is 'both' (the default value - which is a flag to use indicator decision)
@@ -371,12 +372,7 @@ class Strategy:
         # Check the RSI signal before making a trade
         if not self.rsi_signal.check_rsi_signal(rsi_values[-1],final_decision): 
             return  # No trade if RSI filter fails
-        
-        msg = f"Final decision for {stra_symbol} is {final_decision}"
-        print_with_info(msg)
-        if final_decision == 'none':
-            print_hashtaged_msg(1, f"No trade decision for {stra_symbol}")
-            print(f"current_tf_candle_decision: {current_tf_candle_decision}")
+    
 
         if final_decision == 'buy' and self.tradeP_long:
             self.close_all_trades(TRADE_DIRECTION.SELL, stra_symbol)
@@ -467,14 +463,67 @@ class Strategy:
         prepare and close
         used in order to retry the order in case of failure
         """
-        print(f"Closing trade {ticket} for {symbol}")
         close_direction = -(direction.value) # Close the the position so need the opposite direction
         request = self.fill_request_data(close_direction, symbol, ticket, comment)
-        print_with_info(f"calling order_send (to close) for trade: {ticket} ")
-        print(f"request info: {request}")
         result =  order_send(request)
-        print(f"result info: {result}")
         return result
+    
+    def prep_and_update(self, trade_id, position, new_sl):
+        """
+        prepare and update trade by trade_id
+        used in order to retry the order in case of failure
+        """
+        sym = position['symbol']
+        sl = float(new_sl)
+        tp = position['tp']
+        type_order = position['type']
+        action = TRADE_ACTIONS['SLTP'] # action for modify order
+        order_time = ORDER_TIME['GTC']
+        order_filling = ORDER_FILLING['FOK']
+
+        if (sl != 0) and (tp == 0): 
+            modify_order_request = {
+
+                'action': action,
+                'symbol':  sym,
+                'position': trade_id ,
+                'type': type_order,
+                'sl': sl,
+                'type_time': order_time,
+                'type_filling': order_filling
+                                    }
+            print_with_info(f"updating trade: modify_request_order: {modify_order_request}", levels_up=2)
+            return order_send(modify_order_request)
+
+        elif (sl == 0) and (tp != 0): 
+            modify_order_request = {
+
+            'action': action,
+            'symbol':  sym,
+            'position': trade_id ,
+            'type': type_order,
+            'tp': tp,
+            'type_time': order_time,
+            'type_filling': order_filling
+                                    }
+            print_with_info(f"updating trade: modify_request_order: {modify_order_request}", levels_up=2)
+            return order_send(modify_order_request)
+        
+        else:
+            modify_order_request = {
+
+            'action': action,
+            'symbol':  sym,
+            'position': trade_id ,
+            'type': type_order,
+            'tp': tp,
+            'sl': sl,
+            'type_time': order_time,
+            'type_filling': order_filling
+                                    }
+            print_with_info(f"updating trade: modify_request_order: {modify_order_request}", levels_up=2)
+            return order_send(modify_order_request)
+    
 
     #TODO: update this method to collect data more methodically similar to place order
     def close_trade_loop(self, position):
@@ -486,7 +535,6 @@ class Strategy:
         """
 
         # Prepare close request and send the order
-        print_with_info(f"gathering info to close: {position['ticket']} for {position['symbol']}" , levels_up=2)
         def check_return_func(result):
             if not result:
                 return False
@@ -497,7 +545,7 @@ class Strategy:
         loop_error_msg = f"Failed to close {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}"
         comment = f"Close {direction.value}, strategy-{self.strategy_num}"
 
-        result = attempt_i_times_with_s_seconds_delay(5, 0.1, loop_error_msg, check_return_func,
+        result = attempt_i_times_with_s_seconds_delay(3, 0.05, loop_error_msg, check_return_func,
                                                     self.prep_and_close, (direction, symbol, ticket, comment))
         
         if not check_return_func(result):
@@ -557,7 +605,7 @@ class Strategy:
         loop_error_msg = f"Failed to open {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}"
         comment = f"{self.strategy_num}-{self.strategy_name}"
 
-        result = attempt_i_times_with_s_seconds_delay(5, 0.1, loop_error_msg, check_return_func,
+        result = attempt_i_times_with_s_seconds_delay(3, 0.05, loop_error_msg, check_return_func,
                                                     self.prep_and_order, (direction, symbol, -1, comment))
         if not check_return_func(result):
             print_hashtaged_msg(1, f"Failed to open {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}")
@@ -666,13 +714,17 @@ class Strategy:
             rates_df (pd.DataFrame): DataFrame containing historical rates.
         """
         # TODO: update after updating the calculate_trail
-        price = position['price_current']
+        tick = symbol_info_tick(symbol_str)
+        direction = position['type']  # BUY are 0, 2, 4, 6, ; SELL are 1, 3, 5, 7
+        if direction in {0, 2, 4, 6}:
+            price = tick['ask']
+        else:
+            price = tick['bid']
         current_sl = position['sl']
-        direction = position['type']  # BUY or SELL
         point = symbol_info(symbol_str)['point']
-        print_with_info(f"self.trail_method: {self.trail_method}, self.trail_param: {self.trail_param}")
+
         new_sl = calculate_trail(price, current_sl, self.trail_both_directions, direction, self.trail_method, self.trail_param, symbol_str, point, rates_df)
-        if new_sl:
+        if new_sl and abs(new_sl - current_sl) > 10*point:
             self.update_trade(trade_id = trade_id, position = position, new_sl=new_sl)
 
 
@@ -686,27 +738,17 @@ class Strategy:
             new_sl (float, optional): New Stop Loss price.
             new_tp (float, optional): New Take Profit price.
         """
-        symbol = position.symbol
 
-        # Prepare modification request
-        request = {
-            "action": TRADE_ACTIONS['MODIFY'],
-            "symbol": symbol,
-            "position": trade_id,
-            "sl": new_sl if new_sl is not None else position.sl,
-            "tp": position.tp,
-            "magic": position.magic,
-            "comment": f"Modify SL/TP by strategy {self.strategy_num}",
-        }
-
-        # Send modification request
-        #TODO: update this method to retry on failure
-        #TODO: check if can use the same method as in place_order
-        result = order_send(request)
-        result = attempt_i_times_with_s_seconds_delay(5, 0.1, f"Order update failed for {symbol}, retrying...",
-                                                    f"Order failed for {symbol}, quitting.", order_send, request)
+        def check_return_func(result):
+            if not result:
+                return False
+            return result['retcode'] == TRADE_RETCODES['DONE']
+        
+        result = attempt_i_times_with_s_seconds_delay(3, 0.05, f"Order update failed for trade: {trade_id}, retrying...",
+                                                     check_return_func, self.prep_and_update, (trade_id, position, new_sl))
         if result['retcode'] != TRADE_ACTIONS['DONE']:
             print_hashtaged_msg(1, f"Failed to update trade {trade_id}. Retcode: {result['retcode']}")
+            print(f"mt5.last_error: {last_error()}")
         else:
             print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
 

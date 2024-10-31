@@ -320,80 +320,17 @@ tp_methods = {
 
 # Trail methods:
 
-"""
-old gpt code:
-    def calculate_trail(self, position, rates_df):
-        # old start of function string
-        Calculate new SL and TP based on trailing stop strategies.
-        
-        Parameters:
-            position (mt5.Position): The current position object from MT5.
-            rates_df (pd.DataFrame): DataFrame containing historical rates.
-        
-        Returns:
-            tuple: (new_sl, new_tp) Prices for Stop Loss and Take Profit.
-        # old end of function string
-        
-        new_sl = None
-        new_tp = None
-        current_price = position.price_current
-        open_price = position.price_open
-        direction = position.type  # BUY or SELL
-
-        # Example: Implementing a simple trailing stop based on ATR
-        if self.trailing_stop_params.get('use_atr_trail', False):
-            atr_period = self.trailing_stop_params.get('atr_period', 14)
-            atr_multiplier = self.trailing_stop_params.get('atr_multiplier', 1.5)
-
-            # Calculate ATR
-            rates = rates_df.tail(atr_period)
-            if len(rates) < atr_period:
-                print("Not enough data to calculate ATR for trailing stop.")
-                return new_sl, new_tp
-
-            high = rates['high']
-            low = rates['low']
-            close = rates['close']
-            tr = pd.concat([
-                high - low,
-                (high - close.shift(1)).abs(),
-                (low - close.shift(1)).abs()
-            ], axis=1).max(axis=1)
-            atr = tr.rolling(window=atr_period).mean().iloc[-1]
-            trailing_distance = atr * atr_multiplier
-
-            if direction == mt5.POSITION_TYPE_BUY:
-                new_sl_price = current_price - trailing_distance
-                if new_sl_price > position.sl:
-                    new_sl = new_sl_price
-            elif direction == mt5.POSITION_TYPE_SELL:
-                new_sl_price = current_price + trailing_distance
-                if new_sl_price < position.sl:
-                    new_sl = new_sl_price
-
-        # Additional trailing strategies can be implemented similarly
-        # e.g., using moving averages, candle patterns, etc.
-
-        return new_sl, new_tp
-#
-
-"""
-
-def check_trail_conditions(current_price, direction, trail_price,current_sl, both_sides_trail):
-    price_to_compare = current_price
-    if direction == TRADE_DIRECTION.BUY: 
-        if both_sides_trail:
-            price_to_compare = current_sl
-        if price_to_compare > trail_price:
-            return trail_price
+def check_trail_conditions(price, direction, trail_price,current_sl, both_sides_trail):
+    if both_sides_trail:
+        return trail_price
+    if direction % 2 == 0: # BUY -> trade dircetion's are 0, 2, 4, 6 
+        if trail_price > current_sl:
+            return trail_price 
         return None # no change to SL
-    if direction == TRADE_DIRECTION.SELL:
-        if both_sides_trail:
-            price_to_compare = current_sl
-        if price_to_compare < trail_price:
+    else: # SELL traded dircetion's are 1, 3, 5, 7
+        if trail_price < current_sl:
             return trail_price
         return None
-    return None
 
 def calculate_trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
     """
@@ -408,7 +345,6 @@ def calculate_trail(price, current_sl, both_sides_trail, direction, trail_method
     Returns:
         float: Calculated trailing stop price.
     """
-    print_with_info(f"Calculating trailing stop using method: {trail_method}", levels_up=2)
     # Look up the trail method function based on the method name
     trail_method = trail_methods.get(trail_method)
     if trail_method is None:
@@ -427,10 +363,16 @@ def UsePerc_Trail(price, current_sl, both_sides_trail, direction, trail_method, 
         raise ValueError(f"Invalid trade direction: {direction}")
     return trail
 
-def UseCandels_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
-    trail_price = rates_df.iloc[-trail_param]['close']
+def UseCandels_Trail_Close(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
+    if direction % 2 == 0: # BUY -> trade dircetion's are 0, 2, 4, 6 
+        trail_price = min(rates_df.iloc[-trail_param:-1]['close'])
+    else: # SELL traded dircetion's are 1, 3, 5, 7
+        trail_price = max(rates_df.iloc[-trail_param:-1]['close'])
+    print_with_info(f"trail_price: {trail_price} , for position: {direction}")
     return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
-    
+
+def UseCandels_Trail_Extreme(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
+    pass
 
 def UseSR_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
     pass
@@ -447,7 +389,8 @@ def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_method,
 
 trail_methods = {
     'UsePerc_Trail': UsePerc_Trail,
-    'UseCandels_Trail': UseCandels_Trail,
+    'UseCandels_Trail_Close': UseCandels_Trail_Close,
+    'UseCandels_Trail_Extreme': UseCandels_Trail_Extreme,
     'UseSR_Trail': UseSR_Trail,
     'UseTrend_Trail': UseTrend_Trail,
     'UseMA_Trail': UseMA_Trail,

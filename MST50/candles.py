@@ -2,7 +2,8 @@
 
 import pandas as pd
 from .constants import CandleColor
-
+from .utils import print_with_info
+from .plotting import plot_bars
 
 
 
@@ -78,7 +79,7 @@ class CandlePatterns:
             return candle_class()
         return None  # Invalid candle name
 
-    def make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Make a trade decision based on the configured candle patterns.
 
@@ -90,7 +91,7 @@ class CandlePatterns:
         """
         decisions = []
         if self.candle_pattern_instance:
-            decision = self.candle_pattern_instance.calculate_and_make_trade_decision(rates)
+            decision = self.candle_pattern_instance.calculate_and_make_trade_decision(rates,tf_obj)
             if not decision:
                 return None # No valid decisions from the pattern, exit early
             decisions.append(decision)
@@ -98,7 +99,7 @@ class CandlePatterns:
         # Handle individual candle conditions if defined
         candles = [candle for candle in [self.first_candle_instance, self.second_candle_instance, self.third_candle_instance] if candle is not None]
         for candle in candles:
-            decision = candle.calculate_and_make_trade_decision(rates)
+            decision = candle.calculate_and_make_trade_decision(rates,tf_obj)
             if not decision:
                 return None # No valid decisions from the candle, exit early
             decisions.append(decision)
@@ -147,7 +148,7 @@ class Pattern:
         self.pattern_candles_count = pattern_candles_count
         self.trade_decision_method = None # Will be set by the child classes
     
-    def calculate_pattern(self, rates: pd.DataFrame) -> str:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         A placeholder method for calculating the pattern based on the provided rates.
         """
@@ -163,7 +164,7 @@ class Pattern:
         """
         raise NotImplementedError("Trade decision method not implemented")
 
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Calculate the pattern and make a trade decision based on the pattern.
 
@@ -319,10 +320,10 @@ class NoPattern(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.no_trade_decision
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         return False
 
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         return None
 
 class Engulf(Pattern):
@@ -333,7 +334,7 @@ class Engulf(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.engulf
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Engulfing pattern.
 
@@ -362,7 +363,7 @@ class Engulf(Pattern):
         except IndexError:
             return False
     
-    def engulf(self, rates: pd.DataFrame) -> str:
+    def engulf(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Engulfing pattern.
 
@@ -388,7 +389,7 @@ class Marubuzo(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.marubuzo
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Marubuzo pattern.
 
@@ -410,7 +411,7 @@ class Marubuzo(Pattern):
         except IndexError:
             return False
 
-    def marubuzo(self, rates: pd.DataFrame) -> str:
+    def marubuzo(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Marubuzo pattern.
 
@@ -436,7 +437,7 @@ class Out(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.out
     
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Out pattern.
 
@@ -455,7 +456,7 @@ class Out(Pattern):
         except IndexError:
             return False
 
-    def out(self, rates: pd.DataFrame) -> str:
+    def out(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Out pattern.
 
@@ -480,7 +481,7 @@ class In(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.in_bar
     
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for InBar pattern.
 
@@ -498,7 +499,7 @@ class In(Pattern):
         except IndexError:
             return False
 
-    def in_bar(self, rates: pd.DataFrame) -> str:
+    def in_bar(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for InBar pattern.
 
@@ -520,7 +521,7 @@ class Ham(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.ham
     
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Hammer pattern.
 
@@ -541,7 +542,7 @@ class Ham(Pattern):
         except IndexError:
             return False
 
-    def ham(self, rates: pd.DataFrame) -> str:
+    def ham(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Hammer pattern.
 
@@ -563,7 +564,7 @@ class InvHam(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.invham
     
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Inverted Hammer pattern.
 
@@ -584,7 +585,7 @@ class InvHam(Pattern):
         except IndexError:
             return False
 
-    def invham(self, rates: pd.DataFrame) -> str:
+    def invham(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Inverted Hammer pattern.
 
@@ -606,7 +607,7 @@ class KangoroFull(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.kangoro_full
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Full Kangoro pattern.
 
@@ -626,7 +627,7 @@ class KangoroFull(Pattern):
         except IndexError:
             return False
 
-    def kangoro_full(self, rates: pd.DataFrame) -> str:
+    def kangoro_full(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Full Kangoro pattern.
 
@@ -648,7 +649,7 @@ class KangoroPartial(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.kangoro_partial
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Partial Kangoro pattern.
 
@@ -668,7 +669,7 @@ class KangoroPartial(Pattern):
         except IndexError:
             return False
 
-    def kangoro_partial(self, rates: pd.DataFrame) -> str:
+    def kangoro_partial(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Partial Kangoro pattern.
 
@@ -690,7 +691,7 @@ class Fakeout(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.fakeout
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Fakeout pattern.
 
@@ -711,7 +712,7 @@ class Fakeout(Pattern):
         except IndexError:
             return False
 
-    def fakeout(self, rates: pd.DataFrame) -> str:
+    def fakeout(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Fakeout pattern.
 
@@ -733,7 +734,7 @@ class SameCandleCount(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.same_candle_count_pattern
     
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Same Candle Count pattern.
 
@@ -747,7 +748,7 @@ class SameCandleCount(Pattern):
             return True
         return False
 
-    def same_candle_count_pattern(self, rates: pd.DataFrame) -> str:
+    def same_candle_count_pattern(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Same Candle Count pattern.
 
@@ -769,7 +770,7 @@ class InsideBreakout(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.inside_breakout
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         Check for Inside Breakout pattern.
 
@@ -790,7 +791,7 @@ class InsideBreakout(Pattern):
         except IndexError:
             return False
 
-    def inside_breakout(self, rates: pd.DataFrame) -> str:
+    def inside_breakout(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Inside Breakout pattern.
 
@@ -812,13 +813,13 @@ class HHHCLLLC(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.hhhlclll
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         not required for this pattern
         """
         pass
 
-    def hhhlclll(self, rates: pd.DataFrame) -> str:
+    def hhhlclll(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for HHHCLLLC pattern.
 
@@ -842,13 +843,13 @@ class InvHHHCLLLC(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.invhhhlclll
 
-    def calculate_pattern(self, rates: pd.DataFrame) -> bool:
+    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
         """
         not required for this pattern
         """
         pass
 
-    def invhhhlclll(self, rates: pd.DataFrame) -> str:
+    def invhhhlclll(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Inverted HHHCLLLC pattern.
 
@@ -871,7 +872,7 @@ class Candle:
     def __init__(self):
         pass
 
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         A placeholder method for calculating the candle pattern and making a trade decision.
 
@@ -911,7 +912,7 @@ class NoCandle(Candle):
     def __init__(self):
         super().__init__()
 
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         return None
 
 class SameDirectionCandle(Candle):
@@ -922,7 +923,7 @@ class SameDirectionCandle(Candle):
         super().__init__()
     
     
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Same Direction Candle pattern.
 
@@ -946,7 +947,7 @@ class OppositeDirectionCandle(Candle):
     def __init__(self):
         super().__init__()
     
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Opposite Direction Candle pattern.
 
@@ -970,7 +971,7 @@ class DojiCandle(Candle):
     def __init__(self):
         super().__init__()
     
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame) -> str:
+    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
         """
         Check for Doji Candle pattern.
 

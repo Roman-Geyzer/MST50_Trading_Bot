@@ -193,6 +193,7 @@ class Timeframe:
         def check_return_func(rates):
             return rates is not None
         loop_error_msg = f"Failed to get rates for symbol: {symbol}, timeframe {tf}, length {length}"
+        #TODO: update to copy rates from pos 1
         rates = attempt_i_times_with_s_seconds_delay(3, 1, loop_error_msg, check_return_func,
                                             copy_rates_from_pos, (symbol, tf, 0, length))
         if not check_return_func(rates):
