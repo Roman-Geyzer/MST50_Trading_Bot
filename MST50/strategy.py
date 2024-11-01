@@ -16,7 +16,7 @@ from .signals import RSISignal
 from .candles import CandlePatterns
 from .plotting import plot_bars
 
-from .mt5_client import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
+from .mt5_interface import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
                          positions_get, order_send, symbol_info_tick, symbol_info, copy_rates,
                          history_deals_get, symbol_select, last_error) 
 
@@ -524,8 +524,6 @@ class Strategy:
             print_with_info(f"updating trade: modify_request_order: {modify_order_request}", levels_up=2)
             return order_send(modify_order_request)
     
-
-    #TODO: update this method to collect data more methodically similar to place order
     def close_trade_loop(self, position):
         """
         Close an open trade.

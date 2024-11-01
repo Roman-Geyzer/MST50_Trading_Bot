@@ -37,7 +37,7 @@ from .constants import (magic_number_base, performance_file, TIMEFRAME_MAGIC_NUM
                        BarsTFs)
 from datetime import datetime
 import time
-from .mt5_client import TIMEFRAMES, copy_rates_from
+from .mt5_interface import TIMEFRAMES, copy_rates_from
 import math
 
 

@@ -14,7 +14,7 @@ Constants:
     performance_file (str): Filename for storing balance performance data.
 """
 
-from .mt5_client import TIMEFRAMES, ORDER_TYPES, TRADE_ACTIONS
+from .mt5_interface import TIMEFRAMES, ORDER_TYPES, TRADE_ACTIONS
 from enum import Enum
 
 #Enums:

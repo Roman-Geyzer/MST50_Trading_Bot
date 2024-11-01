@@ -3,7 +3,7 @@
 import pandas as pd
 from datetime import datetime
 from .utils import TimeBar, get_timeframe_string, attempt_i_times_with_s_seconds_delay, print_hashtaged_msg
-from .mt5_client import TIMEFRAMES, copy_rates_from_pos
+from .mt5_interface import TIMEFRAMES, copy_rates_from_pos
 
 class Symbol:
     """

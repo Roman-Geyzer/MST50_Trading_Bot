@@ -1,31 +1,5 @@
 # main.py
 
-"""
-main.py
-This script is the main entry point for executing trading strategies using the provided configuration.
-Functions:
-    main(): Initializes MetaTrader 5, loads strategy configurations, schedules strategy execution, and manages the execution loop.
-Modules:
-    strategy: Contains the Strategy class used for executing trading strategies.
-    schedule: Used for scheduling tasks at specific intervals.
-    time: Provides time-related functions.
-    datetime: Supplies classes for manipulating dates and times.
-    pandas: Provides data structures for working with data.
-    pprint: Provides pretty-printing of data structures.
-    concurrent: Provides support for asynchronous execution.
-    sys: Provides access to some variables used or maintained by the interpreter and to functions that interact strongly with the interpreter.
-    os: Provides a way of using operating system dependent functionality.
-    constants: Contains constants used throughout the project.
-    symbols: Contains the Symbol class used for storing symbol data.
-    utils: Contains utility functions used throughout the project.
-    Pyro5: Provides a way to create remote objects in Python - used for initializing the TradingPlatform class. (first use MT5)
-    ThreadPoolExecutor: Provides a high-level interface for asynchronously executing functions in separate threads.
-
-Constants:
-    run_mode (list): Specifies the modes in which the trading strategies can run, either 'live' or 'demo'.
-"""
-
-
 
 """
 This script is the main entry point for executing trading strategies using the provided configuration.
@@ -53,6 +27,10 @@ Constants:
     strategy_timeout (int): Time limit in seconds for executing a strategy.
     pytest_count (int): Number of times the pytest module has been run.
 """
+import os
+
+# Set BACKTEST_MODE to 'True' for backtesting, 'False' for live trading
+os.environ['BACKTEST_MODE'] = 'False'  # Change to 'True' when ready to backtest
 
 import schedule
 import time
@@ -63,7 +41,7 @@ from .utils import (write_balance_performance_file, TradeHour, is_new_bar, TimeB
                     wait_for_new_minute, print_hashtaged_msg,print_with_info)
 from .symbols import Symbol, Timeframe
 
-from .mt5_client import account_info, shutdown, last_error
+from .mt5_interface import account_info, shutdown, last_error
 
 
 
