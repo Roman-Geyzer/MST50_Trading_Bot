@@ -4,6 +4,10 @@ import pandas as pd
 from datetime import datetime
 from .utils import TimeBar, get_timeframe_string, attempt_i_times_with_s_seconds_delay, print_hashtaged_msg
 from .mt5_interface import TIMEFRAMES, copy_rates_from_pos
+import os
+
+# Determine if we are in backtesting mode
+BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 class Symbol:
     """
@@ -85,8 +89,11 @@ class Symbol:
                 if strategy.lower_candle_patterns_active:
                     if strategy.lower_timeframe not in symbols[symbol]:
                         symbols[symbol].append(strategy.lower_timeframe)
-                if strategy.trail_enabled:
-                    if TIMEFRAMES['M1'] not in symbols[symbol]:
+                if strategy.trail_enabled: 
+                    if BACKTEST_MODE: # Only add M1 if not in backtest mode - since in backtest mode we use the backtest_tf
+                        if strategy.backtest_tf not in symbols[symbol]:
+                            symbols[symbol].append(strategy.backtest_tf)
+                    elif TIMEFRAMES['M1'] not in symbols[symbol]:
                         symbols[symbol].append(TIMEFRAMES['M1'])
 
         print(f"Symbols: {symbols}")
@@ -191,7 +198,9 @@ class Timeframe:
         tf = self.timeframe
         length = self.length
         def check_return_func(rates):
-            return rates is not None
+            if rates is None:
+                return False
+            return True
         loop_error_msg = f"Failed to get rates for symbol: {symbol}, timeframe {tf}, length {length}"
         #TODO: update to copy rates from pos 1
         rates = attempt_i_times_with_s_seconds_delay(3, 1, loop_error_msg, check_return_func,

@@ -6,6 +6,9 @@ from datetime import datetime
 import time
 import os
 
+# Determine if we are in backtesting mode
+BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
+
 # Import utility functions and constants
 from .utils import (load_config,  get_final_magic_number, get_timeframe_string, print_with_info,
                     print_hashtaged_msg, attempt_i_times_with_s_seconds_delay, get_future_time)
@@ -19,6 +22,8 @@ from .plotting import plot_bars
 from .mt5_interface import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
                          positions_get, order_send, symbol_info_tick, symbol_info, copy_rates,
                          history_deals_get, symbol_select, last_error) 
+
+drive = "x:" if os.name == 'nt' else "/Volumes/TM"
 
 class Strategy:
     """
@@ -110,7 +115,7 @@ class Strategy:
 
         
         # Define the documentation directory with strategy number and name
-        self.documentation_dir = os.path.join(os.path.dirname(__file__), 'documentation', f"strategy_{self.strategy_num}_{self.strategy_name}")
+        self.documentation_dir = os.path.join(drive, 'documentation', f"strategy_{self.strategy_num}_{self.strategy_name}")
 
         # Create the documentation directory if it doesn't exist
         if not os.path.exists(self.documentation_dir):
@@ -159,6 +164,8 @@ class Strategy:
             dict: Dictionary containing open trades by ticket number.
         """
         open_trades = {}
+        if BACKTEST_MODE:
+            return open_trades # Exit the method early if in backtesting mode - no open trades on strat of backtest
         all_positions = positions_get()
         if all_positions is None:
             return open_trades

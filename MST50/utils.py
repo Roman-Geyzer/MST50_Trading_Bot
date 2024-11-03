@@ -37,12 +37,15 @@ from .constants import (magic_number_base, performance_file, TIMEFRAME_MAGIC_NUM
                        BarsTFs)
 from datetime import datetime
 import time
-import datetime
 from .mt5_interface import TIMEFRAMES, copy_rates_from
 import math
+import platform
 
 
-
+if platform.system() == 'Windows':
+    file_namd_path = "Z:\\Desktop\\Fulfillment\\Forex - Algo trading\\Python API\\config.xlsx"
+else:
+    file_namd_path = "/Users/macmini/Desktop/Fulfillment/Forex - Algo trading/Python API/config.xlsx"
 
 class TradeHour:
     def __init__(self):
@@ -294,9 +297,9 @@ def safe_date_convert(value, default='01/01/2021'):
         datetime: The converted datetime value or the default value.
     """
     try:
-        return datetime.datetime.strptime(value, '%m/%d/%Y') if value else datetime.datetime.strptime(default, '%m/%d/%Y')
+        return datetime.strptime(value, '%m/%d/%Y') if value else datetime.strptime(default, '%m/%d/%Y')
     except (ValueError, TypeError):
-        return datetime.datetime.strptime(default, '%m/%d/%Y')
+        return datetime.strptime(default, '%m/%d/%Y')
 
 def safe_int_extract_from_dict(dict, key, default=0):
     """
@@ -370,7 +373,8 @@ def safe_str_extract_from_dict(dict, key, default=''):
     except (KeyError, ValueError, TypeError):
         return default
 
-def load_config(file_namd_path = "Z:\Desktop\Fulfillment\Forex - Algo trading\Python API\config.xlsx", sheet_name='config', strategies_run_mode=['live']):
+
+def load_config(sheet_name='config', strategies_run_mode=['live']):
     """
     Load configuration from an Excel file into a structured dictionary.
     This loader reads the specified sheet and processes each row into a dictionary.
@@ -487,7 +491,7 @@ def load_config(file_namd_path = "Z:\Desktop\Fulfillment\Forex - Algo trading\Py
             'filterP_min_rsi_deviation': safe_float_convert(row['filterP_min_rsi_deviation']),
             'backtest_params' : {
                 'backtest_start_date': safe_date_convert(row['backtest_start_date']),
-                'backtest_tf' : 'backtest_tf',
+                'backtest_tf' : get_mt5_timeframe(row['backtest_tf']),
             },
         }
 

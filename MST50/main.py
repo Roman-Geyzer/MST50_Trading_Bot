@@ -37,7 +37,7 @@ from .strategy import Strategy
 # Conditional import of TradeHour and TimeBar based on the mode
 if BACKTEST_MODE:
     from .time_backtest import TradeHour, TimeBar
-    from .mt5_backtest import backtest
+    from .mt5_backtest import MT5Backtest, initialize_backtest
 else:
     from .utils import TradeHour, TimeBar
 
@@ -137,7 +137,7 @@ def on_new_bar(strategies, trade_hour, time_bar, symbols, account_info_dict):
 
     [execute_strategy(strategy, symbols, time_bar, new_hour, account_info_dict) for strategy in strategies.values()]
 
-def run_backtest_loop(strategies, trade_hour, time_bar, symbols):
+def run_backtest_loop(strategies, trade_hour, time_bar, symbols, backtest):
     """
     Run the backtesting loop, advancing the simulation time and executing strategies.
     """
@@ -161,6 +161,7 @@ def run_backtest_loop(strategies, trade_hour, time_bar, symbols):
         # Shutdown MetaTrader 5 connection
         shutdown()
 
+#TODO: create full seperation of the main function for live trading and backtesting
 def main():
     """
     Main function to execute trading strategies.
@@ -168,27 +169,30 @@ def main():
     print_hashtaged_msg(1, "Initializing MST50", "Initializing MST50...")
     # Initialize strategies and symbols
     strategies = Strategy.initialize_strategies(run_mode)
-    symbols = Symbol.initialize_symbols(strategies)
-
-    # Initialize the previous hour and day to -1 to ensure the first iteration runs the on_hour function
-    trade_hour = TradeHour()
-    time_bar = TimeBar()
-
-    print(f"Initialized trade hour, hour= {trade_hour.current_hour}, day= {trade_hour.current_day}")
-    print(f"Initialized time bar, current_bar (highest new bar) = {time_bar.current_bar}")
-    account_info_dict = account_info()
-    print("Account info:", account_info_dict)
+    if not BACKTEST_MODE:
+        symbols = Symbol.initialize_symbols(strategies)
+        account_info_dict = account_info()
+        print("Account info:", account_info_dict)
 
     if BACKTEST_MODE:
         # Initialize backtest with strategies
-        from .mt5_backtest import MT5Backtest  # Ensure MT5Backtest is imported
+        initialize_backtest(strategies)
         backtest = MT5Backtest(strategies=strategies)
+        symbols = Symbol.initialize_symbols(strategies)
+        account_info_dict = account_info()
+        print("Account info:", account_info_dict)
         # Initialize TradeHour and TimeBar with backtest
         trade_hour = TradeHour(backtest)
         time_bar = TimeBar(backtest)
         # Run backtesting loop
-        run_backtest_loop(strategies, trade_hour, time_bar, symbols)
+        run_backtest_loop(strategies, trade_hour, time_bar, symbols, backtest)
     else: # Live trading mode
+            # Initialize the previous hour and day to -1 to ensure the first iteration runs the on_hour function
+        trade_hour = TradeHour()
+        time_bar = TimeBar()
+
+        print(f"Initialized trade hour, hour= {trade_hour.current_hour}, day= {trade_hour.current_day}")
+        print(f"Initialized time bar, current_bar (highest new bar) = {time_bar.current_bar}")
         # Schedule the on_minute function to run every minute
         print_hashtaged_msg(1, "Scheduling on_minute", "Scheduling on_minute function to run every minute...")
 

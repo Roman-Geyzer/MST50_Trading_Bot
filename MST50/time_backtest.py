@@ -74,7 +74,7 @@ class TimeBar:
     A class to track and determine if a new bar has started for different timeframes
     during backtesting.
     """
-    def __init__(self):
+    def __init__(self, backtest):
         """
         Initialize the TimeBar instance using backtest.current_time.
         """
