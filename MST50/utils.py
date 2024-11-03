@@ -37,6 +37,7 @@ from .constants import (magic_number_base, performance_file, TIMEFRAME_MAGIC_NUM
                        BarsTFs)
 from datetime import datetime
 import time
+import datetime
 from .mt5_interface import TIMEFRAMES, copy_rates_from
 import math
 
@@ -186,7 +187,6 @@ def calculate_history_length(strategy_config):
     return max(strategy_config['indicator_params']['a'], 20) + 3
 
 
-#TODO: Implement the is_new_bar function
 """
 Check if a new bar has formed for the given timeframe.
 Args:
@@ -278,6 +278,25 @@ def safe_float_convert(value, default=0.0):
         return float(value)
     except (ValueError, TypeError):
         return default
+    
+
+
+def safe_date_convert(value, default='01/01/2021'):
+    """
+    Safely convert a value to a datetime.
+    If conversion fails, return a default value.
+
+    Parameters:
+        value: The value to convert.
+        default (string): The default value to return (before conversion) if conversion fails.
+
+    Returns:
+        datetime: The converted datetime value or the default value.
+    """
+    try:
+        return datetime.datetime.strptime(value, '%m/%d/%Y') if value else datetime.datetime.strptime(default, '%m/%d/%Y')
+    except (ValueError, TypeError):
+        return datetime.datetime.strptime(default, '%m/%d/%Y')
 
 def safe_int_extract_from_dict(dict, key, default=0):
     """
@@ -466,6 +485,10 @@ def load_config(file_namd_path = "Z:\Desktop\Fulfillment\Forex - Algo trading\Py
             'filterP_rsi_period': safe_float_convert(row['filterP_rsi_period']),
             'filterP_max_rsi_deviation': safe_float_convert(row['filterP_max_rsi_deviation']),
             'filterP_min_rsi_deviation': safe_float_convert(row['filterP_min_rsi_deviation']),
+            'backtest_params' : {
+                'backtest_start_date': safe_date_convert(row['backtest_start_date']),
+                'backtest_tf' : 'backtest_tf',
+            },
         }
 
         # Add the strategy configuration to the strategies_config dictionary

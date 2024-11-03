@@ -101,6 +101,10 @@ class Strategy:
         self.trail_both_directions = strategy_config['trail_both_directions']
         self.trail_enabled = self.check_trail_active()
 
+        self.backtest_params = strategy_config['backtest_params']
+        self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
+        self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
+
 
 
 
