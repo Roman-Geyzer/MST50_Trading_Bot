@@ -29,7 +29,6 @@ from decimal import Decimal
 from .mt5_interface import (TIMEFRAMES, ORDER_TYPES, TRADE_ACTIONS, ORDER_TIME,
                         symbol_info, symbol_info_tick, account_info)
 from .constants import TRADE_DIRECTION
-import time
 from .utils import print_with_info
 
 
