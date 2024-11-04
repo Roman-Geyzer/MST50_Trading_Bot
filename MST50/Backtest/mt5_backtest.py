@@ -1717,6 +1717,7 @@ def shutdown():
     if backtest is None:
         raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     backtest.shutdown()
+    quit()
 
 def run_backtest():
     """

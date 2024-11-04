@@ -28,7 +28,7 @@ import os
 BACKTEST_MODE = os.getenv('BACKTEST_MODE', 'False') == 'True'
 
 if BACKTEST_MODE:
-    from . import mt5_backtest as mt5_module
+    from .Backtest import mt5_backtest as mt5_module
 else:
     from . import mt5_client as mt5_module
 
