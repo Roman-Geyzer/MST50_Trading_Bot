@@ -296,8 +296,17 @@ TIMEFRAMES = {
     'MN1': TIMEFRAME_MN1,
 }
 
-# Reverse map of timeframe values to names
-TIMEFRAMES_REVERSE = {v: k for k, v in TIMEFRAMES.items()}
+TIMEFRAMES_REVERSE = {
+    TIMEFRAME_M1: 'M1',
+    TIMEFRAME_M5: 'M5',
+    TIMEFRAME_M15: 'M15',
+    TIMEFRAME_M30: 'M30',
+    TIMEFRAME_H1: 'H1',
+    TIMEFRAME_H4: 'H4',
+    TIMEFRAME_D1: 'D1',
+    TIMEFRAME_W1: 'W1',
+    TIMEFRAME_MN1: 'MN1',
+}
 
 
 
@@ -368,11 +377,17 @@ class ENUM_MT5_TIMEFRAMES(enum.Enum):
     TIMEFRAME_W1                        = 1  | 0x8000
     TIMEFRAME_MN1                       = 1  | 0xC000
 
-def get_mt5_tf_str(mt5_timeframe: ENUM_MT5_TIMEFRAMES):
-    for name, member in ENUM_MT5_TIMEFRAMES.__members__.items():
-        if member.value == mt5_timeframe:
-            return name[10:]
-    return None
+def get_mt5_tf_str(mt5_timeframe):
+    """
+    Convert MT5 timeframe constant to its string representation.
+
+    Parameters:
+        mt5_timeframe (int): The MT5 timeframe constant.
+
+    Returns:
+        str: The timeframe string (e.g., 'M1', 'H1').
+    """
+    return TIMEFRAMES_REVERSE.get(mt5_timeframe, None)
 
 import numpy as np
 def get_constants():
@@ -562,12 +577,12 @@ class MT5Backtest:
             # Add the strategy's main timeframe
             timeframes_set.add(strategy.str_timeframe)
             # Add higher and lower timeframes from strategy, ignoring None
-            higher_tf = get_timeframe_string(strategy.higher_timeframe)
-            lower_tf = get_timeframe_string(strategy.lower_timeframe)
-            if higher_tf is not None:
-                timeframes_set.add(higher_tf)
-            if lower_tf is not None:
-                timeframes_set.add(lower_tf)
+            higher_tf_str = get_mt5_tf_str(strategy.higher_timeframe)
+            lower_tf_str = get_mt5_tf_str(strategy.lower_timeframe)
+            if higher_tf_str is not None:
+                timeframes_set.add(higher_tf_str)
+            if lower_tf_str is not None:
+                timeframes_set.add(lower_tf_str)
             # Collect backtest start date and time step
             backtest_start_dates.append(strategy.backtest_start_date)
             backtest_time_steps.append(strategy.backtest_tf)
@@ -578,18 +593,19 @@ class MT5Backtest:
         # Use the earliest start date among strategies
         self.start_time = min(backtest_start_dates)
 
-        # Set end date as 6 months before today
+        # Set end date as X days before today
         self.end_time = datetime.now() - timedelta(days=backtest_end_relative_to_today)
 
         # Use the backtest time step (candle advance) from the strategies
         # Assuming all strategies have the same backtest time frame
         backtest_timeframe = backtest_time_steps[0]  # Assuming all are the same
-        self.advance_timeframe = backtest_timeframe  # Store the timeframe string
+
+        # Convert the timeframe constant to its string representation
+        backtest_timeframe_str = get_mt5_tf_str(backtest_timeframe)
+        self.advance_timeframe = backtest_timeframe_str  # Store the timeframe string
 
         # Map the timeframe string to a timedelta
-        backtest_timeframe_str = get_mt5_tf_str(backtest_timeframe)
         self.time_step = timeframe_to_timedelta(backtest_timeframe_str)
-
 
     def load_data(self):
         """
@@ -745,7 +761,7 @@ class MT5Backtest:
         Returns:
             dict or None: Tick information or None if error.
         """
-        tf_name = 'M1'  # Assuming M1 has the latest data
+        tf_name = self.advance_timeframe  # Use the advance timeframe
         if symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
             self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
             return None
@@ -753,8 +769,11 @@ class MT5Backtest:
         df = self.symbols_data[symbol][tf_name]
         current_bar = df[df['time'] <= self.current_time].tail(1)
         if current_bar.empty:
-            self.set_last_error(RES_E_NOT_FOUND, f"No tick data available for {symbol} up to current time.")
-            return None
+            # Use the last known price if available
+            current_bar = df.tail(1)
+            if current_bar.empty:
+                self.set_last_error(RES_E_NOT_FOUND, f"No tick data available for {symbol}.")
+                return None
 
         tick = {
             'time': int(current_bar['time'].iloc[0].timestamp()),
@@ -774,12 +793,18 @@ class MT5Backtest:
         Returns:
             dict: Symbol information.
         """
+        if 'JPY' in symbol:
+            digits = 3
+        else:
+            digits = 5
+
         # Simplified symbol information
         info = {
             'name': symbol,
             'path': symbol,
             'description': symbol,
-            'digits': 5,
+            'digits': digits,
+            'point': 10 ** -digits,
             'spread': 2,
             'trade_mode': 0,
             'volume_min': 0.01,
@@ -864,7 +889,7 @@ class MT5Backtest:
             # Pending order (limit or stop)
             result = self.execute_pending_order(symbol, order_type, volume, price, comment, sl, tp, magic)
             return result
-        elif action == TRADE_ACTION_MODIFY:
+        elif action == TRADE_ACTION_SLTP:
             # Modify order
             result = self.modify_order(request)
             return result

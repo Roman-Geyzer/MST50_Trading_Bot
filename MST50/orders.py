@@ -368,7 +368,7 @@ def UseCandels_Trail_Close(price, current_sl, both_sides_trail, direction, trail
         trail_price = min(rates_df.iloc[-trail_param:-1]['close'])
     else: # SELL traded dircetion's are 1, 3, 5, 7
         trail_price = max(rates_df.iloc[-trail_param:-1]['close'])
-    print_with_info(f"trail_price: {trail_price} , for position: {direction}")
+    # TODO: add logging of trail price? - print_with_info(f"trail_price: {trail_price} , for position: {direction}")
     return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
 
 def UseCandels_Trail_Extreme(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):

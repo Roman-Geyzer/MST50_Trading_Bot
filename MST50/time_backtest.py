@@ -5,27 +5,21 @@ This module provides backtesting versions of TradeHour and TimeBar classes,
 which use the simulated current time from the backtesting module.
 """
 
-from .mt5_backtest import backtest
-    
 class TradeHour:
+    """
+    Class to track the current hour and day during backtesting.
+    """
     def __init__(self, backtest):
         self.backtest = backtest
-        self.current_time = backtest.current_time
+        self.current_time = self.backtest.current_time
         self.current_hour = -1
         self.current_day = -1
+        self.current_week = -1
 
     def update_current_time(self):
-        self.current_time = self.backtest.current_time
-
-    # Rest of the class...
-
-class TimeBar:
-    def __init__(self, backtest):
-        self.backtest = backtest
-        self.current_time = backtest.current_time
-        # Initialize other attributes
-
-    def update_current_time(self):
+        """
+        Update the current time from the backtesting module.
+        """
         self.current_time = self.backtest.current_time
 
     def is_new_hour(self):
@@ -69,6 +63,7 @@ class TimeBar:
             return True
         return False
 
+
 class TimeBar:
     """
     A class to track and determine if a new bar has started for different timeframes
@@ -78,7 +73,8 @@ class TimeBar:
         """
         Initialize the TimeBar instance using backtest.current_time.
         """
-        self.current_time = backtest.current_time
+        self.backtest = backtest
+        self.current_time = self.backtest.current_time
         self.M1 = -1
         self.M5 = -1
         self.M15 = -1
@@ -93,7 +89,7 @@ class TimeBar:
         """
         Update the current time from the backtesting module.
         """
-        self.current_time = backtest.current_time
+        self.current_time = self.backtest.current_time
 
     def update_tf_bar(self):
         """
@@ -167,7 +163,7 @@ class TimeBar:
         Returns:
             bool: True if a new bar has started, False otherwise.
         """
-        # Check if the current_bar is equal or higher than the timeframe
+        # Map timeframe strings to indices for comparison
         timeframe_list = ['W1', 'D1', 'H4', 'H1', 'M30', 'M15', 'M5', 'M1']
         current_bar_index = timeframe_list.index(self.current_bar)
         timeframe_index = timeframe_list.index(timeframe)

@@ -236,8 +236,11 @@ class Strategy:
         This method is called when a new minute arrives in the strategy's timeframe.
         It is used to update indicators, check for trading signals, etc.
         """
-        print(f"Handling new minute for strategy no. {self.strategy_num}")
-        plot_bars(symbols.M1, trades=None, show=True, save_path='charts/chart1.png')
+        # for backtest puposes:
+        if BACKTEST_MODE:
+            tf = get_timeframe_string(self.timeframe)
+        else:
+            tf = 'M1'
         if not self.trail_enabled:
             return  # Exit the method early if trailing is not enabled
 
@@ -245,9 +248,9 @@ class Strategy:
                                         # document the closed trades and update strategy performance file   
         
         for stra_symbol in self.symbols:
-            if symbols[stra_symbol].check_symbol_tf_flag(TIMEFRAMES['M1']):
+            if symbols[stra_symbol].check_symbol_tf_flag(TIMEFRAMES[tf]): # Check if 1 minute data is available (for live trading)
                 continue  # Skip to the next symbol if no 1 minute data is available
-            self.monitor_open_trades(stra_symbol, symbols[stra_symbol].get_tf_rates(TIMEFRAMES['M1'])) # update SL, TP, etc. - runs every minute
+            self.monitor_open_trades(stra_symbol, symbols[stra_symbol].get_tf_rates(TIMEFRAMES[tf])) # update SL, TP, etc. - runs every minute
 
 
     def document_closed_trade(self, trade_id):
@@ -399,7 +402,6 @@ class Strategy:
         Close all trades in a specified direction for a given symbol.
         -1 for sell trades, 1 for buy trades, 0 for all trades.
         """
-        print_with_info( f"Closing all {direction} trades for {symbol}",levels_up=2)
         trades = [trade for trade in self.open_trades.values() if trade['symbol'] == symbol]
         if trades is None:
             return
@@ -503,7 +505,6 @@ class Strategy:
                 'type_time': order_time,
                 'type_filling': order_filling
                                     }
-            print_with_info(f"updating trade: modify_request_order: {modify_order_request}", levels_up=2)
             return order_send(modify_order_request)
 
         elif (sl == 0) and (tp != 0): 
@@ -517,7 +518,6 @@ class Strategy:
             'type_time': order_time,
             'type_filling': order_filling
                                     }
-            print_with_info(f"updating trade: modify_request_order: {modify_order_request}", levels_up=2)
             return order_send(modify_order_request)
         
         else:
@@ -532,7 +532,6 @@ class Strategy:
             'type_time': order_time,
             'type_filling': order_filling
                                     }
-            print_with_info(f"updating trade: modify_request_order: {modify_order_request}", levels_up=2)
             return order_send(modify_order_request)
     
     def close_trade_loop(self, position):
@@ -563,7 +562,6 @@ class Strategy:
 
         else:
             # Position closed successfully, remove from open trades
-            print_with_info(f"Trade {position['ticket']} closed successfully.")
             self.open_trades.pop(position['ticket'])
             self.document_closed_trade(position['ticket'])
 
@@ -628,8 +626,8 @@ class Strategy:
                 'ticket': result['order']
             }
             self.open_trades[result['order']] = trade_info
+            # TODO: log the trade
             msg = f"Opened {direction} trade on {symbol}, ticket: {result['order']}"
-            print_with_info(msg)
 
 
 
@@ -770,7 +768,6 @@ class Strategy:
         for trade in trades:
             if trade['symbol'] == symbol:
                 total_trades += 1
-        print_hashtaged_msg(1, f"Total open trades for {symbol}: {total_trades}")  
         return total_trades
 
 

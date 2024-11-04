@@ -68,7 +68,8 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
         symbols (dict): Dictionary containing symbol instances with their respective timeframes and rates.
         account_info_dict (dict): Account information dictionary.
     """
-    print_hashtaged_msg(1, "on_minute", "on_minute function started...")
+    # TODO: uncomment the following line
+    # print_hashtaged_msg(1, "on_minute", "on_minute function started...")
     # Fetch rates for all symbols and timeframes - the method will only update the rates if a new bar has started
     time_bar.update_tf_bar()
     Timeframe.fetch_new_bar_rates(symbols, time_bar)  # Fetch new bar rates for all symbols and all *new* timeframes
@@ -141,25 +142,20 @@ def run_backtest_loop(strategies, trade_hour, time_bar, symbols, backtest):
     """
     Run the backtesting loop, advancing the simulation time and executing strategies.
     """
-    try:
-        while backtest.current_time < backtest.end_time:
-            # Advance the simulation time
-            proceed = backtest.step_simulation()
-            if not proceed:
-                print("Backtest completed.")
-                break
+    while backtest.current_time < backtest.end_time:
+        # Advance the simulation time
+        proceed = backtest.step_simulation()
+        if not proceed:
+            print("Backtest completed.")
+            break
+         # Call the on_new_bar function to process strategies
+        on_new_bar(strategies, trade_hour, time_bar, symbols, account_info_dict=None)
+    # Finalize the backtest
+    backtest.export_logs()
+    # Shutdown Batckest - clear memory ext.
+    shutdown()
 
-            # The TradeHour and TimeBar classes automatically update current_time from backtest.current_time
 
-            # Call the on_new_bar function to process strategies
-            on_new_bar(strategies, trade_hour, time_bar, symbols, account_info_dict=None)
-    except Exception as e:
-        print_hashtaged_msg(3, "Backtest Error", f"An error occurred during backtesting: {e}")
-    finally:
-        # Finalize the backtest
-        backtest.export_logs()
-        # Shutdown MetaTrader 5 connection
-        shutdown()
 
 #TODO: create full seperation of the main function for live trading and backtesting
 def main():
