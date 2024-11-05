@@ -2,24 +2,25 @@
 """
 This module provides a unified interface for interacting with MetaTrader 5, whether in live trading or backtesting mode.
 Functions:
-    account_info(): Retrieves the account information.
-    copy_rates(symbol, timeframe, count): Retrieves historical price data for a symbol and timeframe.
-    copy_rates_from(symbol, timeframe, from_date, count): Retrieves historical price data for a symbol and timeframe starting from a specific date.
-    copy_rates_from_pos(symbol, timeframe, pos, count): Retrieves historical price data for a symbol and timeframe starting from a specific position.
-    order_send(request): Sends a trading order to MetaTrader 5.
-    positions_get(ticket): Retrieves the open positions.
-    symbol_info_tick(symbol): Retrieves the latest tick information for a symbol.
-    symbol_info(symbol): Retrieves the symbol information.
-    history_deals_get(from_date, to_date): Retrieves the historical deals within a date range.
-    last_error(): Retrieves the last error message from MetaTrader 5.
-    shutdown(): Shuts down the MetaTrader 5 client or backtesting server.
+    account_info: Get the account information from the server.
+    copy_rates: Copy rates from the server for a symbol and timeframe.
+    copy_rates_from: Copy rates from the server for a symbol, timeframe, and date.
+    copy_rates_from_pos: Copy rates from the server for a symbol, timeframe, position, and count.
+    order_send: Send an order request to the server.
+    positions_get: Get the positions from the server.
+    symbol_info_tick: Get the tick information for a symbol from the server.
+    symbol_info: Get the symbol information from the server.
+    symbol_select: Select a symbol on the server.
+    history_deals_get: Get the history deals from the server.
+    last_error: Get the last error from the server.
+    shutdown: Shutdown the server.
 Constants:
-    TIMEFRAMES (list): List of available timeframes.
-    ORDER_TYPES (dict): Dictionary of available order types.
-    TRADE_ACTIONS (dict): Dictionary of available trade actions.
-    ORDER_TIME (dict): Dictionary of available order times.
-    ORDER_FILLING (dict): Dictionary of available order filling types.
-    TRADE_RETCODES (dict): Dictionary of trade return codes.
+    TIMEFRAMES (dict): Mapping of string representations of timeframes to MetaTrader5 constants.
+    ORDER_TYPES (dict): Mapping of string representations of order types to MetaTrader5 constants.
+    TRADE_ACTIONS (dict): Mapping of string representations of trade actions to MetaTrader5 constants.
+    ORDER_TIME (dict): Mapping of string representations of order time to MetaTrader5 constants.
+    ORDER_FILLING (dict): Mapping of string representations of order filling to MetaTrader5 constants.
+    TRADE_RETCODES (dict): Mapping of trade return codes to their respective descriptions.
 """
 
 import os

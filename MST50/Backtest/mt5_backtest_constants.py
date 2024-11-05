@@ -1,6 +1,18 @@
 # Backtest/mt5_backtest_constants.py
 """
-
+This module contains constants used in the MetaTrader 5 backtesting module.
+The constants include timeframes, position types, order types, deal types, and trade request actions.
+functions:
+    get_constants: Get the constants used in the MetaTrader 5 backtesting module.
+    timeframe_to_timedelta: Convert timeframe string to timedelta.
+    get_timeframe_string: Get the timeframe string for the given timeframe.
+    get_mt5_tf_str: Convert MT5 timeframe constant to its string representation.
+constants:
+    timeframes: Dictionary of timeframe constants.
+    timeframes_reverse: Dictionary of timeframe constants in reverse.
+    ENUM_MT5_TIMEFRAMES: Enum of MT5 timeframe constants.
+    Generic constants:
+        timeframes, order types, trade actions, order time, order filling, trade retcodes.
 """
 from datetime import datetime, timedelta
 import enum

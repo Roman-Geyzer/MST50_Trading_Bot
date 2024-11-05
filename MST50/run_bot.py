@@ -1,6 +1,11 @@
 # run_bot.py
 
 """
+This module contains the main function to execute strategies on every minute.
+The on_minute function runs every minute and checks if a new hour has started, in backtesting mode: will run per the backtest step and simulation time.
+Also per strategy, it checks if a new bar has started and executes the strategy accordingly.
+Functions:
+    on_minute: Main function to execute strategies on every minute.
 
 """
 import os

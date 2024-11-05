@@ -2,25 +2,20 @@
 """
 This module contains helper functions and dictionaries for managing trades and orders in MetaTrader 5.
 Functions:
-    calculate_lot_size(): Calculate the lot size for a trade based on stop-loss (SL), symbol, and risk percentage.
-    calculate_sl_tp(): Calculate the stop-loss (SL) and take-profit (TP) prices based on the given parameters.
-    calculate_sl(): Calculate the stop-loss (SL) price using sl_method based on the given parameters.
-    calculate_tp(): Calculate the take-profit (TP) price using tp_method based on the given parameters.
-    calculate_trail(): Calculate the trailing stop price using trail_method based on the given parameters.
-    UsePerc_SL(): Calculate the stop loss (SL) price based on a percentage of the current price.
-    UseFixed_SL(): Calculate the stop loss (SL) price based on a fixed value.
-    UsePerc_TP(): Calculate the take profit (TP) price based on a percentage of the current price.
-    UseFixed_TP(): Calculate the take profit (TP) price based on a fixed value.
-    UseRR_TP(): Calculate the take profit (TP) price based on a risk-reward ratio.
-    UsePerc_Trail(): Calculate the trailing stop price based on a percentage of the current price.
-    UseFixed_Trail(): Calculate the trailing stop price based on a fixed value.
-dicts:
-    trade_dict (dict): Dictionary containing trade types and actions for buying and selling.
+    calculate_lot_size: Calculate the lot size for a trade based on the risk percentage and stop-loss.
+    get_mt5_trade_data: Get the trade data from the trade_dict based on the trade direction and type.
+    get_trade_direction: Get the trade direction based on the order type.
+    calculate_sl_tp: Calculate the stop-loss and take-profit prices based on the given parameters.
+    calculate_sl: Calculate the stop-loss price based on the given parameters.
+    calculate_tp: Calculate the take-profit price based on the given parameters.
+    calculate_trail: Calculate the trailing stop price based on the given parameters.
+    check_trail_conditions: Check if the trailing stop conditions are met.
+    mt5_position_to_dict: Convert a position tuple to a dictionary.
+Constants:
+    trade_dict (dict): Dictionary containing trade data for different trade directions and types.
     sl_methods (dict): Dictionary containing stop-loss calculation methods.
     tp_methods (dict): Dictionary containing take-profit calculation methods.
     trail_methods (dict): Dictionary containing trailing stop calculation methods.
-
-
 """
 
 # helper dictionarries:

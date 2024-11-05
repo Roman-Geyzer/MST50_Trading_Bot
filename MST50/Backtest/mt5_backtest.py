@@ -1,4 +1,38 @@
 # mt5_backtest.py
+"""
+This module contains the MT5Backtest class that simulates the MetaTrader 5 client for backtesting purposes.
+The class provides methods to simulate the MetaTrader 5 client functions for backtesting trading strategies.
+The class is designed to be used with the MT5Strategy class to backtest trading strategies.
+functions:
+    MT5Backtest: A class to simulate
+    the MetaTrader 5 (MT5) client for backtesting purposes.
+    extract_backtest_parameters: Extract symbols, timeframes, start_time, end_time, and time_step from strategies.
+    load_data: Load historical data from CSV files into symbols_data.
+    get_timeframe_name: Get the timeframe name from its value.
+    copy_rates: Simulate MT5.copy_rates() function.
+    copy_rates_from_pos: Simulate MT5.copy_rates_from_pos() function.
+    copy_rates_from: Simulate MT5.copy_rates_from() function.
+    account_info: Simulate MT5.account_info() function.
+    positions_get: Simulate MT5.positions_get() function.
+    symbol_info_tick: Simulate MT5.symbol_info_tick() function.
+    symbol_info: Simulate MT5.symbol_info() function.
+    symbol_select: Simulate MT5.symbol_select() function.
+    history_deals_get: Simulate MT5.history_deals_get() function.
+    order_send: Simulate MT5.order_send() function.
+    execute_market_order: Execute a market order.
+    execute_pending_order: Execute a pending order by adding it to the pending_orders list.
+    modify_order: Modify an existing order (e.g., change SL/TP).
+    remove_pending_order: Remove a pending order.
+    close_by_order: Close a position by an opposite one.
+    get_current_price: Get the current price for a symbol based on current_time and advance_timeframe.
+    get_trade_direction: Get trade direction based on order type.
+    advance_time_step: Advance the simulation time by one minute.
+    execute_trade_logic: Process pending orders and update account metrics.
+    process_pending_orders: Process pending orders based on current price.
+    update_account_metrics: Update account metrics based on open positions.
+    close_all_positions: Close all open positions.
+    close_position: Close a single position.
+"""
 
 import pandas as pd
 import numpy as np

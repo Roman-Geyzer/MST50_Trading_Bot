@@ -1,5 +1,21 @@
 # indicators.py
-
+"""
+This module contains the Indicator class and its subclasses for various trading strategies.
+Classes:
+    Indicators: Class to manage and dispatch to specific indicator classes based on the strategy configuration.
+    Indicator: Base class for all indicator classes.
+    Indicator subclasses:
+        NoIndicator: Class for the No Indicator strategy.
+        BBIndicator: Class for the Bollinger Bands indicator.
+        MAIndicator: Class for the Moving Average indicator.
+        DoubleIndicator: Class for the Double pattern indicator.
+        GRIndicator: Class for the Green/Red ratio indicator.
+        RSIIndicator: Class for the Relative Strength Index (RSI) indicator.
+Main Functions:
+    initialize_indicator: Initialize the correct indicator instance based on the strategy configuration.
+    make_trade_decision: Make a trade decision based on the selected indicator class.
+    get_rsi_indicator: Return the RSI indicator instance for calculation.
+"""
 import numpy as np
 import pandas as pd
 from datetime import datetime

@@ -1,4 +1,27 @@
 # symbols.py
+"""
+This module contains the Symbol and Timeframe classes for storing symbol and timeframe data.
+The Symbol class stores symbol data and initializes Timeframe instances for each timeframe.
+The Timeframe class stores timeframe data and fetches historical rates for a symbol and timeframe.
+Classes:
+    Symbol: Class for storing symbol data, initializing Timeframe instances, and fetching rates.
+    Timeframe: Class for storing timeframe data.
+Methods:
+    Symbol Class:
+        initialize_symbols: Initialize symbols for each strategy.
+        create_symbols_dict: Create a dictionary containing DataFrames for each symbol in each strategy.
+        get_tf_rates: Get rates for a specific timeframe.
+        check_symbol_tf_flag: Get rates for a specific timeframe.
+        get_tf_obj: Get rates for a specific timeframe.
+    Timeframe Class:
+        fetch_rates: Fetch historical rates for a symbol and timeframe.
+        calculate_tr_length: Calculate the TR length for a symbol and timeframe.
+        fetch_rates: Fetch historical rates for a symbol and timeframe.
+        fetch_new_bar_rates: Fetch new bar rates for all symbols and timeframes.
+        get_rates: Get rates for a specific timeframe.
+        get_tf_str: Get rates for a specific timeframe.
+        get_symbol_str: Get rates for a specific timeframe.
+"""
 
 import pandas as pd
 from datetime import datetime

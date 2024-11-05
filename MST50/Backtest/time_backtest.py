@@ -3,6 +3,9 @@
 """
 This module provides backtesting versions of TradeHour and TimeBar classes,
 which use the simulated current time from the backtesting module.
+Classes:
+    TradeHour: Class to track the current hour and day during backtesting.
+    TimeBar: Class to track and determine if a new bar has started for different timeframes during backtesting.
 """
 
 class TradeHour:

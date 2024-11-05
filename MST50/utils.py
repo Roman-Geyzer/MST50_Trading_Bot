@@ -1,31 +1,50 @@
 # utils.py
 """
-This module provides utility functions and classes for trading strategies, including configuration loading, 
-timeframe and symbol magic number retrieval, and safe type conversions.
+This module contains utility functions for the MST50 package.
 Classes:
-    TradeHour: A class to track and determine if a new trading hour has started.
-    TimeBar: A class to track and determine if a new bar has started for different timeframes.
+    TradeHour: Class to track the current hour and day.
+    TimeBar: Class to track the current bar for different timeframes.
+Methods:
+    TradeHour:
+        is_new_hour: Check if a new hour has started.
+        is_new_day: Check if a new day has started.
+        is_new_week: Check if a new week has started.
+        update_current_day: Update the current day.
+        update_current_hour: Update the current hour.
+    TimeBar:
+        update_tf_bar: Check the highest timeframe that has a new bar and update the respective attributes.
+        check_last_minute_of_hour: Check if the last minute of the hour has been reached.
+
+Variables:
+    magic_number_base: Base magic number for strategies.
+    performance_file: File to write performance data.
+    TIMEFRAME_MAGIC_NUMBER_MAPPING: Mapping of timeframes to magic numbers.
+    SYMBOL_MAGIC_NUMBER_MAPPING: Mapping of symbols to magic numbers.
+    TIMEFRAME_MT5_MAPPING: Mapping of timeframes to MetaTrader 5 timeframes.
+    TIMEFRAME_STRING_MAPPING: Mapping of timeframes to string representations.
+    BarsTFs: Enum for bar timeframes.
 Functions:
-    calculate_history_length(strategy_config): Calculate the history length based on the strategy configuration.
-    is_new_bar(timeframe, time_bar): Check if a new bar has formed for the given timeframe.
-    get_mt5_timeframe(timeframe): Return the corresponding MetaTrader 5 timeframe for the given timeframe.
-    get_timeframe_string(timeframe): Return the corresponding index for the given timeframe.
-    get_timeframe_magic_number(timeframe): Return the corresponding number for the given timeframe.
-    get_final_magic_number(symbol, base_magic_number): Return the final magic number for the given symbol.
-    str_to_bool(s): Convert a value to boolean.
-    safe_int_convert(value, default=0): Safely convert a value to an integer.
-    safe_float_convert(value, default=0.0): Safely convert a value to a float.
-    safe_int_extract_from_dict(dict, key, default=0): Safely extract an integer value from a dictionary.
-    safe_float_extract_from_dict(dict, key, default=0.0): Safely extract a float value from a dictionary.
-    safe_bool_extract_from_dict(dict, key, default=False): Safely extract a boolean value from a dictionary.
-    safe_str_extract_from_dict(dict, key, default=''): Safely extract a string value from a dictionary.
-    load_config(filename, sheet_name='config', strategies_run_mode=['live']): Load configuration from an Excel file into a structured dictionary.
-    write_balance_performance_file(balance, performance, filename='balance_performance.csv'): Write the balance and performance data to a CSV file.
-    wait_for_new_minute(time_bar): Wait for a new minute to start based on the TimeBar object.
-    attempt_i_times_with_s_seconds_delay(i, s, loop_error_msg, final_error_msg, func, *args): Attempt to execute a function a specified number of times with a delay between attempts.
-    print_current_time(): Print the current time.
-    print_hashtags(): Print a line of hashtags.
-    print_hashtaged_msg(hashed_lines, *args): Print a message surrounded by hashtags.
+    load_config: Load configuration from an Excel file into a structured dictionary - used for strategies configuration and initialization.
+    get_mt5_timeframe: Get the MetaTrader 5 timeframe for a given timeframe.
+    get_timeframe_string: Get the string representation of a timeframe.
+    get_timeframe_magic_number: Get the magic number for a timeframe.
+    get_final_magic_number: Get the final magic number for a strategy.
+    str_to_bool: Convert a value to boolean.
+    safe_int_convert: Safely convert a value to an integer.
+    safe_float_convert: Safely convert a value to a float.
+    safe_date_convert: Safely convert a value to a datetime.
+    safe_int_extract_from_dict: Safely extract an integer value from a dictionary.
+    safe_float_extract_from_dict: Safely extract a float value from a dictionary.
+    safe_bool_extract_from_dict: Safely extract a boolean value from a dictionary.
+    safe_str_extract_from_dict: Safely extract a string value from a dictionary.
+    write_balance_performance_file: Write the balance and performance data to a CSV file.
+    wait_for_new_minute: Wait for a new minute to start based on the TimeBar object.
+    print_with_info: Prints information about the call stack up to 'levels_up' levels.
+    attempt_i_times_with_s_seconds_delay: Attempt to execute a function a specified number of times with a delay between attempts.
+    catch_i_times_with_s_seconds_delay: Attempt to execute a function a specified number of times with a delay between attempts.
+    calculate_history_length: Calculate the history length based on the strategy configuration.
+Functions:
+
 """
 
 import pandas as pd

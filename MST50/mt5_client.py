@@ -1,5 +1,21 @@
 # MST50/mt5_client.py
-
+"""
+This module provides a client interface to the MetaTrader 5 server using Pyro5.
+The client interface exposes the server functions and constants to the trading platform.
+Functions:
+    account_info: Get the account information from the server.
+    copy_rates: Copy rates from the server for a symbol and timeframe.
+    order_send: Send an order request to the server.
+    positions_get: Get the positions from the server.
+    symbol_info_tick: Get the tick information for a symbol from the server.
+    symbol_info: Get the symbol information from the server.
+    history_deals_get: Get the history deals from the server.
+    copy_rates_from: Copy rates from the server for a symbol, timeframe, and date.
+    copy_rates_from_pos: Copy rates from the server for a symbol, timeframe, position, and count.
+    last_error: Get the last error from the server.
+    symbol_select: Select a symbol on the server.
+    shutdown: Shutdown the server.
+"""
 
 import Pyro5.api
 import numpy as np

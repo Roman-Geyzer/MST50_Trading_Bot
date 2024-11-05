@@ -1,4 +1,10 @@
 # signals.py
+"""
+This module provides signal classes for use as indicator filters.
+Classes:
+    RSISignal: Class to check RSI signals for trade entry.
+    ERSignal: Class to check ER signals for trade entry.
+"""
 
 import numpy as np
 import pandas as pd

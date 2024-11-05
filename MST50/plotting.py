@@ -1,6 +1,9 @@
 # plotting.py
 """
 plotting.py module defines functions for plotting charts using OHLC data from a Timeframe instance and annotating trades if provided using Plotly.
+Functions:
+    plot_bars: Plots the bar chart using OHLC data from a Timeframe instance and annotates trades if provided.
+    
 """
 
 import pandas as pd

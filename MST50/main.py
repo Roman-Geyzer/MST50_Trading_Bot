@@ -3,16 +3,16 @@
 """
 This script is the main entry point for executing trading strategies using the provided configuration.
 Functions:
-    main(): Initializes MetaTrader 5, loads strategy configurations, schedules strategy execution, and manages the execution loop.
-    on_minute(): Executes trading strategies on every minute.
+    main(): Main function to execute trading strategies in either live trading or backtesting mode.
 Modules:
-    strategy: Contains the Strategy class used for executing trading strategies.
-    schedule: Used for scheduling tasks at specific intervals.
-    time: Provides time-related functions.
-    datetime: Supplies classes for manipulating dates and times.
-    os: Provides a way of using operating system dependent functionality.
-    symbols: Contains the Symbol class used for storing symbol data.
-    utils: Contains utility functions used throughout the project.
+    schedule: Python job scheduling for running the on_minute function every minute.
+    time: Time access and conversions.
+    mt5_interface: Interface to MetaTrader 5 for trading and data access.
+    strategy: Module for defining trading strategies.
+    symbols: Module for defining trading symbols.
+    Backtest.main_backtest: Module for running backtesting.
+    utils: Utility functions for logging and printing messages.
+    run_bot: Module for running the on_minute function.
 Constants:
     run_mode (list): Specifies the modes in which the trading strategies can run, either 'live' or 'demo'.
     cores (int): Number of cores to use for parallel processing.
@@ -49,6 +49,7 @@ run_mode = ['dev']
 def main():
     """
     Main function to execute trading strategies.
+    will run the main_backtest function if BACKTEST_MODE is True, otherwise will run the live trading mode.
     """
     print_hashtaged_msg(1, "Initializing MST50", "Initializing MST50...")
     # Initialize strategies and symbols

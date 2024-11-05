@@ -1,7 +1,6 @@
 # constants.py
 """
 This module defines various constants and mappings used for trading with MetaTrader5.
-Imports:
 Constants:
     TIMEFRAME_MT5_MAPPING (dict): Mapping of string representations of timeframes to MetaTrader5 constants.
     TIMEFRAME_MAGIC_NUMBER_MAPPING (dict): Mapping of string representations of timeframes to their respective magic numbers.
@@ -12,9 +11,17 @@ Constants:
     SLIPPAGE (int): Maximum slippage in points.
     magic_number_base (int): Base value for magic numbers, requires currency for full number.
     performance_file (str): Filename for storing balance performance data.
+    SYMBOL_MAGIC_NUMBER_MAPPING (dict): Mapping of symbols to their respective magic numbers.
+    TIMEFRAME_STRING_MAPPING (dict): Mapping of MetaTrader5 constants to string representations of timeframes.
+    TIMEFRAMES (dict): Mapping of string representations of timeframes to MetaTrader5 constants.
+    ORDER_TYPES (dict): Mapping of string representations of order types to MetaTrader5 constants.
+    TRADE_ACTIONS (dict): Mapping of string representations of trade actions to MetaTrader5 constants.
+    TRADE_DECISION (dict): Enumeration of trade decisions.
+    CandleColor (dict): Enumeration of candle colors.
+    BarsTFs (dict): Enumeration of bar timeframes.
 """
 
-from .mt5_interface import TIMEFRAMES, ORDER_TYPES, TRADE_ACTIONS
+from .mt5_interface import TIMEFRAMES
 from enum import Enum
 
 #Enums:

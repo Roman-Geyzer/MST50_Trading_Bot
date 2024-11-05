@@ -1,5 +1,38 @@
 # candles.py
-
+"""
+This module contains the CandlePatterns class that handles the candle patterns and their trade decisions.
+The CandlePatterns class is initialized with configurations for a specific timeframe.
+The class contains methods to make trade decisions based on the configured candle patterns.
+functions:
+    CandlePatterns: Initialize the CandlePatterns class with configurations for a specific timeframe.
+    initialize_pattern: Initialize the appropriate candle pattern class based on the configured pattern.
+    initialize_candle: Initialize the appropriate candle class based on the configured candle.
+    make_trade_decision: Make a trade decision based on the configured candle patterns.
+    check_candle_patterns_active: Check if the configured candle pattern is active.
+classes:
+    CandlePatterns: Class to handle the candle patterns and their trade decisions.
+    Pattern: Base class for candle patterns.
+    Pattern Class children:
+        NoPattern: Placeholder class for no pattern.
+        Engulf: Initialize the Engulfing pattern.
+        Marubuzo: Initialize the Marubuzo pattern.
+        Out: Initialize the Out pattern.
+        In: Initialize the InBar pattern.
+        Ham: Initialize the Hammer pattern.
+        InvHam: Initialize the Inverted Hammer pattern.
+        KangoroFull: Initialize the Full Kangoro pattern.
+        KangoroPartial: Initialize the Partial Kangoro pattern.
+        Fakeout: Initialize the Fakeout pattern.
+        SameCandleCount: Initialize the Same Candle Count pattern.
+        InsideBreakout: Initialize the Inside Breakout pattern.
+        HHHCLLLC: Initialize the HHHCLLLC pattern.
+        InvHHHCLLLC: Initialize the Inverted HHHCLLLC pattern.
+    Candle: Base class for candle patterns.
+    Candle Class children:
+        NoCandle: Placeholder class for no candle.
+        SameDirectionCandle: Initialize the Same Direction Candle class.
+        OppositeDirectionCandle: Initialize the Opposite Direction Candle class.
+"""
 import pandas as pd
 from .constants import CandleColor
 from .utils import print_with_info

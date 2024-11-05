@@ -1,5 +1,27 @@
 # strategy.py
-
+"""
+This module contains the Strategy class, which represents a trading strategy.
+The Strategy class manages open trades for a specific strategy, including entering positions, 
+monitoring open trades, checking if trades are still open or closed, documenting closed trades, and performing actions like trailing stops or closing trades based on conditions.
+Classes:
+    Strategy: A class to represent a trading strategy.
+Functions:
+    initialize_strategies: Initialize all strategy instances based on the provided configuration.
+    get_open_trades_from_terminal: Get all open trades from the terminal by magic number.
+    handle_new_bar: Handle the arrival of a new bar.
+    handle_new_minute: Handle the arrival of a new minute.
+    document_closed_trade: Document a closed trade.
+    check_open_trades: Monitor open trades and update their status.
+    write_strategy_performance_file: Write the strategy's performance to a file.
+    check_trail_active: Check if trailing is active for the strategy.
+    check_trading_filters: Check the trading filters for a symbol and decide whether to continue checking for entry signals and indicators.
+    check_and_place_orders: Check for trading signals and enter positions accordingly.
+    close_all_trades: Close all trades in a specified direction for a given symbol.
+    fill_request_data: Fill the request data for a trade operation.
+    prep_and_order: Prepare and order.
+    prep_and_close: Prepare and close.
+    prep_and_update: Prepare and update.
+"""
 
 import pandas as pd
 from datetime import datetime
