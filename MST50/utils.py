@@ -51,16 +51,27 @@ import pandas as pd
 import inspect
 
 
-from .constants import (magic_number_base, performance_file, TIMEFRAME_MAGIC_NUMBER_MAPPING,
-                       SYMBOL_MAGIC_NUMBER_MAPPING, TIMEFRAME_MT5_MAPPING, TIMEFRAME_STRING_MAPPING,
-                       BarsTFs)
+from .constants import (magic_number_base, TIMEFRAME_MAGIC_NUMBER_MAPPING,
+                       SYMBOL_MAGIC_NUMBER_MAPPING, TIMEFRAME_MT5_MAPPING, TIMEFRAME_STRING_MAPPING)
 from datetime import datetime
 import time
 from .mt5_interface import TIMEFRAMES, copy_rates_from
 import math
 import platform
+import os
 
+# Determine if we are in backtesting mode
+BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
+if platform.system() == 'Windows':
+    drive = "Z:"
+else:
+    drive = "/Volumes/TM"
+
+performance_dir = os.path.join(drive, 'documentation/account')
+
+performance_file = f"{drive}/Fulfillment/Forex - Algo trading/Python API/performance.csv"
+#TODO: update the path with drive
 if platform.system() == 'Windows':
     file_namd_path = "Z:\\Desktop\\Fulfillment\\Forex - Algo trading\\Python API\\config.xlsx"
 else:
@@ -528,8 +539,9 @@ def write_balance_performance_file(account_info_dict):
         performance (list): List of performance data.
         filename (str): The name of the CSV file to write.
     """
-    #TODO: implement the write_balance_performance_file function
-    pass
+    if BACKTEST_MODE:
+        return # Skip writing the file in backtest mode
+    #TODO: implement the function to write the balance and performance data to a CSV file
 
 
 

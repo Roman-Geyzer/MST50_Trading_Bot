@@ -32,15 +32,20 @@ functions:
     update_account_metrics: Update account metrics based on open positions.
     close_all_positions: Close all open positions.
     close_position: Close a single position.
+    simulate_target_hit_close: Check if any open positions have hit their SL or TP and close them accordingly.
+    get_current_bar_data: Get the current bar data for a symbol based on current_time and advance_timeframe.
+    initialize_current_tick_indices: Initialize current_tick_index for each symbol and timeframe based on self.start_time.
 """
 
 import pandas as pd
 import numpy as np
 import os
 from datetime import datetime, timedelta
-import copy
+
 import plotly.graph_objects as go
 from .mt5_backtest_constants import *
+from .time_backtest import TimeBar, TradeHour
+
 
 
 # days set to end backtest - x days ago from today
@@ -134,6 +139,12 @@ class MT5Backtest:
         self.trade_logs = []      # List to store trade dictionaries
         self.account_docs = []    # List to store account documentation dictionaries
 
+        # Initialize current tick indices for each symbol and timeframe
+        self.current_tick_index = {}
+        for symbol, tfs in self.symbols_data.items():
+            self.current_tick_index[symbol] = {}
+            for tf_name in tfs.keys():
+                self.current_tick_index[symbol][tf_name] = 0  # Start at the first bar
 
     def extract_backtest_parameters(self):
         """
@@ -179,14 +190,17 @@ class MT5Backtest:
         # Map the timeframe string to a timedelta
         self.time_step = timeframe_to_timedelta(backtest_timeframe_str)
 
+
     def load_data(self):
         """
         Load historical data from CSV files into symbols_data.
-        Only loads data for specified symbols and timeframes.
+        Only loads data for specified symbols and timeframes, starting from self.start_time.
         """
         if not self.symbols or not self.timeframes:
             print("No symbols or timeframes specified for data loading.")
             return
+
+        required_columns = {'time', 'open', 'high', 'low', 'close', 'spread'}
 
         for filename in os.listdir(self.data_dir):
             filepath = os.path.join(self.data_dir, filename)
@@ -200,13 +214,93 @@ class MT5Backtest:
             if symbol not in self.symbols or tf_name not in self.timeframes:
                 continue  # Skip unnecessary data
 
-            df = pd.read_csv(filepath, parse_dates=['time'])
+            df = pd.read_csv(filepath)
+            
+            # Check if 'time' column exists
+            if 'time' not in df.columns:
+                print(f"Error: 'time' column missing in {filename}. Skipping.")
+                continue
+
+            # **Remove utc=True to keep 'time' timezone-naive**
+            try:
+                df['time'] = pd.to_datetime(df['time'], errors='raise')  # Removed utc=True
+            except Exception as e:
+                print(f"Error parsing 'time' column in {filename}: {e}. Skipping.")
+                continue
+
+            # Check for required columns
+            if not required_columns.issubset(df.columns):
+                missing = required_columns - set(df.columns)
+                print(f"Error: Missing columns {missing} in {filename}. Skipping.")
+                continue
+
+            # Remove rows with any NaT in 'time'
+            if df['time'].isnull().any():
+                print(f"Warning: Some 'time' entries could not be parsed in {filename}. They will be dropped.")
+                df = df.dropna(subset=['time'])
+
+            # Sort by 'time' ascending
             df.sort_values('time', inplace=True)
-            df.reset_index(drop=True, inplace=True)
+
+            # Filter data to include only rows where 'time' >= self.start_time
+            if self.start_time:
+                initial_row_count = len(df)
+                df = df[df['time'] >= self.start_time]
+                filtered_row_count = len(df)
+                print(f"    Filtered data for {symbol} on timeframe {tf_name}: {filtered_row_count} out of {initial_row_count} bars retained (from {self.start_time}).")
+            else:
+                print(f"    No start_time specified. Loading all data for {symbol} on timeframe {tf_name}.")
+
+            # Set 'time' as index for faster access
+            df.set_index('time', inplace=True)  # Set 'time' as index
+            df.drop_duplicates(inplace=True)    # Remove any duplicate timestamps
+            # Reset index to keep 'time' as a column while also having it as the index
+            df.reset_index(inplace=True)
+
+            # **Precompute NumPy arrays for faster access**
+            df['time_np'] = df['time'].astype('int64') // 10**9  # Convert to UNIX timestamp
+            df['close_np'] = df['close'].values
+            df['spread_np'] = df['spread'].values
+
+            # Ensure symbols_data[symbol] is initialized as a dict
             if symbol not in self.symbols_data:
                 self.symbols_data[symbol] = {}
+
+            # Assign the DataFrame to the specific timeframe
             self.symbols_data[symbol][tf_name] = df
 
+            print(f"    Loaded data for {symbol} on timeframe {tf_name} with {len(df)} bars.")
+
+        # Initialize current_tick_index after loading all data
+        self.initialize_current_tick_indices()
+    
+    def initialize_current_tick_indices(self):
+        """
+        Initialize the current_tick_index for each symbol and timeframe.
+        """
+        for symbol, tfs in self.symbols_data.items():
+            for tf_name in tfs:
+                self.current_tick_index[symbol][tf_name] = 0
+
+    def initialize_current_tick_indices(self):
+        """
+        Initialize current_tick_index for each symbol and timeframe based on self.start_time.
+        Sets the current_tick_index to the first bar at or after self.start_time.
+        """
+        self.current_tick_index = {}
+        for symbol, tfs in self.symbols_data.items():
+            self.current_tick_index[symbol] = {}
+            for tf_name, df in tfs.items():
+                # Find the first index where 'time' >= self.start_time
+                idx = df.index[df['time'] >= self.start_time].tolist()
+                if idx:
+                    first_valid_index = idx[0]
+                    self.current_tick_index[symbol][tf_name] = first_valid_index
+                    print(f"    Initialized current_tick_index for {symbol} on {tf_name}: {first_valid_index}")
+                else:
+                    # If no data after self.start_time, set index to len(df) to indicate no data
+                    self.current_tick_index[symbol][tf_name] = len(df)
+                    print(f"    No data after start_time for {symbol} on {tf_name}. Setting current_tick_index to {len(df)}")    
 
     def get_timeframe_name(self, timeframe):
         """
@@ -238,12 +332,17 @@ class MT5Backtest:
             return None
 
         df = self.symbols_data[symbol][tf_name]
-        df_up_to_now = df[df['time'] <= self.current_time]
-        if df_up_to_now.empty:
-            self.set_last_error(RES_E_NOT_FOUND, f"No data available up to current time for {symbol}, {tf_name}")
+        current_index = self.current_tick_index[symbol][tf_name]
+
+        if current_index < 0 or current_index >= len(df):
+            self.set_last_error(RES_E_NOT_FOUND, f"Current index {current_index} out of range for {symbol}, {tf_name}")
             return None
 
-        rates = df_up_to_now.tail(count)
+        # Determine the start and end indices for slicing
+        start_index = max(current_index - count + 1, 0)
+        end_index = current_index + 1  # +1 because slicing is exclusive at the end
+
+        rates = df.iloc[start_index:end_index]
         return rates.to_records(index=False)
 
     def copy_rates_from_pos(self, symbol, timeframe, pos, count):
@@ -269,6 +368,7 @@ class MT5Backtest:
             self.set_last_error(RES_E_INVALID_PARAMS, f"Invalid position: {pos} for {symbol}, {tf_name}")
             return None
 
+        # Use iloc to slice based on position
         rates = df.iloc[pos: pos + count]
         return rates.to_records(index=False)
 
@@ -306,7 +406,7 @@ class MT5Backtest:
         Returns:
             dict: Account information.
         """
-        return copy.deepcopy(self.account)
+        return self.account
 
     def positions_get(self, ticket=None):
         """
@@ -319,9 +419,9 @@ class MT5Backtest:
             dict or list or None: Single position dict, list of positions, or None if not found.
         """
         if ticket is not None:
-            return copy.deepcopy(self.open_positions.get(ticket, None))
+            return self.open_positions.get(ticket, None)
         else:
-            return copy.deepcopy(list(self.open_positions.values())) if self.open_positions else None
+            return (self.open_positions.values()) if self.open_positions else None
 
     def symbol_info_tick(self, symbol):
         """
@@ -334,26 +434,35 @@ class MT5Backtest:
             dict or None: Tick information or None if error.
         """
         tf_name = self.advance_timeframe  # Use the advance timeframe
+
+        # Quick existence check using 'in' for both symbol and timeframe
         if symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
             self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
             return None
 
         df = self.symbols_data[symbol][tf_name]
-        current_bar = df[df['time'] <= self.current_time].tail(1)
-        if current_bar.empty:
-            # Use the last known price if available
-            current_bar = df.tail(1)
-            if current_bar.empty:
-                self.set_last_error(RES_E_NOT_FOUND, f"No tick data available for {symbol}.")
-                return None
+        current_index = self.current_tick_index[symbol][tf_name]
+
+        # Check if current_index is within bounds
+        if current_index >= len(df):
+            self.set_last_error(RES_E_NOT_FOUND, f"No more tick data available for {symbol}.")
+            return None
+
+        # **Access precomputed NumPy arrays for faster retrieval**
+        tick_time = df['time_np'].iloc[current_index]
+        bid = df['close_np'].iloc[current_index]
+        spread = df['spread_np'].iloc[current_index]
+        ask = bid + (spread * 0.0001)
+        last = bid
 
         tick = {
-            'time': int(current_bar['time'].iloc[0].timestamp()),
-            'bid': current_bar['close'].iloc[0],  # Simplified: using close price as bid
-            'ask': current_bar['close'].iloc[0] + (current_bar['spread'].iloc[0] * 0.0001),  # Simplified spread
-            'last': current_bar['close'].iloc[0]
+            'time': int(tick_time),  # UNIX timestamp as integer
+            'bid': bid,               # Close price as bid
+            'ask': ask,               # Close price plus scaled spread as ask
+            'last': last              # Close price as last
         }
         return tick
+
 
     def symbol_info(self, symbol):
         """
@@ -428,7 +537,7 @@ class MT5Backtest:
         for pos in self.closed_positions:
             close_time = pos.get('close_datetime')
             if close_time and from_date <= close_time <= to_date:
-                deals.append(copy.deepcopy(pos))
+                deals.append(pos)
         return deals if deals else None
 
     def order_send(self, request):
@@ -535,7 +644,7 @@ class MT5Backtest:
         self.next_ticket += 1
 
         # Log the trade
-        trade_log = copy.deepcopy(position)
+        trade_log = position
         trade_log['action'] = 'OPEN'
         self.trade_logs.append(trade_log)
 
@@ -579,7 +688,7 @@ class MT5Backtest:
         self.next_ticket += 1
 
         # Log the pending order
-        pending_order_log = copy.deepcopy(pending_order)
+        pending_order_log = pending_order
         pending_order_log['ticket'] = temp_ticket
         pending_order_log['time'] = self.current_time
         pending_order_log['action'] = 'PENDING'
@@ -650,7 +759,7 @@ class MT5Backtest:
                 self.pending_orders.remove(order)
 
                 # Log the removal
-                removal_log = copy.deepcopy(order)
+                removal_log = order
                 removal_log['ticket'] = order_ticket
                 removal_log['time'] = self.current_time
                 removal_log['action'] = 'REMOVE'
@@ -732,15 +841,22 @@ class MT5Backtest:
 
     def advance_time_step(self):
         """
-        Advance the simulation time by one minute.
+        Advance the simulation time to the next data point.
+        Returns:
+            bool: True if simulation continues, False otherwise.
         """
         # Determine the next timestamp across all symbols and timeframes
         next_times = []
         for symbol, tfs in self.symbols_data.items():
-            for tf, df in tfs.items():
-                future_bars = df[df['time'] > self.current_time]
-                if not future_bars.empty:
-                    next_times.append(future_bars['time'].iloc[0])
+            for tf_name, df in tfs.items():
+                current_index = self.current_tick_index[symbol][tf_name]
+                if current_index + 1 < len(df):
+                    next_bar_time = df.iloc[current_index + 1]['time']
+                    if isinstance(next_bar_time, (int, float)):
+                        # Convert UNIX timestamp to datetime if necessary
+                        next_bar_time = datetime.fromtimestamp(next_bar_time)
+                    if next_bar_time > self.current_time:
+                        next_times.append(next_bar_time)
 
         if not next_times:
             # No more data to process
@@ -756,20 +872,60 @@ class MT5Backtest:
         # Advance time
         self.current_time = next_time
 
-        # Execute trade logic (process pending orders, update account)
-        self.execute_trade_logic()
-
-        # Log account status if a new hour has started
-        self.log_account_status()
-
         return True
 
     def execute_trade_logic(self):
         """
         Process pending orders and update account metrics.
         """
+        # Simulate SL/TP hits before processing pending orders
+        self.simulate_target_hit_close()
+
         self.process_pending_orders()
         self.update_account_metrics()
+
+    def simulate_target_hit_close(self):
+        """
+        Check if any open positions have hit their SL or TP and close them accordingly.
+        """
+        tickets_to_check = list(self.open_positions.keys())  # Create a list to avoid runtime errors
+        for ticket in tickets_to_check:
+            position = self.open_positions[ticket]
+            symbol = position['symbol']
+            order_type = position['type']
+            sl = position['sl']
+            tp = position['tp']
+
+            # Get current bar data for the symbol
+            bar_data = self.get_current_bar_data(symbol)
+            if bar_data is None:
+                continue  # Skip if no bar data available
+
+            high = bar_data['high']
+            low = bar_data['low']
+
+            # Determine if SL or TP was hit
+            sl_hit = False
+            tp_hit = False
+
+            if order_type == ORDER_TYPE_BUY:
+                if sl and low <= sl:
+                    sl_hit = True
+                    exit_price = sl  # Exit at SL price
+                elif tp and high >= tp:
+                    tp_hit = True
+                    exit_price = tp  # Exit at TP price
+            elif order_type == ORDER_TYPE_SELL:
+                if sl and high >= sl:
+                    sl_hit = True
+                    exit_price = sl  # Exit at SL price
+                elif tp and low <= tp:
+                    tp_hit = True
+                    exit_price = tp  # Exit at TP price
+
+            if sl_hit or tp_hit:
+                # Close the position
+                self.close_position(ticket, exit_price, reason='SL' if sl_hit else 'TP')
 
     def process_pending_orders(self):
         """
@@ -827,28 +983,34 @@ class MT5Backtest:
         """
         Update account metrics based on open positions.
         """
-        total_profit = 0.0
-        for pos in self.open_positions.values():
-            current_prices = self.get_current_price(pos['symbol'])
-            if not current_prices:
-                continue  # Skip if no price data
+        if not self.open_positions:
+            self.account['profit'] = 0.0
+        else:
+            # Create a DataFrame from open positions
+            positions_df = pd.DataFrame(self.open_positions.values())
+            # Get current prices for all symbols
+            symbols = positions_df['symbol'].unique()
+            current_prices = {symbol: self.get_current_price(symbol) for symbol in symbols}
 
-            bid = current_prices['bid']
-            ask = current_prices['ask']
+            # Calculate profit for each position
+            def calculate_profit(row):
+                price_data = current_prices.get(row['symbol'], {})
+                bid = price_data.get('bid', row['price'])
+                ask = price_data.get('ask', row['price'])
+                if row['type'] in [ORDER_TYPE_BUY, ORDER_TYPE_BUY_LIMIT, ORDER_TYPE_BUY_STOP, ORDER_TYPE_BUY_STOP_LIMIT]:
+                    return (bid - row['price']) * row['volume']
+                elif row['type'] in [ORDER_TYPE_SELL, ORDER_TYPE_SELL_LIMIT, ORDER_TYPE_SELL_STOP, ORDER_TYPE_SELL_STOP_LIMIT]:
+                    return (row['price'] - ask) * row['volume']
+                else:
+                    return 0.0
 
-            if pos['type'] in [ORDER_TYPE_BUY, ORDER_TYPE_BUY_LIMIT, ORDER_TYPE_BUY_STOP, ORDER_TYPE_BUY_STOP_LIMIT]:
-                profit = (bid - pos['price']) * pos['volume']
-            elif pos['type'] in [ORDER_TYPE_SELL, ORDER_TYPE_SELL_LIMIT, ORDER_TYPE_SELL_STOP, ORDER_TYPE_SELL_STOP_LIMIT]:
-                profit = (pos['price'] - ask) * pos['volume']
-            else:
-                profit = 0.0
+            positions_df['profit'] = positions_df.apply(calculate_profit, axis=1)
+            total_profit = positions_df['profit'].sum()
 
-            pos['profit'] = profit
-            total_profit += profit
-
-        self.account['profit'] = total_profit
-        self.account['equity'] = self.account['balance'] + self.account['profit']
-        self.account['free_margin'] = self.account['equity'] - self.account['margin']
+            # Update account
+            self.account['profit'] = total_profit
+            self.account['equity'] = self.account['balance'] + self.account['profit']
+            self.account['free_margin'] = self.account['equity'] - self.account['margin']
 
     def close_all_positions(self):
         """
@@ -856,103 +1018,121 @@ class MT5Backtest:
         """
         for ticket in list(self.open_positions.keys()):
             self.close_position(ticket)
+    
+    def get_current_bar_data(self, symbol):
+        """
+        Get the current bar data for the symbol at current_time.
 
-    def close_position(self, ticket):
+        Parameters:
+            symbol (str): The trading symbol.
+
+        Returns:
+            dict or None: Bar data or None if not found.
+        """
+        tf_name = self.advance_timeframe  # Use the advance timeframe
+        if symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
+            self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
+            return None
+
+        df = self.symbols_data[symbol][tf_name]
+        current_bar = df.iloc[self.current_tick_index[symbol][tf_name]]
+        if current_bar is None:
+            return None
+
+        bar = current_bar.to_dict()
+        return bar
+
+    def close_position(self, ticket, exit_price=None, reason='CLOSE'):
         """
         Close a single position.
 
         Parameters:
             ticket (int): The ticket number of the position to close.
+            exit_price (float): The price at which the position is closed.
+            reason (str): The reason for closing ('CLOSE', 'SL', 'TP').
         """
         if ticket not in self.open_positions:
             self.set_last_error(RES_E_NOT_FOUND, f"Position ticket {ticket} not found.")
             return
 
         position = self.open_positions[ticket]
-        direction = 'SELL' if position['type'] in [
-            ORDER_TYPE_BUY, ORDER_TYPE_BUY_LIMIT, ORDER_TYPE_BUY_STOP, ORDER_TYPE_BUY_STOP_LIMIT
-        ] else 'BUY'
+        order_type = position['type']
+        volume = position['volume']
+        entry_price = position['price']
+        symbol = position['symbol']
 
-        current_prices = self.get_current_price(position['symbol'])
-        if not current_prices:
-            self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {position['symbol']}.")
-            return
-
-        exec_price = current_prices['bid'] if direction == 'SELL' else current_prices['ask']
-
-        # Update account balance (simplified)
-        cost = exec_price * position['volume']
-        if direction == 'BUY':
-            self.account['balance'] -= cost
-        elif direction == 'SELL':
-            self.account['balance'] += cost
+        # Get current prices if exit_price not provided
+        if exit_price is None:
+            current_prices = self.get_current_price(symbol)
+            if not current_prices:
+                self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol}.")
+                return
+            if order_type == ORDER_TYPE_BUY:
+                exit_price = current_prices['bid']
+            elif order_type == ORDER_TYPE_SELL:
+                exit_price = current_prices['ask']
 
         # Calculate profit
-        if direction == 'BUY':
-            profit = (exec_price - position['price']) * position['volume']
+        if order_type == ORDER_TYPE_BUY:
+            profit = (exit_price - entry_price) * volume
+        elif order_type == ORDER_TYPE_SELL:
+            profit = (entry_price - exit_price) * volume
         else:
-            profit = (position['price'] - exec_price) * position['volume']
+            profit = 0.0
 
-        self.account['profit'] += profit
+        # Update account balance
+        self.account['balance'] += profit
+        self.account['profit'] -= position['profit']  # Remove unrealized profit
         self.account['equity'] = self.account['balance'] + self.account['profit']
         self.account['free_margin'] = self.account['equity'] - self.account['margin']
 
         # Move position to closed_positions
-        closed_position = copy.deepcopy(position)
+        closed_position = position
         closed_position['close_datetime'] = self.current_time
+        closed_position['close_price'] = exit_price
         closed_position['profit'] = profit
         self.closed_positions.append(closed_position)
 
         # Log the trade closure
         trade_log = {
             'ticket': ticket,
-            'symbol': position['symbol'],
-            'type': position['type'],
-            'volume': position['volume'],
-            'price': exec_price,
+            'symbol': symbol,
+            'type': order_type,
+            'volume': volume,
+            'price': exit_price,
             'sl': position['sl'],
             'tp': position['tp'],
             'time': self.current_time,
             'comment': position['comment'],
             'magic': position['magic'],
             'profit': profit,
-            'action': 'CLOSE'
+            'action': reason
         }
         self.trade_logs.append(trade_log)
 
         # Remove from open_positions
         del self.open_positions[ticket]
 
-    def get_next_timestamp(self):
-        """
-        Get the next timestamp across all symbols and timeframes.
-
-        Returns:
-            datetime: The next timestamp or current_time if no future data.
-        """
-        next_times = []
-        for symbol, tfs in self.symbols_data.items():
-            for tf, df in tfs.items():
-                future_bars = df[df['time'] > self.current_time]
-                if not future_bars.empty:
-                    next_times.append(future_bars['time'].iloc[0])
-
-        return min(next_times) if next_times else self.current_time
-
     def step_simulation(self):
         """
-        Advance the simulation by fixed time step.
-
+        Advance the simulation time to the next data point.
         Returns:
             bool: True if simulation continues, False otherwise.
         """
-        # Advance time by fixed time_step
-        self.current_time += self.time_step
+        proceed = self.advance_time_step()
+        if not proceed:
+            return False  # End of backtest or error
 
-        if self.current_time > self.end_time:
-            return False  # End of backtest
+        # Update current_tick_index for each symbol and timeframe
+        for symbol, tfs in self.symbols_data.items():
+            for tf_name, df in tfs.items():
+                current_index = self.current_tick_index[symbol][tf_name]
+                if current_index + 1 < len(df):
+                    next_bar_time = df.iloc[current_index + 1]['time']
+                    if next_bar_time <= self.current_time:
+                        self.current_tick_index[symbol][tf_name] += 1
 
-        # Process pending orders
+        # Execute trade logic (process pending orders, update account)
         self.execute_trade_logic()
 
         # Log account status if a new hour has started
@@ -1000,6 +1180,7 @@ class MT5Backtest:
 
         # Generate and save graph
         self.generate_account_graph()
+
 
     def generate_account_graph(self):
         """
@@ -1050,25 +1231,10 @@ class MT5Backtest:
             print(f"Account balance and equity graph saved to {graph_path_png}")
         except Exception as e:
             print(f"Could not save graph as image. Install 'kaleido' to enable image export. Error: {e}")
+
+        # Optionally, display the graph
+        fig.show()
             
-
-    def run_backtest(self):
-        """
-        Run the backtest until the end time is reached.
-        """
-        print(f"Starting backtest from {self.current_time} to {self.end_time}")
-        while self.current_time < self.end_time:
-            proceed = self.step_simulation()
-            if not proceed:
-                print(f"Backtest stopped due to error: {self.last_error_description}")
-                break
-        print("Backtest completed.")
-        print(f"Final balance: {self.account['balance']}")
-        print(f"Final equity: {self.account['equity']}")
-        print(f"Total profit: {self.account['profit']}")
-
-        # Export logs
-        self.export_logs()
 
     def last_error(self):
         """
@@ -1124,6 +1290,7 @@ def initialize_backtest(strategies):
     """
     global backtest
     backtest = MT5Backtest(strategies=strategies)
+    print(f"Backtest params: {backtest.__dict__}")
 
 
 def account_info():
@@ -1291,10 +1458,37 @@ def shutdown():
     backtest.shutdown()
     quit()
 
-def run_backtest():
+def run_backtest(strategies, symbols):
     """
     Function to run the backtest externally.
+    Parameters:
+        strategies (dict): Dictionary of strategy instances.
+        symbols (dict): Dictionary of symbol instances.
     """
     if backtest is None:
         raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
-    backtest.run_backtest()
+    
+    from ..run_bot import on_minute
+
+    # Initialize TradeHour and TimeBar with backtest
+    trade_hour = TradeHour(backtest)
+    time_bar = TimeBar(backtest)
+
+    print(f"Starting backtest from {backtest.current_time} to {backtest.end_time}")
+    while backtest.current_time < backtest.end_time:
+        # Advance time by time_step
+        proceed = backtest.step_simulation()
+        if not proceed:
+            print(f"Backtest stopped due to error: {backtest.last_error_description}")
+            break
+
+        # Call on_minute with current simulation time
+        on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict=None)
+
+    print("Backtest completed.")
+    print(f"Final balance: {backtest.account['balance']}")
+    print(f"Final equity: {backtest.account['equity']}")
+    print(f"Total profit: {backtest.account['profit']}")
+
+    # Export logs
+    backtest.export_logs()

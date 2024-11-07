@@ -129,8 +129,7 @@ This script is the main entry point for executing trading strategies using the p
 ### `Backtest/main_backtest.py`
 
 - **Functions**:
-  - `run_backtest_loop`: Run the backtesting loop, advancing the simulation time and executing strategies.
-  - `main_backtest`: Main backtest function that initializes the backtest and runs the backtesting loop.
+  - `main_backtest`: Main backtest function that initializes the backtest and runs the backtesting loop (run backtest method).
 
 ### `Backtest/mt5_backtest.py`
 
@@ -148,7 +147,7 @@ This script is the main entry point for executing trading strategies using the p
 ### `Backtest/time_backtest.py`
 
 - **Classes**:
-  - `TradeHour`: Class for managing trading hours.
+  - `TradeHour`: Class for managing trading hours in backtest.
   - `TimeBar`: Class for managing time bars in the backtest.
 
 ### `strategy.py`

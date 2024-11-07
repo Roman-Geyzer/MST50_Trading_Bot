@@ -16,10 +16,7 @@ os.environ['BACKTEST_MODE'] = 'True'  # Change to 'True' when ready to backtest
 # Determine if we are in backtesting mode
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
-import schedule
-import time
 
-from .strategy import Strategy
 
 from .utils import (
     write_balance_performance_file, is_new_bar, wait_for_new_minute,
