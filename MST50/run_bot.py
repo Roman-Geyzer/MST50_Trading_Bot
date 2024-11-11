@@ -53,14 +53,16 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
         account_info_dict = account_info()
 
         if account_info_dict is not None:
-            write_balance_performance_file(account_info_dict)
+            #TODO: check if this is correct
+            open_trades = [trade for strategy in strategies.values() for trade in strategy.open_trades]
+            write_balance_performance_file(account_info_dict, open_trades)
         # Failed to get account info
         else:
             print_hashtaged_msg(3, "Failed to get account info", "Failed to get account info, error code =", last_error())
 
     def execute_strategy(strategy, symbols, time_bar, new_hour, account_info_dict):
         if is_new_bar(strategy.timeframe, time_bar):
-            print(f"New bar detected for strategy:{strategy.strategy_num}-{strategy.strategy_name} strategy timeframe: {strategy.str_timeframe}")
+            #print(f"New bar detected for strategy:{strategy.strategy_num}-{strategy.strategy_name} strategy timeframe: {strategy.str_timeframe}")
             strategy.handle_new_bar(symbols)
         else:
             strategy.handle_new_minute(symbols)

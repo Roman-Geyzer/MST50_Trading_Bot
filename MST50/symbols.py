@@ -14,7 +14,6 @@ Methods:
         check_symbol_tf_flag: Get rates for a specific timeframe.
         get_tf_obj: Get rates for a specific timeframe.
     Timeframe Class:
-        fetch_rates: Fetch historical rates for a symbol and timeframe.
         calculate_tr_length: Calculate the TR length for a symbol and timeframe.
         fetch_rates: Fetch historical rates for a symbol and timeframe.
         fetch_new_bar_rates: Fetch new bar rates for all symbols and timeframes.
@@ -180,8 +179,6 @@ class Timeframe:
     def __hash__(self):
         return hash(self.timeframe)
 
-    def fetch_rates(self, symbol):
-        pass
     
     def calculate_tr_length(self, symbol_str, strategies):
         timeframe_length_in_strategies = [2]
@@ -212,47 +209,68 @@ class Timeframe:
 
         Parameters:
             symbol (str): The symbol to fetch rates for.
-            timeframe (str): The timeframe to fetch rates for.
 
         Returns:
-            list: A list of historical rates for the symbol and timeframe.
+            np.recarray or None: The rates data.
         """
         self.rates_error_flag = True
         tf = self.timeframe
         length = self.length
+
         def check_return_func(rates):
-            if rates is None:
-                return False
-            return True
+            return rates is not None
+
         loop_error_msg = f"Failed to get rates for symbol: {symbol}, timeframe {tf}, length {length}"
-        #TODO: update to copy rates from pos 1
-        rates = attempt_i_times_with_s_seconds_delay(3, 1, loop_error_msg, check_return_func,
-                                            copy_rates_from_pos, (symbol, tf, 0, length))
+
+        rates = attempt_i_times_with_s_seconds_delay(
+            3, 1, loop_error_msg, check_return_func, copy_rates_from_pos, (symbol, tf, 0, length)
+        )
+
         if not check_return_func(rates):
             print_hashtaged_msg(3, f"Failed to get rates for symbol: {symbol}, timeframe {tf}, length {length}")
             return None
+
         self.rates_error_flag = False
-        rates_df = pd.DataFrame(rates, columns=['time', 'open', 'high', 'low', 'close', 'tick_volume', 'spread', 'real_volume'])
-        return rates_df
+        return rates  # Return rates as np.recarray
 
     @staticmethod
     def fetch_new_bar_rates(symbols, timebar: TimeBar):
         """
         Fetch new bar rates for all symbols and timeframes.
-        Args:
-            symbols (list): List of symbols to fetch rates for.
-            time_bar (TimeBar(Enum)): TimeBar instance to track the current bar timeframe.
 
-        Updates: all symbol TF's rates that have a new bar.
+        Args:
+            symbols (dict): Dictionary of Symbol instances.
+            timebar (TimeBar): Current time bar.
+
+        Updates:
+            Updates the rates for all timeframes that have a new bar.
         """
-        print("Fetching new bar rates for all symbols, updating rates for all tf's <=: ", timebar.current_bar, )
-        print(f"current_time is: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         time_frames_list = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1']
         for symbol in symbols.values():
             for tf in time_frames_list:
                 tf_obj = getattr(symbol, tf, None)
-                if tf_obj is not None and time_frames_list.index(tf) < time_frames_list.index(timebar.current_bar):
-                    tf_obj.rates = tf_obj.fetch_rates(symbol.symbol_str)
+                if tf_obj is not None and time_frames_list.index(tf) <= time_frames_list.index(timebar.current_bar):
+                    tf_obj.update_rates_if_new_bar()
+
+    def update_rates_if_new_bar(self):
+        """
+        Update rates if there is a new bar since the last update.
+        """
+        latest_time = self.rates['time'][-1] if self.rates is not None and len(self.rates) > 0 else None
+        new_rates = self.fetch_rates(self.symbol_str)
+
+        if new_rates is not None and len(new_rates) > 0:
+            new_latest_time = new_rates['time'][-1]
+            if latest_time != new_latest_time:
+                # New bar detected, update rates
+                self.rates = new_rates
+                self.rates_error_flag = False
+            else:
+                # No new bar, do not update rates
+                pass
+        else:
+            # Error fetching new rates
+            self.rates_error_flag = True
 
 
     def get_rates(self):

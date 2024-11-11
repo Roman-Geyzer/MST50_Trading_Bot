@@ -34,7 +34,7 @@ BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 # Import utility functions and constants
 from .utils import (load_config,  get_final_magic_number, get_timeframe_string, print_with_info,
                     print_hashtaged_msg, attempt_i_times_with_s_seconds_delay, get_future_time)
-from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_data, get_trade_direction
+from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_type, get_trade_direction
 from .indicators import Indicators
 from .constants import DEVIATION, TRADE_DIRECTION
 from .signals import RSISignal
@@ -106,24 +106,21 @@ class Strategy:
         #future implementation: add more signals
         #self.er_signal = ERSignal(strategy_config['exitP_ER_low_value'], strategy_config['EXITP_ER_high_value'])
 
-        self.trade_method = strategy_config['tradeP_method']
-        self.trade_limit_order_expiration_bars = strategy_config['tradeP_limit_order_expiration_bars']
-
         self.sl_method = strategy_config['sl_method']
         self.sl_param = strategy_config['sl_param']
-        if self.sl_method in {'UseCandels_SL'}:
+        if self.sl_method in {'UseCandles_SL'}:
             self.sl_param = int(self.sl_param)
 
         self.tp_method = strategy_config['tp_method']
         self.tp_param = strategy_config['tp_param']
-        if self.tp_method in {'UseCandels_TP'}:
+        if self.tp_method in {'UseCandles_TP'}:
             self.tp_param = int(self.tp_param)
 
         self.exit_params = strategy_config.get('exit_params', {})
 
         self.trail_method = strategy_config['trail_method']
         self.trail_param = strategy_config['trail_param']
-        if self.trail_method in {'UseCandels_Trail_Close' , 'UseCandels_Trail_Extreme'}:
+        if self.trail_method in {'UseCandles_Trail_Close' , 'UseCandles_Trail_Extreme'}:
             self.trail_param = int(self.trail_param)
         self.trail_both_directions = strategy_config['trail_both_directions']
         self.trail_enabled = self.check_trail_active()
@@ -131,6 +128,8 @@ class Strategy:
         self.backtest_params = strategy_config['backtest_params']
         self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
         self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
+
+        self.cached_rsi = {}    # Cache for RSI values per symbol and timeframe
 
 
 
@@ -214,7 +213,6 @@ class Strategy:
         for strategy_num , settings in strategies_config.items():print(f"""Executing strategy no. {strategy_num}
                                                                         strategy name: {settings['strategy_name']},
                                                                         setragy run mode: {settings['strategy_status']},
-                                                                        strategy trade method: {settings['tradeP_method']},
                                                                         strategy magic number: {settings['magic_num']},
                                                                         strategy status: {settings['strategy_status']},
                                                                         with symbols: {settings['symbols']} 
@@ -242,7 +240,7 @@ class Strategy:
         This method is called when a new bar arrives in the strategy's timeframe.
         It is used update indicators, check for trading signals, etc.
         """
-        print(f"Handling new bar for strategy no. {self.strategy_num}, strategy name: {self.strategy_name}, strategy timeframe: {self.str_timeframe}")
+        #print(f"Handling new bar for strategy no. {self.strategy_num}, strategy name: {self.strategy_name}, strategy timeframe: {self.str_timeframe}")
         self.check_open_trades() # check all open trades to make sure they are still open
                                        # document the closed trades and update strategy performance file
                                        # update the stratgy class variables
@@ -332,6 +330,33 @@ class Strategy:
 
         return True # Passed all filters - continue checking for entry signals and indicators in check_and_place_orders
 
+    def get_cached_rsi(self, symbol_str, timeframe, rates):
+        """
+        Retrieve cached RSI values or calculate and cache them if not already cached.
+
+        Parameters:
+            symbol_str (str): The symbol string.
+            timeframe (int): The timeframe.
+            rates (np.recarray): The rates data.
+
+        Returns:
+            np.ndarray: The RSI values.
+        """
+        cache_key = (symbol_str, timeframe)
+        last_bar_time = rates['time'][-1]
+
+        # Check if the RSI is cached and up to date
+        if cache_key in self.cached_rsi:
+            cached_rsi, cached_time = self.cached_rsi[cache_key]
+            if cached_time == last_bar_time:
+                # Use cached RSI values
+                return cached_rsi
+
+        # Calculate RSI and cache it
+        rsi_values = self.rsi_signal.calculate_rsi(rates)
+        self.cached_rsi[cache_key] = (rsi_values, last_bar_time)
+        return rsi_values
+
     def check_and_place_orders(self, stra_symbol, symbol):
         """
         Check for trading signals and enter positions accordingly.
@@ -399,14 +424,14 @@ class Strategy:
             final_decision = candle_decision_set.pop()
 
 
-        # Get the RSI values for filtering
-        rsi_values = self.rsi_signal.calculate_rsi(rates)
-        if not rsi_values:
+        # Get the RSI values for filtering using the cached method
+        rsi_values = self.get_cached_rsi(stra_symbol, self.timeframe, rates)
+        if rsi_values.size == 0:
             print_hashtaged_msg(1, f"Failed to calculate RSI for {stra_symbol} and timeframe {self.str_timeframe}")
             return  # Exit the method early if RSI values are not available
-        
+
         # Check the RSI signal before making a trade
-        if not self.rsi_signal.check_rsi_signal(rsi_values[-1],final_decision): 
+        if not self.rsi_signal.check_rsi_signal(rsi_values[-1], final_decision): 
             return  # No trade if RSI filter fails
     
 
@@ -447,7 +472,7 @@ class Strategy:
         if ticket < 0, it will be an open trade operation.
         """
         #TODO: update this method per the original mql5 code - need to use paremeters from the strategy config
-        trade_data = get_mt5_trade_data(TRADE_DIRECTION(direction) , trade_type=self.trade_method)
+        trade_type = get_mt5_trade_type(TRADE_DIRECTION(direction))
         price = self.get_price(symbol, direction)
         #round price to the nearest pip
         price = round(price, symbol_info(symbol)['digits'])
@@ -461,10 +486,10 @@ class Strategy:
             magic_num = get_final_magic_number(symbol, self.magic_num)
 
         request = {
-            "action": trade_data['action'],
+            "action": TRADE_ACTIONS['DEAL'],
             "symbol": symbol,
             "volume": volume,  
-            "type": trade_data['type'],
+            "type": trade_type,
             "price": price,
             "deviation": DEVIATION,
             "comment": comment,
@@ -476,9 +501,6 @@ class Strategy:
             request['magic'] = magic_num
             request["sl"] = sl
             request["tp"] = tp
-            if trade_data['action'] == TRADE_ACTIONS['PENDING']:
-                request["type_time"] = ORDER_TIME['GTC']
-                request["expiration"] = get_future_time(symbol, self.timeframe, time.now(), self.trade_limit_order_expiration_bars)        #TimeCurrent(dt_struct) + PendingOrdersExpirationBars * PeriodSeconds(0);
         return request
     
     def prep_and_order(self, direction, symbol, ticket, comment):
@@ -489,8 +511,10 @@ class Strategy:
         request = self.fill_request_data(direction, symbol, ticket, comment)
         result =  order_send(request)
         if result['retcode'] == TRADE_ACTIONS['DONE']:
+            pass
+            #TODO: implement logic to store trade info
             # Order succeeded, store trade info
-            print(f"Opened {direction} trade on {symbol}, ticket: {result['order']}")
+            #print(f"Opened {direction} trade on {symbol}, ticket: {result['order']}")
         return result
     
     def prep_and_close(self, direction, symbol, ticket, comment):
@@ -654,14 +678,14 @@ class Strategy:
 
 
 
-    def check_exit_conditions(self, symbol, rates_df):
+    def check_exit_conditions(self, symbol, rates):
         """
         Check exit conditions for all open trades of the given symbol.
         If any exit condition is met, close the trade.
-        
+
         Parameters:
             symbol (str): The trading symbol.
-            rates_df (pd.DataFrame): DataFrame containing historical rates.
+            rates (np.recarray): Rates data.
         """
         current_time = datetime.now()
 
@@ -670,10 +694,10 @@ class Strategy:
                 continue  # Skip trades not related to the current symbol
 
             # Calculate how long the trade has been open
-            open_time = datetime.fromtimestamp(trade_info['time'])
-            time_diff = current_time - open_time
+            open_time = trade_info['time']
+            time_diff = current_time - datetime.fromtimestamp(open_time)
             days_in_trade = time_diff.days
-            bars_in_trade = self.calculate_bars_in_trade(trade_info, rates_df)
+            bars_in_trade = self.calculate_bars_in_trade(trade_info, rates)
 
             # Retrieve trade details from MT5 to get current profit
             position = positions_get(ticket=trade_id)
@@ -709,9 +733,9 @@ class Strategy:
                 continue  # Move to the next trade
             
             if self.trail_enabled:
-                self.monitor_open_trades(symbol, rates_df)
+                self.monitor_open_trades(symbol, rates)
 
-    #TODO: add position to the new class for trades 
+
     def monitor_open_trades(self, symbol, rates_df):
         """
         Monitor open trades and update their Stop Loss (SL) and Take Profit (TP) based on trailing strategies.
@@ -735,26 +759,31 @@ class Strategy:
             self.monitor_open_trade(symbol, rates_df, trade_id, position)
 
 
-    def monitor_open_trade(self, symbol_str, rates_df, trade_id, position):
+    def monitor_open_trade(self, symbol_str, rates, trade_id, position):
         """
         Monitor single open trade and update its Stop Loss (SL) and Take Profit (TP) based on trailing strategies.
+
         Parameters:
-            symbol (str): The trading symbol.
-            rates_df (pd.DataFrame): DataFrame containing historical rates.
+            symbol_str (str): The trading symbol.
+            rates (np.recarray): Rates data.
+            trade_id (int): The trade ID.
+            position (dict): The position data.
         """
-        # TODO: update after updating the calculate_trail
         tick = symbol_info_tick(symbol_str)
-        direction = position['type']  # BUY are 0, 2, 4, 6, ; SELL are 1, 3, 5, 7
-        if direction in {0, 2, 4, 6}:
+        direction = position['type']  
+        if direction == 0:  # buy
             price = tick['ask']
-        else:
+        else:  # sell
             price = tick['bid']
         current_sl = position['sl']
         point = symbol_info(symbol_str)['point']
 
-        new_sl = calculate_trail(price, current_sl, self.trail_both_directions, direction, self.trail_method, self.trail_param, symbol_str, point, rates_df)
-        if new_sl and abs(new_sl - current_sl) > 10*point:
-            self.update_trade(trade_id = trade_id, position = position, new_sl=new_sl)
+        new_sl = calculate_trail(
+            price, current_sl, self.trail_both_directions, direction,
+            self.trail_method, self.trail_param, symbol_str, point, rates
+        )
+        if new_sl and abs(new_sl - current_sl) > 10 * point:
+            self.update_trade(trade_id=trade_id, position=position, new_sl=new_sl)
 
 
 
@@ -779,7 +808,8 @@ class Strategy:
             print_hashtaged_msg(1, f"Failed to update trade {trade_id}. Retcode: {result['retcode']}")
             print(f"mt5.last_error: {last_error()}")
         else:
-            print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
+            pass
+            # print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
 
     def get_total_open_trades(self, symbol):
         """
@@ -795,24 +825,22 @@ class Strategy:
 
 
     
-
-    #TODO: update this method so the bars are part of the trade class and adds +1 each time the logic "touch" the trade - a lot more efficient
-    def calculate_bars_in_trade(self, trade_info, rates_df):
+    def calculate_bars_in_trade(self, trade_info, rates):
         """
         Calculate the number of bars since the trade was opened.
-        
+
         Parameters:
             trade_info (dict): Information about the trade.
-            rates_df (pd.DataFrame): DataFrame containing historical rates.
-        
+            rates (np.recarray): Rates data.
+
         Returns:
             int: Number of bars since the trade was opened.
         """
         open_time = trade_info['time']
-        trade_time = pd.to_datetime(open_time)
-        latest_bar_time = pd.to_datetime(rates_df['time'].iloc[-1], unit='s')
+        trade_time = pd.to_datetime(open_time, unit='s')
+        latest_bar_time = pd.to_datetime(rates['time'][-1], unit='s')
         time_diff = latest_bar_time - trade_time
-        bar_duration = pd.Timedelta(minutes=1)  # Assuming 1-minute bars; adjust based on timeframe
+        bar_duration = pd.Timedelta(minutes=1)  # Adjust based on timeframe if needed
         bars = int(time_diff / bar_duration)
         return bars
 

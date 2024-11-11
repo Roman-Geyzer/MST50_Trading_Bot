@@ -1,46 +1,44 @@
-# candles.py
 """
-This module contains the CandlePatterns class that handles the candle patterns and their trade decisions.
-The CandlePatterns class is initialized with configurations for a specific timeframe.
-The class contains methods to make trade decisions based on the configured candle patterns.
-functions:
-    CandlePatterns: Initialize the CandlePatterns class with configurations for a specific timeframe.
-    initialize_pattern: Initialize the appropriate candle pattern class based on the configured pattern.
-    initialize_candle: Initialize the appropriate candle class based on the configured candle.
-    make_trade_decision: Make a trade decision based on the configured candle patterns.
-    check_candle_patterns_active: Check if the configured candle pattern is active.
-classes:
-    CandlePatterns: Class to handle the candle patterns and their trade decisions.
-    Pattern: Base class for candle patterns.
-    Pattern Class children:
-        NoPattern: Placeholder class for no pattern.
-        Engulf: Initialize the Engulfing pattern.
-        Marubuzo: Initialize the Marubuzo pattern.
-        Out: Initialize the Out pattern.
-        In: Initialize the InBar pattern.
-        Ham: Initialize the Hammer pattern.
-        InvHam: Initialize the Inverted Hammer pattern.
-        KangoroFull: Initialize the Full Kangoro pattern.
-        KangoroPartial: Initialize the Partial Kangoro pattern.
-        Fakeout: Initialize the Fakeout pattern.
-        SameCandleCount: Initialize the Same Candle Count pattern.
-        InsideBreakout: Initialize the Inside Breakout pattern.
-        HHHCLLLC: Initialize the HHHCLLLC pattern.
-        InvHHHCLLLC: Initialize the Inverted HHHCLLLC pattern.
-    Candle: Base class for candle patterns.
-    Candle Class children:
-        NoCandle: Placeholder class for no candle.
-        SameDirectionCandle: Initialize the Same Direction Candle class.
-        OppositeDirectionCandle: Initialize the Opposite Direction Candle class.
-"""
-import pandas as pd
-from .constants import CandleColor
-from .utils import print_with_info
-from .plotting import plot_bars
+This module contains the `CandlePatterns` class that handles candle patterns and their trade decisions.
 
+The `CandlePatterns` class is initialized with configurations for a specific timeframe.
+It contains methods to make trade decisions based on the configured candle patterns.
+
+Classes:
+    - CandlePatterns: Handles the candle patterns and their trade decisions.
+    - Pattern: Base class for candle patterns.
+        - Child Classes:
+            - NoPattern
+            - Engulf
+            - Marubozu
+            - Out
+            - InPattern
+            - Hammer
+            - InvertedHammer
+            - KangarooTailFull
+            - KangarooTailPartial
+            - Fakeout
+            - SameCandleCount
+            - InsideBreakout
+            - HHHCLLLC
+            - InvHHHCLLLC
+    - Candle: Base class for individual candle analysis.
+        - Child Classes:
+            - NoCandle
+            - SameDirectionCandle
+            - OppositeDirectionCandle
+            - DojiCandle
+"""
+
+import numpy as np
+from .constants import CandleColor
 
 
 class CandlePatterns:
+    """
+    Class to handle the candle patterns and their trade decisions.
+    """
+
     def __init__(self, candles_config: dict):
         """
         Initialize the CandlePatterns class with configurations for a specific timeframe.
@@ -52,18 +50,17 @@ class CandlePatterns:
         self.pattern_name = candles_config.get('barsP_pattern', '0')
         self.pattern_candles_count = candles_config.get('barsP_pattern_count', 1)
 
-        
-        # Map pattern names to their corresponding methods
+        # Map pattern names to their corresponding classes
         self.pattern_mapping = {
-            '0' : NoPattern, # No pattern
+            '0': NoPattern,  # No pattern
             'Engulf': Engulf,
-            'Marubuzo': Marubuzo,
+            'Marubozu': Marubozu,
             'Out': Out,
-            'In': In,
-            'Ham': Ham,
-            'InvHam': InvHam,
-            'Kangoro_full': KangoroFull,
-            'Kangoro_partial': KangoroPartial,
+            'In': InPattern,
+            'Ham': Hammer,
+            'InvHam': InvertedHammer,
+            'Kangoro_full': KangarooTailFull,
+            'Kangoro_partial': KangarooTailPartial,
             'Fakeout': Fakeout,
             'Same_Candle_Count': SameCandleCount,
             'Inside_breakout': InsideBreakout,
@@ -77,9 +74,7 @@ class CandlePatterns:
             'doji': DojiCandle,
         }
 
-        # Initialize the appropriate candeles class based on cnadles config
-
-        # Candle pattern
+        # Initialize the appropriate candle pattern class based on candles config
         self.candle_pattern_name = candles_config.get('barsP_pattern', '0')
         self.candle_pattern_instance = self.initialize_pattern()
 
@@ -93,12 +88,12 @@ class CandlePatterns:
         Initialize the appropriate candle pattern class based on the configured pattern.
 
         Returns:
-            CandlePattern: Candle pattern class instance.
+            Pattern: Candle pattern class instance.
         """
         if self.candle_pattern_name in self.pattern_mapping:
             candle_pattern_class = self.pattern_mapping[self.candle_pattern_name]
             return candle_pattern_class(self.pattern_candles_count)
-        return None # Invalid pattern name
+        return None  # Invalid pattern name
 
     def initialize_candle(self, position_candle: str):
         """
@@ -112,149 +107,134 @@ class CandlePatterns:
             return candle_class()
         return None  # Invalid candle name
 
-    def make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+    def make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         """
         Make a trade decision based on the configured candle patterns.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str or None: 'buy', 'sell', 'both' or None based on the aggregated decisions.
         """
         decisions = []
         if self.candle_pattern_instance:
-            decision = self.candle_pattern_instance.calculate_and_make_trade_decision(rates,tf_obj)
+            decision = self.candle_pattern_instance.calculate_and_make_trade_decision(rates, tf_obj)
             if not decision:
-                return None # No valid decisions from the pattern, exit early
+                return None  # No valid decisions from the pattern, exit early
             decisions.append(decision)
 
         # Handle individual candle conditions if defined
-        candles = [candle for candle in [self.first_candle_instance, self.second_candle_instance, self.third_candle_instance] if candle is not None]
+        candles = [
+            candle for candle in [
+                self.first_candle_instance,
+                self.second_candle_instance,
+                self.third_candle_instance
+            ] if candle is not None and candle.__class__ != NoCandle
+        ]
         for candle in candles:
-            decision = candle.calculate_and_make_trade_decision(rates,tf_obj)
+            decision = candle.calculate_and_make_trade_decision(rates, tf_obj)
             if not decision:
-                return None # No valid decisions from the candle, exit early
+                return None  # No valid decisions from the candle, exit early
             decisions.append(decision)
-        
+
         unique_decisions = set(decisions)
         if len(unique_decisions) == 1:
             return unique_decisions.pop()
-        return None # Conflicting decisions
-
+        return None  # Conflicting decisions
 
     def check_candle_patterns_active(self) -> bool:
         """
         Check if the configured candle pattern is active.
+
         Returns:
             bool: True if the pattern is active, False otherwise.
         """
-        if self.pattern_name == '0' or not self.candle_pattern_instance:
-            pattern_active = False
-        else:
-            pattern_active = True
-        if self.first_candle_instance == '0' or not self.first_candle_instance:
-            first_candle_active = False
-        else:
-            first_candle_active = True
-        if self.second_candle_instance == '0' or not self.second_candle_instance:
-            second_candle_active = False
-        else:
-            second_candle_active = True
-        if self.third_candle_instance == '0' or not self.third_candle_instance:
-            third_candle_active = False
-        else:
-            third_candle_active = True
-        
-        if pattern_active or first_candle_active or second_candle_active or third_candle_active:
-            return True # At least one pattern is active
-        return False # No active patterns
+        pattern_active = self.pattern_name != '0' and self.candle_pattern_instance is not None
+        first_candle_active = self.first_candle_instance is not None and self.first_candle_instance.__class__ != NoCandle
+        second_candle_active = self.second_candle_instance is not None and self.second_candle_instance.__class__ != NoCandle
+        third_candle_active = self.third_candle_instance is not None and self.third_candle_instance.__class__ != NoCandle
+
+        return any([pattern_active, first_candle_active, second_candle_active, third_candle_active])
+
 
 class Pattern:
     """
-    Inithe the base class with the number of candles required for the pattern.
+    Base class for candle patterns.
 
     Parameters:
         pattern_candles_count (int): Number of candles required for the pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         self.pattern_candles_count = pattern_candles_count
-        self.trade_decision_method = None # Will be set by the child classes
-    
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> str:
+        self.trade_decision_method = None  # Will be set by the child classes
+
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
-        A placeholder method for calculating the pattern based on the provided rates.
+        Placeholder method for calculating the pattern based on the provided rates.
+        Should be overridden by child classes.
+
+        Returns:
+            bool: True if pattern is detected, False otherwise.
         """
         raise NotImplementedError("Pattern calculation method not implemented")
 
-    def get_trade_decision_method(self):
-        """
-        Return the trade decision method based on the pattern.
-        This method should be implemented by the child classes.
-
-        Returns:
-            method: Trade decision method.
-        """
-        raise NotImplementedError("Trade decision method not implemented")
-
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         """
         Calculate the pattern and make a trade decision based on the pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str or None: 'buy', 'sell', 'both' or None based on the aggregated decisions.
+            str or None: 'buy', 'sell', 'both' or None based on the pattern.
         """
         if self.trade_decision_method:
             return self.trade_decision_method(rates)
-        return None # No trade decision method set
+        return None  # No trade decision method set
 
-
-    def upper_wick_size(self, rates: pd.DataFrame, candle_i: int) -> float:
+    def upper_wick_size(self, rates: np.recarray, candle_i: int) -> float:
         """
         Calculate the upper wick size of a candle.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
-            candle_condition (int): location of the candle in the dataframe.
+            rates (np.recarray): Historical price data (OHLC).
+            candle_i (int): Index of the candle (1-based, where 1 is the latest candle).
 
         Returns:
             float: Upper wick size.
         """
-        candle = rates.iloc[-candle_i]
-        if Candle.candle_color(candle) == -1: # Red candle
-            return candle['high'] - candle['open'] # Upper wick size of a red candle
+        candle = rates[-candle_i]
+        if Candle.candle_color(candle) == -1:  # Red candle
+            return candle['high'] - candle['open']
         else:
-            return candle['high'] - candle['close'] # Upper wick size of a green candle
+            return candle['high'] - candle['close']
 
-
-    def lower_wick_size(self, rates: pd.DataFrame, candle_i: int) -> float:
+    def lower_wick_size(self, rates: np.recarray, candle_i: int) -> float:
         """
         Calculate the lower wick size of a candle.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
-            candle_condition (int): location of the candle in the dataframe.
+            rates (np.recarray): Historical price data (OHLC).
+            candle_i (int): Index of the candle (1-based, where 1 is the latest candle).
 
         Returns:
             float: Lower wick size.
         """
-        candle = rates.iloc[-candle_i]
-        if Candle.candle_color(candle) == -1: # Red candle
-            return candle['close'] - candle['low'] # Lower wick size of a red candle
+        candle = rates[-candle_i]
+        if Candle.candle_color(candle) == -1:  # Red candle
+            return candle['close'] - candle['low']
         else:
-            return candle['open'] - candle['low'] # Lower wick size of a green candle
+            return candle['open'] - candle['low']
 
-
-    def upper_wick_ratio(self, rates: pd.DataFrame, candle_i) -> float:
+    def upper_wick_ratio(self, rates: np.recarray, candle_i: int) -> float:
         """
         Calculate the upper wick ratio of a candle.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
-            candle_i (int): location of the candle in the dataframe.
+            rates (np.recarray): Historical price data (OHLC).
+            candle_i (int): Index of the candle.
 
         Returns:
             float: Upper wick ratio.
@@ -263,13 +243,14 @@ class Pattern:
         body = self.body_size(rates, candle_i)
         return body / size if size != 0 else 1000.0
 
-    def lower_wick_ratio(self, rates: pd.DataFrame,candle_i: int ) -> float:
+    def lower_wick_ratio(self, rates: np.recarray, candle_i: int) -> float:
         """
         Calculate the lower wick ratio of a candle.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
-            candle_i (int): location of the candle in the dataframe.
+            rates (np.recarray): Historical price data (OHLC).
+            candle_i (int): Index of the candle.
+
         Returns:
             float: Lower wick ratio.
         """
@@ -277,51 +258,98 @@ class Pattern:
         body = self.body_size(rates, candle_i)
         return body / size if size != 0 else 1000.0
 
-    def wick_ratio(self, rates: pd.DataFrame, candle_i : int) -> float:
+    def wick_ratio(self, rates: np.recarray, candle_i: int) -> float:
         """
         Calculate the overall wick ratio of a candle.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
-            candle_i (int): location of the candle in the dataframe.
+            rates (np.recarray): Historical price data (OHLC).
+            candle_i (int): Index of the candle.
 
         Returns:
             float: Wick ratio.
         """
         upper = self.upper_wick_size(rates, candle_i)
         lower = self.lower_wick_size(rates, candle_i)
-        if upper + lower == 0:
+        total_wick = upper + lower
+        if total_wick == 0:
             return 10.0  # No wicks
-        return self.body_size(rates, candle_i) / (upper + lower)
-
-    # Candlestick patterns static methods:
-    @staticmethod
-    def hhhc(rates, i):
-        return rates.iloc[-i]['close'] > rates.iloc[-i-1]['close'] and rates.iloc[-i]['high'] > rates.iloc[-i-1]['high']
-    @staticmethod
-    def lllc(rates, i):
-        return rates.iloc[-i]['close'] < rates.iloc[-i-1]['close'] and rates.iloc[-i]['low'] < rates.iloc[-i-1]['low']
-
-
+        return self.body_size(rates, candle_i) / total_wick
 
     @staticmethod
-    def same_candle_count(rates: pd.DataFrame, candle_i: int) -> int:
+    def hhhc(rates: np.recarray, i: int) -> bool:
+        """
+        Higher High Higher Close pattern.
+
+        Parameters:
+            rates (np.recarray): Historical price data (OHLC).
+            i (int): Index of the candle.
+
+        Returns:
+            bool: True if pattern is detected, False otherwise.
+        """
+        return rates[-i]['close'] > rates[-i - 1]['close'] and rates[-i]['high'] > rates[-i - 1]['high']
+
+    @staticmethod
+    def lllc(rates: np.recarray, i: int) -> bool:
+        """
+        Lower Low Lower Close pattern.
+
+        Parameters:
+            rates (np.recarray): Historical price data (OHLC).
+            i (int): Index of the candle.
+
+        Returns:
+            bool: True if pattern is detected, False otherwise.
+        """
+        return rates[-i]['close'] < rates[-i - 1]['close'] and rates[-i]['low'] < rates[-i - 1]['low']
+
+    @staticmethod
+    def hhhl(rates: np.recarray, i: int) -> bool:
+        """
+        Higher High Higher Low pattern.
+
+        Parameters:
+            rates (np.recarray): Historical price data (OHLC).
+            i (int): Index of the candle.
+
+        Returns:
+            bool: True if pattern is detected, False otherwise.
+        """
+        return rates[-i]['high'] > rates[-i - 1]['high'] and rates[-i]['low'] > rates[-i - 1]['low']
+
+    @staticmethod
+    def lhll(rates: np.recarray, i: int) -> bool:
+        """
+        Lower High Lower Low pattern.
+
+        Parameters:
+            rates (np.recarray): Historical price data (OHLC).
+            i (int): Index of the candle.
+
+        Returns:
+            bool: True if pattern is detected, False otherwise.
+        """
+        return rates[-i]['high'] < rates[-i - 1]['high'] and rates[-i]['low'] < rates[-i - 1]['low']
+
+    @staticmethod
+    def same_candle_count(rates: np.recarray, candle_i: int) -> int:
         """
         Count the number of consecutive candles with the same color.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
-            candle_condition (str): Condition specifying which candle to start counting from.
+            rates (np.recarray): Historical price data (OHLC).
+            candle_i (int): Index of the candle (1-based, where 1 is the latest candle).
 
         Returns:
             int: Number of consecutive candles with the same color.
         """
-        base_color = Candle.candle_color(rates.iloc[-candle_i])
+        base_color = Candle.candle_color(rates[-candle_i])
         if base_color == 0:
             return 1
         count = 1
         while (candle_i + count) <= len(rates):
-            current_color = Candle.candle_color(rates.iloc[-(candle_i + count)])
+            current_color = Candle.candle_color(rates[-(candle_i + count)])
             if current_color == base_color:
                 count += 1
             else:
@@ -329,18 +357,18 @@ class Pattern:
         return count
 
     @staticmethod
-    def body_size(rates: pd.DataFrame, candle_i: int) -> float:
+    def body_size(rates: np.recarray, candle_i: int) -> float:
         """
         Calculate the body size of a candle.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
-            candle_condition (str): Condition specifying which candle to evaluate.
+            rates (np.recarray): Historical price data (OHLC).
+            candle_i (int): Index of the candle.
 
         Returns:
             float: Absolute body size.
         """
-        candle = rates.iloc[-candle_i]
+        candle = rates[-candle_i]
         return abs(candle['close'] - candle['open'])
 
 
@@ -353,40 +381,45 @@ class NoPattern(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.no_trade_decision
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         return False
 
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         return None
+
+    def no_trade_decision(self, rates: np.recarray) -> str:
+        return None
+
 
 class Engulf(Pattern):
     """
-    Initialize the Engulfing pattern.
+    Engulfing pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.engulf
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
         Check for Engulfing pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Engulfing pattern is detected, False otherwise.
+            bool: True if Engulfing pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates.iloc[-1])
-            previous_color = Candle.candle_color(rates.iloc[-2])
+            current_color = Candle.candle_color(rates[-1])
+            previous_color = Candle.candle_color(rates[-2])
             if current_color == previous_color or current_color == 0 or previous_color == 0:
                 return False
 
-            current_open = rates.iloc[-1]['open']
-            current_close = rates.iloc[-1]['close']
-            previous_open = rates.iloc[-2]['open']
-            previous_close = rates.iloc[-2]['close']
+            current_open = rates[-1]['open']
+            current_close = rates[-1]['close']
+            previous_open = rates[-2]['open']
+            previous_close = rates[-2]['close']
 
             if current_color == 1 and current_open <= previous_close and current_close >= previous_open:
                 return True
@@ -395,174 +428,184 @@ class Engulf(Pattern):
             return False
         except IndexError:
             return False
-    
-    def engulf(self, rates: pd.DataFrame,tf_obj) -> str:
+
+    def engulf(self, rates: np.recarray) -> str:
         """
-        Check for Engulfing pattern.
+        Determine trade decision based on Engulfing pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'buy', 'sell', or 'none'.
+            str: 'buy', 'sell', or None.
         """
-        if self.calculate_pattern(rates):
-            current_color = Candle.candle_color(rates.iloc[-1])
+        if self.calculate_pattern(rates, None):
+            current_color = Candle.candle_color(rates[-1])
             if current_color == 1:
                 return 'buy'
             elif current_color == -1:
                 return 'sell'
         return None
 
-class Marubuzo(Pattern):
+
+class Marubozu(Pattern):
     """
-    Initialize the Marubuzo pattern.
+    Marubozu pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.marubuzo
+        self.trade_decision_method = self.marubozu
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
-        Check for Marubuzo pattern.
+        Check for Marubozu pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Marubuzo pattern is detected, False otherwise.
+            bool: True if Marubozu pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates.iloc[-1])
-            body = self.body_size(rates, 1)
+            current_color = Candle.candle_color(rates[-1])
             wick_ratio = self.wick_ratio(rates, 1)
+            upper_wick_ratio = self.upper_wick_ratio(rates, 1)
+            lower_wick_ratio = self.lower_wick_ratio(rates, 1)
+
             if current_color == 0:
                 return False
-            if wick_ratio > 1.75 and max(self.upper_wick_ratio(rates, 1), self.lower_wick_ratio(rates, 1)) >= 3:
+            if wick_ratio > 1.75 and max(upper_wick_ratio, lower_wick_ratio) >= 3:
                 return True
             return False
         except IndexError:
             return False
 
-    def marubuzo(self, rates: pd.DataFrame,tf_obj) -> str:
+    def marubozu(self, rates: np.recarray) -> str:
         """
-        Check for Marubuzo pattern.
+        Determine trade decision based on Marubozu pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'buy', 'sell', or None.
         """
-        if self.calculate_pattern(rates):
-            current_color = Candle.candle_color(rates.iloc[-1])
+        if self.calculate_pattern(rates, None):
+            current_color = Candle.candle_color(rates[-1])
             if current_color == 1:
                 return 'buy'
             elif current_color == -1:
                 return 'sell'
         return None
-        
+
+
 class Out(Pattern):
     """
-    Initialize the Out pattern.
+    Outside Bar pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.out
-    
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+        self.trade_decision_method = self.out_pattern
+
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
-        Check for Out pattern.
+        Check for Outside Bar pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Out pattern is detected, False otherwise.
+            bool: True if Outside Bar pattern is detected, False otherwise.
         """
         try:
-            current = rates.iloc[-1]
-            previous = rates.iloc[-2]
+            current = rates[-1]
+            previous = rates[-2]
             if current['high'] > previous['high'] and current['low'] < previous['low']:
                 return True
             return False
         except IndexError:
             return False
 
-    def out(self, rates: pd.DataFrame,tf_obj) -> str:
+    def out_pattern(self, rates: np.recarray) -> str:
         """
-        Check for Out pattern.
+        Determine trade decision based on Outside Bar pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'both', or 'none'.
+            str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
-            current = rates.iloc[-1]
-            previous = rates.iloc[-2]
+        if self.calculate_pattern(rates, None):
+            current = rates[-1]
+            previous = rates[-2]
             return 'both' if current['close'] > previous['close'] else 'sell'
         return None
 
 
-class In(Pattern):
+class InPattern(Pattern):
     """
-    Initialize the InBar pattern.
+    Inside Bar pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.in_bar
-    
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+        self.trade_decision_method = self.in_pattern
+
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
-        Check for InBar pattern.
+        Check for Inside Bar pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if InBar pattern is detected, False otherwise.
+            bool: True if Inside Bar pattern is detected, False otherwise.
         """
         try:
-            current = rates.iloc[-1]
-            previous = rates.iloc[-2]
-            comparison = rates.iloc[-3]
-            return current['high'] < previous['high'] and current['low'] > comparison['low']
+            current = rates[-1]
+            previous = rates[-2]
+            if current['high'] < previous['high'] and current['low'] > previous['low']:
+                return True
+            return False
         except IndexError:
             return False
 
-    def in_bar(self, rates: pd.DataFrame,tf_obj) -> str:
+    def in_pattern(self, rates: np.recarray) -> str:
         """
-        Check for InBar pattern.
+        Determine trade decision based on Inside Bar pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'both' or None
+            str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
-    
-class Ham(Pattern):
+
+
+class Hammer(Pattern):
     """
-    Initialize the Hammer pattern.
+    Hammer pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.ham
-    
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+        self.trade_decision_method = self.hammer
+
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
         Check for Hammer pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Hammer pattern is detected, False otherwise.
+            bool: True if Hammer pattern is detected, False otherwise.
         """
         try:
             if self.wick_ratio(rates, 1) > 0.3:
@@ -575,37 +618,39 @@ class Ham(Pattern):
         except IndexError:
             return False
 
-    def ham(self, rates: pd.DataFrame,tf_obj) -> str:
+    def hammer(self, rates: np.recarray) -> str:
         """
-        Check for Hammer pattern.
+        Determine trade decision based on Hammer pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
 
-class InvHam(Pattern):
+
+class InvertedHammer(Pattern):
     """
-    Initialize the Inverted Hammer pattern.
+    Inverted Hammer pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.invham
-    
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+        self.trade_decision_method = self.inverted_hammer
+
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
         Check for Inverted Hammer pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Inverted Hammer pattern is detected, False otherwise.
+            bool: True if Inverted Hammer pattern is detected, False otherwise.
         """
         try:
             if self.wick_ratio(rates, 1) > 0.3:
@@ -618,409 +663,419 @@ class InvHam(Pattern):
         except IndexError:
             return False
 
-    def invham(self, rates: pd.DataFrame,tf_obj) -> str:
+    def inverted_hammer(self, rates: np.recarray) -> str:
         """
-        Check for Inverted Hammer pattern.
+        Determine trade decision based on Inverted Hammer pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
 
-class KangoroFull(Pattern):
+
+class KangarooTailFull(Pattern):
     """
-    Initialize the Full Kangoro pattern.
+    Kangaroo Tail Full pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.kangoro_full
+        self.trade_decision_method = self.kangaroo_tail_full
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
-        Check for Full Kangoro pattern.
+        Check for Kangaroo Tail Full pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Full Kangoro pattern is detected, False otherwise.
+            bool: True if Kangaroo Tail Full pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates.iloc[-1])
+            current_color = Candle.candle_color(rates[-1])
             if current_color == 1:
-                return Pattern.lhll(rates,1) and Pattern.hhhl(rates,1)
+                return self.lhll(rates, 1) and self.hhhl(rates, 1)
             elif current_color == -1:
-                return Pattern.hhhl(rates,1) and Pattern.lhll(rates,1)
+                return self.hhhl(rates, 1) and self.lhll(rates, 1)
             return False
         except IndexError:
             return False
 
-    def kangoro_full(self, rates: pd.DataFrame,tf_obj) -> str:
+    def kangaroo_tail_full(self, rates: np.recarray) -> str:
         """
-        Check for Full Kangoro pattern.
+        Determine trade decision based on Kangaroo Tail Full pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
 
-class KangoroPartial(Pattern):
+
+class KangarooTailPartial(Pattern):
     """
-    Initialize the Partial Kangoro pattern.
+    Kangaroo Tail Partial pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.kangoro_partial
+        self.trade_decision_method = self.kangaroo_tail_partial
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
-        Check for Partial Kangoro pattern.
+        Check for Kangaroo Tail Partial pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Partial Kangoro pattern is detected, False otherwise.
+            bool: True if Kangaroo Tail Partial pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates.iloc[-1])
+            current_color = Candle.candle_color(rates[-1])
             if current_color == 1:
-                return self.lhll(rates,1)
+                return self.lhll(rates, 1)
             elif current_color == -1:
-                return self.hhhl(rates,1)
+                return self.hhhl(rates, 1)
             return False
         except IndexError:
             return False
 
-    def kangoro_partial(self, rates: pd.DataFrame,tf_obj) -> str:
+    def kangaroo_tail_partial(self, rates: np.recarray) -> str:
         """
-        Check for Partial Kangoro pattern.
+        Determine trade decision based on Kangaroo Tail Partial pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
+
 
 class Fakeout(Pattern):
     """
-    Initialize the Fakeout pattern.
+    Fakeout pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.fakeout
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
         Check for Fakeout pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Fakeout pattern is detected, False otherwise.
+            bool: True if Fakeout pattern is detected, False otherwise.
         """
         try:
-            current_color = Candle.candle_color(rates.iloc[-1])
-            previous_color = Candle.candle_color(rates.iloc[-2])
-            if current_color == 1 and rates.iloc[-1]['close'] < rates.iloc[-2]['high']:
+            current_color = Candle.candle_color(rates[-1])
+            if current_color == 1 and rates[-1]['close'] < rates[-2]['high']:
                 return True
-            elif current_color == -1 and rates.iloc[-1]['close'] > rates.iloc[-2]['low']:
+            elif current_color == -1 and rates[-1]['close'] > rates[-2]['low']:
                 return True
             return False
         except IndexError:
             return False
 
-    def fakeout(self, rates: pd.DataFrame,tf_obj) -> str:
+    def fakeout(self, rates: np.recarray) -> str:
         """
-        Check for Fakeout pattern.
+        Determine trade decision based on Fakeout pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
-    
-class SameCandleCount(Pattern): 
+
+
+class SameCandleCount(Pattern):
     """
-    Initialize the Same Candle Count pattern.
+    Same Candle Count pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.same_candle_count_pattern
-    
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
         Check for Same Candle Count pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Same Candle Count pattern is detected, False otherwise.
+            bool: True if Same Candle Count pattern is detected, False otherwise.
         """
         if self.same_candle_count(rates, 1) >= self.pattern_candles_count:
             return True
         return False
 
-    def same_candle_count_pattern(self, rates: pd.DataFrame,tf_obj) -> str:
+    def same_candle_count_pattern(self, rates: np.recarray) -> str:
         """
-        Check for Same Candle Count pattern.
+        Determine trade decision based on Same Candle Count pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
 
+
 class InsideBreakout(Pattern):
     """
-    Initialize the Inside Breakout pattern.
+    Inside Breakout pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.inside_breakout
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
         """
         Check for Inside Breakout pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            True if Inside Breakout pattern is detected, False otherwise.
+            bool: True if Inside Breakout pattern is detected, False otherwise.
         """
         try:
-            if not self.in_bar(rates):
+            in_bar_pattern = InPattern(self.pattern_candles_count)
+            if not in_bar_pattern.calculate_pattern(rates, tf_obj):
                 return False
-            if rates.iloc[-2]['close'] > rates.iloc[-4]['high']:
+            if rates[-2]['close'] > rates[-4]['high']:
                 return True
-            elif rates.iloc[-2]['close'] < rates.iloc[-4]['low']:
+            elif rates[-2]['close'] < rates[-4]['low']:
                 return True
             return False
         except IndexError:
             return False
 
-    def inside_breakout(self, rates: pd.DataFrame,tf_obj) -> str:
+    def inside_breakout(self, rates: np.recarray) -> str:
         """
-        Check for Inside Breakout pattern.
+        Determine trade decision based on Inside Breakout pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
             str: 'both' or None.
         """
-        if self.calculate_pattern(rates):
+        if self.calculate_pattern(rates, None):
             return 'both'
         return None
 
+
 class HHHCLLLC(Pattern):
     """
-    Initialize the HHHCLLLC pattern.
+    Higher High Higher Close / Lower Low Lower Close pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.hhhlclll
+        self.trade_decision_method = self.hhhclllc
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
-        """
-        not required for this pattern
-        """
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+        # Not required for this pattern
         pass
 
-    def hhhlclll(self, rates: pd.DataFrame,tf_obj) -> str:
+    def hhhclllc(self, rates: np.recarray) -> str:
         """
-        Check for HHHCLLLC pattern.
+        Determine trade decision based on HHHCLLLC pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'both' or None.
+            str: 'buy', 'sell', or None.
         """
-        if self.hhhc(rates,1):
+        if self.hhhc(rates, 1):
             return 'buy'
-        if self.lllc(rates,1):
+        if self.lllc(rates, 1):
             return 'sell'
         return None
+
 
 class InvHHHCLLLC(Pattern):
     """
-    Initialize the Inverted HHHCLLLC pattern.
+    Inverted HHHCLLLC pattern.
     """
+
     def __init__(self, pattern_candles_count: int):
         super().__init__(pattern_candles_count)
-        self.trade_decision_method = self.invhhhlclll
+        self.trade_decision_method = self.inv_hhhclllc
 
-    def calculate_pattern(self, rates: pd.DataFrame,tf_obj) -> bool:
-        """
-        not required for this pattern
-        """
+    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+        # Not required for this pattern
         pass
 
-    def invhhhlclll(self, rates: pd.DataFrame,tf_obj) -> str:
+    def inv_hhhclllc(self, rates: np.recarray) -> str:
         """
-        Check for Inverted HHHCLLLC pattern.
+        Determine trade decision based on Inverted HHHCLLLC pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'both' or None.
+            str: 'buy', 'sell', or None.
         """
-        if self.hhhc(rates,1):
+        if self.hhhc(rates, 1):
             return 'sell'
-        if self.lhll(rates,1):
+        if self.lllc(rates, 1):
             return 'buy'
         return None
 
+
 class Candle:
     """
-    Base class for candle patterns.
+    Base class for candle analysis.
     """
+
     def __init__(self):
         pass
 
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         """
         A placeholder method for calculating the candle pattern and making a trade decision.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'buy', 'sell', or 'none'.
+            str: 'buy', 'sell', or None.
         """
         raise NotImplementedError("Candle calculation method not implemented")
-    
 
     @staticmethod
     def candle_color(candle) -> int:
         """
-        Determine the color of a specific candle based on condition.
+        Determine the color of a specific candle.
 
         Parameters:
-            cadnle (pd.DataFrame): 1 candle price data (OHLC).
+            candle (np.record): A single candle's data.
 
         Returns:
-            int: 1 for green, -1 for red, 0 for doji.
+            int: 1 for green (bullish), -1 for red (bearish), 0 for doji.
         """
         if candle['close'] > candle['open']:
-            return 1  # Green
+            return 1  # Green (bullish)
         elif candle['close'] < candle['open']:
-            return -1  # Red
+            return -1  # Red (bearish)
         else:
-            return 0  # Doji
-#
+            return 0  # Doji (indecision)
 
 
 class NoCandle(Candle):
     """
     Placeholder class for no candle.
     """
+
     def __init__(self):
         super().__init__()
 
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         return None
+
 
 class SameDirectionCandle(Candle):
     """
-    Initialize the Same Direction Candle class.
+    Same Direction Candle class.
     """
+
     def __init__(self):
         super().__init__()
-    
-    
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+
+    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         """
         Check for Same Direction Candle pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'buy', 'sell', or 'none'.
+            str: 'buy', 'sell', or None.
         """
-        color = Candle.candle_color(rates.iloc[-1])
+        color = Candle.candle_color(rates[-1])
         if color == 1:
             return 'buy'
         elif color == -1:
             return 'sell'
-        return 'none'
+        return None
+
 
 class OppositeDirectionCandle(Candle):
     """
-    Initialize the Opposite Direction Candle class.
+    Opposite Direction Candle class.
     """
+
     def __init__(self):
         super().__init__()
-    
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+
+    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         """
         Check for Opposite Direction Candle pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: 'buy', 'sell', or 'none'.
+            str: 'buy', 'sell', or None.
         """
-        color = Candle.candle_color(rates.iloc[-1])
+        color = Candle.candle_color(rates[-1])
         if color == 1:
             return 'sell'
         elif color == -1:
             return 'buy'
-        return 'none'
+        return None
+
 
 class DojiCandle(Candle):
     """
-    Initialize the Doji Candle class.
+    Doji Candle class.
     """
+
     def __init__(self):
         super().__init__()
-    
-    def calculate_and_make_trade_decision(self, rates: pd.DataFrame,tf_obj) -> str:
+
+    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
         """
         Check for Doji Candle pattern.
 
         Parameters:
-            rates (pd.DataFrame): Historical price data (OHLC).
+            rates (np.recarray): Historical price data (OHLC).
 
         Returns:
-            str: both or 'none'.
+            str: 'both' if doji is detected, None otherwise.
         """
-        color = Candle.candle_color(rates.iloc[-1])
+        color = Candle.candle_color(rates[-1])
         if color == 0:
             return 'both'
-        return 'none'
-
-
-
-    
-
-
+        return None

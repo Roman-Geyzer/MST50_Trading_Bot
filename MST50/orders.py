@@ -1,92 +1,57 @@
-# orders.py
 """
 This module contains helper functions and dictionaries for managing trades and orders in MetaTrader 5.
+
 Functions:
-    calculate_lot_size: Calculate the lot size for a trade based on the risk percentage and stop-loss.
-    get_mt5_trade_data: Get the trade data from the trade_dict based on the trade direction and type.
-    get_trade_direction: Get the trade direction based on the order type.
-    calculate_sl_tp: Calculate the stop-loss and take-profit prices based on the given parameters.
-    calculate_sl: Calculate the stop-loss price based on the given parameters.
-    calculate_tp: Calculate the take-profit price based on the given parameters.
-    calculate_trail: Calculate the trailing stop price based on the given parameters.
-    check_trail_conditions: Check if the trailing stop conditions are met.
-    mt5_position_to_dict: Convert a position tuple to a dictionary.
+    - calculate_lot_size: Calculate the lot size for a trade based on the risk percentage and stop-loss.
+    - get_mt5_trade_type: Get the trade type (BUY or SELL) based on the trade direction.
+    - get_trade_direction: Get the trade direction based on the order type.
+    - calculate_sl_tp: Calculate the stop-loss and take-profit prices based on the given parameters.
+    - calculate_sl: Calculate the stop-loss price based on the given parameters.
+    - calculate_tp: Calculate the take-profit price based on the given parameters.
+    - calculate_trail: Calculate the trailing stop price based on the given parameters.
+    - check_trail_conditions: Check if the trailing stop conditions are met.
+    - mt5_position_to_dict: Convert a position tuple to a dictionary.
+
 Constants:
-    trade_dict (dict): Dictionary containing trade data for different trade directions and types.
-    sl_methods (dict): Dictionary containing stop-loss calculation methods.
-    tp_methods (dict): Dictionary containing take-profit calculation methods.
-    trail_methods (dict): Dictionary containing trailing stop calculation methods.
+    - trade_dict (dict): Dictionary containing trade data for different trade directions and types.
+    - sl_methods (dict): Dictionary containing stop-loss calculation methods.
+    - tp_methods (dict): Dictionary containing take-profit calculation methods.
+    - trail_methods (dict): Dictionary containing trailing stop calculation methods.
 """
 
-# helper dictionarries:
-
 from decimal import Decimal
-from .mt5_interface import (TIMEFRAMES, ORDER_TYPES, TRADE_ACTIONS, ORDER_TIME,
-                        symbol_info, symbol_info_tick, account_info)
+from .mt5_interface import (
+    TIMEFRAMES,
+    ORDER_TYPES,
+    TRADE_ACTIONS,
+    ORDER_TIME,
+    symbol_info,
+    symbol_info_tick,
+    account_info
+)
 from .constants import TRADE_DIRECTION
 from .utils import print_with_info
 
-
-
-
-
-
-#TODO: check if directions are correct - buy is 1 and sell is 0 ?
-#TODO: update the trade_dict with the correct values
+# Helper dictionaries
 trade_dict = {
-    TRADE_DIRECTION.BUY: {
-        'market': {
-            'action': TRADE_ACTIONS['DEAL'],
-            'type': ORDER_TYPES['BUY'] ,
-        },
-        'limit': {
-            'action': TRADE_ACTIONS['PENDING'],
-            'type': ORDER_TYPES['BUY_LIMIT'],
-
-        },
-        'stop': {
-            'action': TRADE_ACTIONS['PENDING'],
-            'type': ORDER_TYPES['BUY_STOP'],
-        },
-        'limit_stop': {
-            'action': TRADE_ACTIONS['PENDING'],
-            'type': ORDER_TYPES['BUY_STOP_LIMIT'],
-        },
-    },
-    TRADE_DIRECTION.SELL: {
-        'market': {
-            'action': TRADE_ACTIONS['DEAL'],
-            'type': ORDER_TYPES['SELL'],
-        },
-        'limit': {
-            'action': TRADE_ACTIONS['PENDING'],
-            'type': ORDER_TYPES['SELL_LIMIT'],
-        },
-        'stop': {
-            'action': TRADE_ACTIONS['PENDING'],
-            'type': ORDER_TYPES['SELL_STOP'],
-        },
-        'limit_stop': {
-            'action': TRADE_ACTIONS['PENDING'],
-            'type': ORDER_TYPES['SELL_STOP_LIMIT'],
-        },
-    },
+    TRADE_DIRECTION.BUY: ORDER_TYPES['BUY'],
+    TRADE_DIRECTION.SELL: ORDER_TYPES['SELL'],
 }
 
-# helper functions:
+# Helper functions
 
-def calculate_lot_size(symbol, trade_risk_percent, sl):
+def calculate_lot_size(symbol: str, trade_risk_percent: float, sl: float) -> float:
     """
     Calculate the lot size for a trade based on stop-loss (SL), symbol, and risk percentage.
 
     Parameters:
-    symbol (str): Symbol name.
-    trade_risk_percent (float): Risk percentage per trade.
-    sl (float): Stop-loss value.
+        symbol (str): Symbol name.
+        trade_risk_percent (float): Risk percentage per trade.
+        sl (float): Stop-loss value.
+
     Returns:
-    float: Calculated lot size.
+        float: Calculated lot size.
     """
-    
     # Get the symbol tick value
     n_tick_value = symbol_info_tick(symbol)['bid']
     if sl == 0:
@@ -97,36 +62,62 @@ def calculate_lot_size(symbol, trade_risk_percent, sl):
     # Get account balance
     account_balance = account_info()['balance']
 
-    # Point() in MQL5 refers to the tick size, so we'll use symbol_info().point to get the point size
+    # Get point size
     point_size = symbol_info(symbol)['point']
 
     # Calculate lot size
     lot_size = (account_balance * trade_risk_percent / 100) / (sl / point_size * n_tick_value)
-    
+
     # Normalize lot size to 2 decimal places
     lot_size = round(lot_size, 2)
-    
+
     return lot_size
 
-def get_mt5_trade_data(direction, trade_type):
+def get_mt5_trade_type(direction):
     """
-    function to get the trade data from the trade_dict
-    input: direction, trade_type
-    output: trade_data
+    Get the trade type (BUY or SELL) based on the trade direction.
+
+    Parameters:
+        direction (int): Trade direction.
+
+    Returns:
+        int: MT5 trade type.
     """
-    print(f"direction: {direction}, trade_type: {trade_type}")
-    trade_data = trade_dict[direction][trade_type]
-    return trade_data
+    return trade_dict[direction]
 
 def get_trade_direction(trade_type):
-    if trade_type == ORDER_TYPES['BUY'] or trade_type == ORDER_TYPES['BUY_LIMIT'] or trade_type == ORDER_TYPES['BUY_STOP'] or trade_type == ORDER_TYPES['BUY_STOP_LIMIT']:
+    """
+    Get the trade direction based on the order type.
+
+    Parameters:
+        trade_type (int): Order type.
+
+    Returns:
+        int: Trade direction.
+    """
+    if trade_type == ORDER_TYPES['BUY']:
         return TRADE_DIRECTION.BUY
-    elif trade_type == ORDER_TYPES['SELL'] or trade_type == ORDER_TYPES['SELL_LIMIT'] or trade_type == ORDER_TYPES['SELL_STOP'] or trade_type == ORDER_TYPES['SELL_STOP_LIMIT']:
+    elif trade_type == ORDER_TYPES['SELL']:
         return TRADE_DIRECTION.SELL
     else:
         raise ValueError(f"Invalid trade type: {trade_type}")
 
-def calculate_sl_tp(price, direction,sl_method, sl_param, tp_method, tp_param, symbol):
+def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, symbol):
+    """
+    Calculate the stop-loss and take-profit prices based on the given parameters.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_method (str): Stop-loss calculation method name.
+        sl_param (float): Stop-loss parameter value.
+        tp_method (str): Take-profit calculation method name.
+        tp_param (float): Take-profit parameter value.
+        symbol (str): Symbol name.
+
+    Returns:
+        tuple: (stop-loss price, take-profit price)
+    """
     symbol_i = symbol_info(symbol)
     point = symbol_i['point']
 
@@ -136,7 +127,7 @@ def calculate_sl_tp(price, direction,sl_method, sl_param, tp_method, tp_param, s
     else:
         tp = calculate_tp(price, direction, tp_method, tp_param, symbol, point)
 
-    # Round to 5 decimal places or less
+    # Round to the number of decimal places based on the point size
     point_decimal = Decimal(str(point))
     decimal_places = -point_decimal.as_tuple().exponent
     decimal_places = min(decimal_places, 5)
@@ -144,249 +135,566 @@ def calculate_sl_tp(price, direction,sl_method, sl_param, tp_method, tp_param, s
     tp = round(tp, decimal_places)
 
     return sl, tp
-#obsolete - since use of
-"""
-def mt5_position_to_dict(position):
-    recives a position object (tuple) and returns a dictionary with the position data
-    if isinstance(position, dict):
-        return position
-    position = position[0]
-    position_dict = {
-        'ticket': position[0],
-        'time': position[1],
-        'time_msc': position[2],
-        'time_update': position[3],
-        'time_update_msc': position[4],
-        'type': position[5],
-        'magic': position[6],
-        'identifier': position[7],
-        'reason': position[8],
-        'volume': position[9],
-        'price_open': position[10],
-        'sl': position[11],
-        'tp': position[12],
-        'price_current': position[13],
-        'swap': position[14],
-        'profit': position[15],
-        'symbol': position[16],
-        'comment': position[17],
-        'external_id': position[18],
-    }
-    return position_dict
-#
-"""
 
-# SL methods:
+# SL methods
 def calculate_sl(price, direction, sl_method_name, sl_param, symbol, point):
     """
     Calculate the stop loss (SL) price using sl_method based on the given parameters.
-    Args:
+
+    Parameters:
         price (float): Current price.
-        direction (str): Trade direction ('buy' or 'sell').
+        direction (int): Trade direction.
         sl_method_name (str): SL calculation method name.
         sl_param (float): SL parameter value.
         symbol (str): Symbol name.
         point (float): Point value for the symbol.
+
     Returns:
         float: Calculated SL price.
     """
     # Look up the SL method function based on the method name
-    sl_method = sl_methods.get(sl_method_name)
-    if sl_method is None:
+    sl_method_func = sl_methods.get(sl_method_name)
+    if sl_method_func is None:
         raise ValueError(f"Invalid SL method: {sl_method_name}")
 
     # Call the SL method function with the provided parameters
-    return sl_method(price, direction, sl_param, symbol, point)
-
+    return sl_method_func(price, direction, sl_param, symbol, point)
 
 def UsePerc_SL(price, direction, sl_param, symbol, point):
-    if direction == TRADE_DIRECTION.BUY: 
-        sl = price - sl_param 
+    """
+    Calculate SL using percentage.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_param (float): SL percentage.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated SL price.
+    """
+    if direction == TRADE_DIRECTION.BUY:
+        sl = price - sl_param * price / 100
     elif direction == TRADE_DIRECTION.SELL:
-        sl = price + sl_param 
+        sl = price + sl_param * price / 100
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
     return sl
 
-def UseCandels_SL(price, direction, sl_param, symbol, point):
+def UseFixed_SL(price, direction, sl_param, symbol, point):
+    """
+    Calculate SL using a fixed number of points.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_param (float): SL parameter.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated SL price.
+    """
+    if direction == TRADE_DIRECTION.BUY:
+        sl = price - sl_param * point
+    elif direction == TRADE_DIRECTION.SELL:
+        sl = price + sl_param * point
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return sl
+
+def UseCandles_SL(price, direction, sl_param, symbol, point):
+    """
+    Calculate SL based on candle data.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_param (int): Number of candles to consider.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated SL price.
+    """
+    # This function needs implementation based on your candle data availability
     pass
 
 def UseSR_SL(price, direction, sl_param, symbol, point):
+    """
+    Calculate SL based on Support and Resistance levels.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_param (float): Parameter for SR calculation.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated SL price.
+    """
+    # This function needs implementation based on your SR levels
     pass
 
 def UseTrend_SL(price, direction, sl_param, symbol, point):
+    """
+    Calculate SL based on trend lines.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_param (float): Parameter for trend calculation.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated SL price.
+    """
+    # This function needs implementation based on your trend line data
     pass
 
 def UseMA_SL(price, direction, sl_param, symbol, point):
-    pass
+    """
+    Calculate SL based on Moving Averages.
 
-def UseFixed_SL(price, direction, sl_param, symbol, point):
-    if direction == TRADE_DIRECTION.BUY: 
-        sl = price - sl_param * point * 10
-    elif direction == TRADE_DIRECTION.SELL:
-        sl = price + sl_param * point * 10
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return sl
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_param (int): MA period.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated SL price.
+    """
+    # This function needs implementation based on your MA data
+    pass
 
 sl_methods = {
     'UsePerc_SL': UsePerc_SL,
-    'UseCandels_SL': UseCandels_SL,
+    'UseFixed_SL': UseFixed_SL,
+    'UseCandles_SL': UseCandles_SL,
     'UseSR_SL': UseSR_SL,
     'UseTrend_SL': UseTrend_SL,
     'UseMA_SL': UseMA_SL,
-    'UseFixed_SL': UseFixed_SL,
 }
 
-# TP methods:
-
-def calculate_tp(price, direction, tp_method, tp_param, symbol, point):
+# TP methods
+def calculate_tp(price, direction, tp_method_name, tp_param, symbol, point, sl=None):
     """
     Calculate the take profit (TP) price using tp_method based on the given parameters.
-    Args:
+
+    Parameters:
         price (float): Current price.
-        direction (str): Trade direction ('buy' or 'sell').
-        tp_method (str): TP calculation method.
+        direction (int): Trade direction.
+        tp_method_name (str): TP calculation method name.
         tp_param (float): TP parameter value.
         symbol (str): Symbol name.
         point (float): Point value for the symbol.
+        sl (float, optional): Stop-loss price. Required for certain TP methods.
+
     Returns:
         float: Calculated TP price.
     """
     # Look up the TP method function based on the method name
-    tp_method = tp_methods.get(tp_method)
-    if tp_method is None:
-        raise ValueError(f"Invalid TP method: {tp_method}")
-    
+    tp_method_func = tp_methods.get(tp_method_name)
+    if tp_method_func is None:
+        raise ValueError(f"Invalid TP method: {tp_method_name}")
+
     # Call the TP method function with the provided parameters
-    return tp_method(price, direction, tp_param, symbol, point)
+    if tp_method_name == 'UseRR_TP' and sl is not None:
+        return tp_method_func(price, direction, tp_param, symbol, point, sl)
+    else:
+        return tp_method_func(price, direction, tp_param, symbol, point)
 
 def UsePerc_TP(price, direction, tp_param, symbol, point):
-    if direction == TRADE_DIRECTION.BUY: 
-        tp = price + tp_param * point 
+    """
+    Calculate TP using percentage.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (float): TP percentage.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    if direction == TRADE_DIRECTION.BUY:
+        tp = price + tp_param * price / 100
     elif direction == TRADE_DIRECTION.SELL:
-        tp = price - tp_param * point 
+        tp = price - tp_param * price / 100
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
-
-def UseCandels_TP(price, direction, tp_param, symbol, point):
-    pass
-
-
-def UseSR_TP(price, direction, tp_param, symbol, point):
-    pass
-
-
-def UseTrend_TP(price, direction, tp_param, symbol, point):
-    pass
-
-
-def UseMA_TP(price, direction, tp_param, symbol, point):
-    pass
-
 
 def UseFixed_TP(price, direction, tp_param, symbol, point):
-    if direction == TRADE_DIRECTION.BUY: 
-        tp = price + tp_param * point * 10
+    """
+    Calculate TP using a fixed number of points.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (float): TP parameter.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    if direction == TRADE_DIRECTION.BUY:
+        tp = price + tp_param * point
     elif direction == TRADE_DIRECTION.SELL:
-        tp = price - tp_param * point * 10
+        tp = price - tp_param * point
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
-def UseRR_TP(price, direction, tp_param, symbol, point, SL):
-    if direction == TRADE_DIRECTION.BUY: 
-        tp = price + tp_param * point
+def UseCandles_TP(price, direction, tp_param, symbol, point):
+    """
+    Calculate TP based on candle data.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (int): Number of candles to consider.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    # This function needs implementation based on your candle data availability
+    pass
+
+def UseSR_TP(price, direction, tp_param, symbol, point):
+    """
+    Calculate TP based on Support and Resistance levels.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (float): Parameter for SR calculation.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    # This function needs implementation based on your SR levels
+    pass
+
+def UseTrend_TP(price, direction, tp_param, symbol, point):
+    """
+    Calculate TP based on trend lines.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (float): Parameter for trend calculation.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    # This function needs implementation based on your trend line data
+    pass
+
+def UseMA_TP(price, direction, tp_param, symbol, point):
+    """
+    Calculate TP based on Moving Averages.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (int): MA period.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    # This function needs implementation based on your MA data
+    pass
+
+def UseRR_TP(price, direction, tp_param, symbol, point, sl):
+    """
+    Calculate TP using Risk-Reward ratio.
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (float): RR ratio.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        sl (float): Stop-loss price.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    risk = abs(price - sl)
+    reward = risk * tp_param
+    if direction == TRADE_DIRECTION.BUY:
+        tp = price + reward
+    elif direction == TRADE_DIRECTION.SELL:
+        tp = price - reward
     else:
-        tp = price - tp_param * point
+        raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
 tp_methods = {
     'UsePerc_TP': UsePerc_TP,
-    'UseCandels_TP': UseCandels_TP,
+    'UseFixed_TP': UseFixed_TP,
+    'UseCandles_TP': UseCandles_TP,
     'UseSR_TP': UseSR_TP,
     'UseTrend_TP': UseTrend_TP,
     'UseMA_TP': UseMA_TP,
-    'UseFixed_TP': UseFixed_TP,
     'UseRR_TP': UseRR_TP,
 }
 
-# Trail methods:
+# Trail methods
+def check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail):
+    """
+    Check if the trailing stop conditions are met.
 
-def check_trail_conditions(price, direction, trail_price,current_sl, both_sides_trail):
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        trail_price (float): Proposed new trailing stop price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
     if both_sides_trail:
         return trail_price
-    if direction % 2 == 0: # BUY -> trade dircetion's are 0, 2, 4, 6 
+    if direction == 0: # Buy
         if trail_price > current_sl:
-            return trail_price 
-        return None # no change to SL
-    else: # SELL traded dircetion's are 1, 3, 5, 7
+            return trail_price
+        return None  # No change to SL
+    elif direction == 1: # Sell
         if trail_price < current_sl:
             return trail_price
         return None
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
 
-def calculate_trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
+def calculate_trail(price, current_sl, both_sides_trail, direction, trail_method_name, trail_param, symbol, point, rates_df):
     """
     Calculate the trailing stop price using trail_method based on the given parameters.
-    Args:
+
+    Parameters:
         price (float): Current price.
-        direction (str): Trade direction ('buy' or 'sell').
-        trail_method (str): Trail calculation method.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_method_name (str): Trail calculation method name.
         trail_param (float): Trail parameter value.
         symbol (str): Symbol name.
         point (float): Point value for the symbol.
+        rates_df (np.recarray): Historical price data.
+
     Returns:
-        float: Calculated trailing stop price.
+        float or None: New stop-loss price if conditions are met, otherwise None.
     """
     # Look up the trail method function based on the method name
-    trail_method = trail_methods.get(trail_method)
-    if trail_method is None:
-        raise ValueError(f"Invalid trail method: {trail_method}")
-    
-    #TODO: this need more work, maybe send the position object to the trail method instead of price and direction
-    # Call the trail method function with the provided parameters
-    return trail_method(price,current_sl,both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df)
+    trail_method_func = trail_methods.get(trail_method_name)
+    if trail_method_func is None:
+        raise ValueError(f"Invalid trail method: {trail_method_name}")
 
-def UsePerc_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
-    if direction == TRADE_DIRECTION.BUY: 
-        trail = price - trail_param * point
+    # Call the trail method function with the provided parameters
+    return trail_method_func(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df)
+
+def UsePerc_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop using percentage.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (float): Trail percentage.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    if direction == TRADE_DIRECTION.BUY:
+        trail_price = price - trail_param * price / 100
     elif direction == TRADE_DIRECTION.SELL:
-        trail = price + trail_param * point
+        trail_price = price + trail_param * price / 100
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
-    return trail
-
-def UseCandels_Trail_Close(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
-    if direction % 2 == 0: # BUY -> trade dircetion's are 0, 2, 4, 6 
-        trail_price = min(rates_df.iloc[-trail_param:-1]['close'])
-    else: # SELL traded dircetion's are 1, 3, 5, 7
-        trail_price = max(rates_df.iloc[-trail_param:-1]['close'])
-    # TODO: add logging of trail price? - print_with_info(f"trail_price: {trail_price} , for position: {direction}")
     return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
 
-def UseCandels_Trail_Extreme(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
+def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop using a fixed number of points.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (float): Trail parameter.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    if direction == TRADE_DIRECTION.BUY:
+        trail_price = price - trail_param * point
+    elif direction == TRADE_DIRECTION.SELL:
+        trail_price = price + trail_param * point
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+
+def UseCandles_Trail_Close(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop using the close prices of the last N candles.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (int): Number of candles to consider.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    if direction == 0: # Buy
+        trail_prices = rates_df['close'][-trail_param:-1]
+        trail_price = min(trail_prices)
+    elif direction == 1: # Sell
+        trail_prices = rates_df['close'][-trail_param:-1]
+        trail_price = max(trail_prices)
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+
+def UseCandles_Trail_Extreme(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop using the high/low prices of the last N candles.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (int): Number of candles to consider.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    if direction == TRADE_DIRECTION.BUY:
+        trail_prices = rates_df['low'][-trail_param:-1]
+        trail_price = min(trail_prices)
+    elif direction == TRADE_DIRECTION.SELL:
+        trail_prices = rates_df['high'][-trail_param:-1]
+        trail_price = max(trail_prices)
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+
+def UseSR_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop based on Support and Resistance levels.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (float): Parameter for SR calculation.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    # This function needs implementation based on your SR levels
     pass
 
-def UseSR_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
+def UseTrend_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop based on trend lines.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (float): Parameter for trend calculation.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    # This function needs implementation based on your trend line data
     pass
 
-def UseTrend_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
-    pass
+def UseMA_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop based on Moving Averages.
 
-def UseMA_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
-    pass
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (int): MA period.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
 
-def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_method, trail_param, symbol, point, rates_df):
-    trail_price = price - trail_param * point
-    return check_trail_conditions(price, direction, trail_price,current_sl, both_sides_trail)
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    # This function needs implementation based on your MA data
+    pass
 
 trail_methods = {
     'UsePerc_Trail': UsePerc_Trail,
-    'UseCandels_Trail_Close': UseCandels_Trail_Close,
-    'UseCandels_Trail_Extreme': UseCandels_Trail_Extreme,
+    'UseFixed_Trail': UseFixed_Trail,
+    'UseCandles_Trail_Close': UseCandles_Trail_Close,
+    'UseCandles_Trail_Extreme': UseCandles_Trail_Extreme,
     'UseSR_Trail': UseSR_Trail,
     'UseTrend_Trail': UseTrend_Trail,
     'UseMA_Trail': UseMA_Trail,
-    'UseFixed_Trail': UseFixed_Trail,
 }
+
+# Additional functions as needed
+#TODO: Implement this function
+def mt5_position_to_dict(position):
+    """
+    Convert a position tuple to a dictionary.
+
+    Parameters:
+        position (mt5.Position): MT5 position object.
+
+    Returns:
+        dict: Dictionary representation of the position.
+    """
+    # This function needs implementation based on MT5 position object
+    pass

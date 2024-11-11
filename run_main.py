@@ -2,6 +2,8 @@
 
 from MST50.main import main
 
+#To see profile results, run the following command in the terminal:
+# snakeviz backtest_profile.prof
 
 ################# Profiling #################
 

@@ -67,12 +67,6 @@ POSITION_REASON_EXPERT              = 3      # The position was opened as a resu
 # order types, ENUM_ORDER_TYPE
 ORDER_TYPE_BUY                      = 0      # Market Buy order
 ORDER_TYPE_SELL                     = 1      # Market Sell order
-ORDER_TYPE_BUY_LIMIT                = 2      # Buy Limit pending order
-ORDER_TYPE_SELL_LIMIT               = 3      # Sell Limit pending order
-ORDER_TYPE_BUY_STOP                 = 4      # Buy Stop pending order
-ORDER_TYPE_SELL_STOP                = 5      # Sell Stop pending order
-ORDER_TYPE_BUY_STOP_LIMIT           = 6      # Upon reaching the order price, a pending Buy Limit order is placed at the StopLimit price
-ORDER_TYPE_SELL_STOP_LIMIT          = 7      # Upon reaching the order price, a pending Sell Limit order is placed at the StopLimit price
 ORDER_TYPE_CLOSE_BY                 = 8      # Order to close a position by an opposite one
 # order state, ENUM_ORDER_STATE
 ORDER_STATE_STARTED                 = 0      # Order checked, but not yet accepted by broker
@@ -356,13 +350,7 @@ def get_constants():
         },
         'ORDER_TYPES': {
             'BUY': ORDER_TYPE_BUY,
-            'BUY_LIMIT': ORDER_TYPE_BUY_LIMIT,
-            'BUY_STOP': ORDER_TYPE_BUY_STOP,
-            'BUY_STOP_LIMIT': ORDER_TYPE_BUY_STOP_LIMIT,
             'SELL': ORDER_TYPE_SELL,
-            'SELL_LIMIT': ORDER_TYPE_SELL_LIMIT,
-            'SELL_STOP': ORDER_TYPE_SELL_STOP,
-            'SELL_STOP_LIMIT': ORDER_TYPE_SELL_STOP_LIMIT,
         },
         'TRADE_ACTIONS': {
             'DEAL': TRADE_ACTION_DEAL,
@@ -471,5 +459,21 @@ def get_mt5_tf_str(mt5_timeframe):
         str: The timeframe string (e.g., 'M1', 'H1').
     """
     return TIMEFRAMES_REVERSE.get(mt5_timeframe, None)
+
+def timeframe_to_timedelta(tf_name):
+    """
+    Map the timeframe string to a timedelta object.
+    """
+    mapping = {
+        'M1': timedelta(minutes=1),
+        'M5': timedelta(minutes=5),
+        'M15': timedelta(minutes=15),
+        'M30': timedelta(minutes=30),
+        'H1': timedelta(hours=1),
+        'H4': timedelta(hours=4),
+        'D1': timedelta(days=1),
+        'W1': timedelta(weeks=1),
+    }
+    return mapping.get(tf_name, timedelta(minutes=1))  # Default to 1 minute
 
 

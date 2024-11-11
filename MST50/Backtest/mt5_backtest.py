@@ -1,11 +1,11 @@
 # mt5_backtest.py
+
 """
 This module contains the MT5Backtest class that simulates the MetaTrader 5 client for backtesting purposes.
 The class provides methods to simulate the MetaTrader 5 client functions for backtesting trading strategies.
 The class is designed to be used with the MT5Strategy class to backtest trading strategies.
-functions:
-    MT5Backtest: A class to simulate
-    the MetaTrader 5 (MT5) client for backtesting purposes.
+Functions:
+    MT5Backtest: A class to simulate the MetaTrader 5 (MT5) client for backtesting purposes.
     extract_backtest_parameters: Extract symbols, timeframes, start_time, end_time, and time_step from strategies.
     load_data: Load historical data from CSV files into symbols_data.
     get_timeframe_name: Get the timeframe name from its value.
@@ -20,15 +20,11 @@ functions:
     history_deals_get: Simulate MT5.history_deals_get() function.
     order_send: Simulate MT5.order_send() function.
     execute_market_order: Execute a market order.
-    execute_pending_order: Execute a pending order by adding it to the pending_orders list.
     modify_order: Modify an existing order (e.g., change SL/TP).
-    remove_pending_order: Remove a pending order.
     close_by_order: Close a position by an opposite one.
     get_current_price: Get the current price for a symbol based on current_time and advance_timeframe.
-    get_trade_direction: Get trade direction based on order type.
     advance_time_step: Advance the simulation time by one minute.
-    execute_trade_logic: Process pending orders and update account metrics.
-    process_pending_orders: Process pending orders based on current price.
+    execute_trade_logic: Check if SL or TP were hit and update account metrics.
     update_account_metrics: Update account metrics based on open positions.
     close_all_positions: Close all open positions.
     close_position: Close a single position.
@@ -62,6 +58,10 @@ ORDER_FILLING = constants['ORDER_FILLING']
 TRADE_RETCODES = constants['TRADE_RETCODES']
 
 
+
+
+
+
 # ----------------------------
 # MT5Backtest Class Definition
 # ----------------------------
@@ -84,13 +84,13 @@ class MT5Backtest:
             data_dir (str): Directory where historical CSV data is stored.
             output_dir (str): Directory where backtest outputs will be saved.
         """
-
+        self._initialized = True  # To match the singleton pattern in main.py
         self.strategies = strategies  # Store the strategies
         self.data_dir = os.path.join(drive, data_dir)
         self.symbols_data = {}  # {symbol: {timeframe: DataFrame}}
 
         # Extract symbols, timeframes, and backtest parameters from strategies
-        if strategies: # since there is one gloabl instance of this class with no strategies - this will not be executed
+        if strategies:
             self.extract_backtest_parameters()
             self.load_data()
 
@@ -112,7 +112,8 @@ class MT5Backtest:
             'equity': 100000.0,
             'margin': 0.0,
             'free_margin': 100000.0,
-            'profit': 0.0
+            'profit': 0.0,
+            'margin_level': 0.0
         }
 
         # Initialize positions
@@ -125,9 +126,6 @@ class MT5Backtest:
 
         # Ticket counter
         self.next_ticket = 1000  # Starting ticket number
-
-        # Order management
-        self.pending_orders = []  # List of pending order requests
 
         # Output directory setup
         self.output_dir = os.path.join(drive, output_dir)
@@ -145,6 +143,9 @@ class MT5Backtest:
             self.current_tick_index[symbol] = {}
             for tf_name in tfs.keys():
                 self.current_tick_index[symbol][tf_name] = 0  # Start at the first bar
+
+        self.current_tick_data = {}  # Store current tick data for each symbol
+
 
     def extract_backtest_parameters(self):
         """
@@ -190,6 +191,7 @@ class MT5Backtest:
         # Map the timeframe string to a timedelta
         self.time_step = timeframe_to_timedelta(backtest_timeframe_str)
 
+        
 
     def load_data(self):
         """
@@ -215,15 +217,14 @@ class MT5Backtest:
                 continue  # Skip unnecessary data
 
             df = pd.read_csv(filepath)
-            
+
             # Check if 'time' column exists
             if 'time' not in df.columns:
                 print(f"Error: 'time' column missing in {filename}. Skipping.")
                 continue
 
-            # **Remove utc=True to keep 'time' timezone-naive**
             try:
-                df['time'] = pd.to_datetime(df['time'], errors='raise')  # Removed utc=True
+                df['time'] = pd.to_datetime(df['time'], errors='raise')
             except Exception as e:
                 print(f"Error parsing 'time' column in {filename}: {e}. Skipping.")
                 continue
@@ -252,17 +253,11 @@ class MT5Backtest:
                 print(f"    No start_time specified. Loading all data for {symbol} on timeframe {tf_name}.")
 
             # Set 'time' as index for faster access
-            df.set_index('time', inplace=True)  # Set 'time' as index
-            df.drop_duplicates(inplace=True)    # Remove any duplicate timestamps
-            # Reset index to keep 'time' as a column while also having it as the index
+            df.set_index('time', inplace=True)
+            df.drop_duplicates(inplace=True)
             df.reset_index(inplace=True)
 
-            # **Precompute NumPy arrays for faster access**
-            df['time_np'] = df['time'].astype('int64') // 10**9  # Convert to UNIX timestamp
-            df['close_np'] = df['close'].values
-            df['spread_np'] = df['spread'].values
-
-            # Ensure symbols_data[symbol] is initialized as a dict
+            # Assign the DataFrame to the specific timeframe
             if symbol not in self.symbols_data:
                 self.symbols_data[symbol] = {}
 
@@ -273,14 +268,6 @@ class MT5Backtest:
 
         # Initialize current_tick_index after loading all data
         self.initialize_current_tick_indices()
-    
-    def initialize_current_tick_indices(self):
-        """
-        Initialize the current_tick_index for each symbol and timeframe.
-        """
-        for symbol, tfs in self.symbols_data.items():
-            for tf_name in tfs:
-                self.current_tick_index[symbol][tf_name] = 0
 
     def initialize_current_tick_indices(self):
         """
@@ -292,15 +279,15 @@ class MT5Backtest:
             self.current_tick_index[symbol] = {}
             for tf_name, df in tfs.items():
                 # Find the first index where 'time' >= self.start_time
-                idx = df.index[df['time'] >= self.start_time].tolist()
-                if idx:
-                    first_valid_index = idx[0]
+                idx_list = df.index[df['time'] >= self.start_time].tolist()
+                if idx_list:
+                    first_valid_index = idx_list[0]
                     self.current_tick_index[symbol][tf_name] = first_valid_index
                     print(f"    Initialized current_tick_index for {symbol} on {tf_name}: {first_valid_index}")
                 else:
                     # If no data after self.start_time, set index to len(df) to indicate no data
                     self.current_tick_index[symbol][tf_name] = len(df)
-                    print(f"    No data after start_time for {symbol} on {tf_name}. Setting current_tick_index to {len(df)}")    
+                    print(f"    No data after start_time for {symbol} on {tf_name}. Setting current_tick_index to {len(df)}")
 
     def get_timeframe_name(self, timeframe):
         """
@@ -314,6 +301,7 @@ class MT5Backtest:
         """
         return TIMEFRAMES_REVERSE.get(timeframe, None)
 
+
     def copy_rates(self, symbol, timeframe, count):
         """
         Simulate MT5.copy_rates() function.
@@ -324,7 +312,7 @@ class MT5Backtest:
             count (int): Number of bars to copy.
 
         Returns:
-            np.recarray or None: Array of rates up to current_time or None if error.
+            np.recarray or None: NumPy recarray of rates or None if error.
         """
         tf_name = self.get_timeframe_name(timeframe)
         if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
@@ -334,16 +322,26 @@ class MT5Backtest:
         df = self.symbols_data[symbol][tf_name]
         current_index = self.current_tick_index[symbol][tf_name]
 
-        if current_index < 0 or current_index >= len(df):
-            self.set_last_error(RES_E_NOT_FOUND, f"Current index {current_index} out of range for {symbol}, {tf_name}")
+        if current_index < 0:
+            self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
             return None
 
-        # Determine the start and end indices for slicing
-        start_index = max(current_index - count + 1, 0)
-        end_index = current_index + 1  # +1 because slicing is exclusive at the end
+        # Get data up to current_index
+        df_up_to_current = df.iloc[:current_index + 1]
+        total_bars = len(df_up_to_current)
+        if total_bars == 0:
+            self.set_last_error(RES_E_NOT_FOUND, f"No data available up to current_time for {symbol}, {tf_name}")
+            return None
 
-        rates = df.iloc[start_index:end_index]
-        return rates.to_records(index=False)
+        # Reverse the DataFrame to have newest bar first
+        df_reversed = df_up_to_current.iloc[::-1].reset_index(drop=True)
+
+        rates = df_reversed.iloc[:count]
+
+        # Convert to NumPy recarray
+        data_array = rates.to_records(index=False)
+        return data_array
+
 
     def copy_rates_from_pos(self, symbol, timeframe, pos, count):
         """
@@ -352,11 +350,11 @@ class MT5Backtest:
         Parameters:
             symbol (str): The trading symbol.
             timeframe (int): The timeframe constant.
-            pos (int): Starting position.
+            pos (int): Starting position (0 is the newest bar).
             count (int): Number of bars to copy.
 
         Returns:
-            np.recarray or None: Array of rates or None if error.
+            np.recarray or None: NumPy recarray of rates or None if error.
         """
         tf_name = self.get_timeframe_name(timeframe)
         if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
@@ -364,13 +362,31 @@ class MT5Backtest:
             return None
 
         df = self.symbols_data[symbol][tf_name]
-        if pos < 0 or pos >= len(df):
+        current_index = self.current_tick_index[symbol][tf_name]
+
+        if current_index < 0:
+            self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
+            return None
+
+        # Get data up to current_index
+        df_up_to_current = df.iloc[:current_index + 1]
+        total_bars = len(df_up_to_current)
+        if total_bars == 0:
+            self.set_last_error(RES_E_NOT_FOUND, f"No data available up to current_time for {symbol}, {tf_name}")
+            return None
+        if pos < 0 or pos >= total_bars:
             self.set_last_error(RES_E_INVALID_PARAMS, f"Invalid position: {pos} for {symbol}, {tf_name}")
             return None
 
-        # Use iloc to slice based on position
-        rates = df.iloc[pos: pos + count]
-        return rates.to_records(index=False)
+        # Reverse the DataFrame to have newest bar first
+        df_reversed = df_up_to_current.iloc[::-1].reset_index(drop=True)
+
+        end_index = min(pos + count, total_bars)
+        rates = df_reversed.iloc[pos:end_index]
+
+        # Convert to NumPy recarray
+        data_array = rates.to_records(index=False)
+        return data_array
 
     def copy_rates_from(self, symbol, timeframe, datetime_from, count):
         """
@@ -383,7 +399,7 @@ class MT5Backtest:
             count (int): Number of bars to copy.
 
         Returns:
-            np.recarray or None: Array of rates or None if error.
+            np.recarray or None: NumPy recarray of rates or None if error.
         """
         tf_name = self.get_timeframe_name(timeframe)
         if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
@@ -391,13 +407,23 @@ class MT5Backtest:
             return None
 
         df = self.symbols_data[symbol][tf_name]
-        df_from = df[df['time'] >= datetime_from]
-        if df_from.empty:
-            self.set_last_error(RES_E_NOT_FOUND, f"No data available from {datetime_from} for {symbol}, {tf_name}")
+        current_index = self.current_tick_index[symbol][tf_name]
+
+        if current_index < 0:
+            self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
             return None
 
-        rates = df_from.head(count)
-        return rates.to_records(index=False)
+        # Filter data between datetime_from and current_index
+        df_filtered = df[(df['time'] >= datetime_from) & (df.index <= current_index)]
+        if df_filtered.empty:
+            self.set_last_error(RES_E_NOT_FOUND, f"No data available from {datetime_from} to current_time for {symbol}, {tf_name}")
+            return None
+
+        rates = df_filtered.head(count)
+
+        # Convert to NumPy recarray
+        data_array = rates.to_records(index=False)
+        return data_array
 
     def account_info(self):
         """
@@ -406,6 +432,7 @@ class MT5Backtest:
         Returns:
             dict: Account information.
         """
+        # Convert account info to native Python types
         return self.account
 
     def positions_get(self, ticket=None):
@@ -419,9 +446,16 @@ class MT5Backtest:
             dict or list or None: Single position dict, list of positions, or None if not found.
         """
         if ticket is not None:
-            return self.open_positions.get(ticket, None)
+            position = self.open_positions.get(ticket, None)
+            if position:
+                return position  # Return single position dict
+            else:
+                return None
         else:
-            return (self.open_positions.values()) if self.open_positions else None
+            positions = list(self.open_positions.values())
+            return positions  # Return list of positions
+
+
 
     def symbol_info_tick(self, symbol):
         """
@@ -433,36 +467,24 @@ class MT5Backtest:
         Returns:
             dict or None: Tick information or None if error.
         """
-        tf_name = self.advance_timeframe  # Use the advance timeframe
-
-        # Quick existence check using 'in' for both symbol and timeframe
-        if symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-            self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
+        tick_data = self.get_current_bar_data(symbol)
+        if tick_data is None:
+            self.set_last_error(RES_E_NOT_FOUND, f"No tick data available for {symbol}.")
             return None
 
-        df = self.symbols_data[symbol][tf_name]
-        current_index = self.current_tick_index[symbol][tf_name]
-
-        # Check if current_index is within bounds
-        if current_index >= len(df):
-            self.set_last_error(RES_E_NOT_FOUND, f"No more tick data available for {symbol}.")
-            return None
-
-        # **Access precomputed NumPy arrays for faster retrieval**
-        tick_time = df['time_np'].iloc[current_index]
-        bid = df['close_np'].iloc[current_index]
-        spread = df['spread_np'].iloc[current_index]
-        ask = bid + (spread * 0.0001)
+        bid = tick_data['close']
+        spread = tick_data['spread']
+        ask = bid + (spread * self.symbol_info(symbol)['point'])
         last = bid
+        tick_time = tick_data['time']
 
         tick = {
-            'time': int(tick_time),  # UNIX timestamp as integer
-            'bid': bid,               # Close price as bid
-            'ask': ask,               # Close price plus scaled spread as ask
-            'last': last              # Close price as last
+            'time': int(pd.Timestamp(tick_time).timestamp()),
+            'bid': bid,
+            'ask': ask,
+            'last': last
         }
         return tick
-
 
     def symbol_info(self, symbol):
         """
@@ -538,7 +560,11 @@ class MT5Backtest:
             close_time = pos.get('close_datetime')
             if close_time and from_date <= close_time <= to_date:
                 deals.append(pos)
-        return deals if deals else None
+        if deals:
+            deals = [self._convert_numpy_types(deal) for deal in deals]
+            return deals
+        else:
+            return None
 
     def order_send(self, request):
         """
@@ -560,23 +586,23 @@ class MT5Backtest:
         sl = request.get('sl', 0.0)
         tp = request.get('tp', 0.0)
         magic = request.get('magic', 0)
+        position_ticket = request.get('position', None)
 
-        # Simplified order execution
         if action == TRADE_ACTION_DEAL:
-            # Market order
-            result = self.execute_market_order(symbol, order_type, volume, price, comment, sl, tp, magic)
-            return result
-        elif action == TRADE_ACTION_PENDING:
-            # Pending order (limit or stop)
-            result = self.execute_pending_order(symbol, order_type, volume, price, comment, sl, tp, magic)
-            return result
+            if position_ticket is None:
+                # Open new position
+                result = self.execute_market_order(symbol, order_type, volume, price, comment, sl, tp, magic)
+                return result
+            else:
+                # Close existing position
+                result = self.close_position(position_ticket, price, reason='CLOSE')
+                return {
+                    'retcode': TRADE_RETCODE_DONE,
+                    'order': position_ticket
+                }
         elif action == TRADE_ACTION_SLTP:
             # Modify order
             result = self.modify_order(request)
-            return result
-        elif action == TRADE_ACTION_REMOVE:
-            # Remove pending order
-            result = self.remove_pending_order(request)
             return result
         elif action == TRADE_ACTION_CLOSE_BY:
             # Close by opposite position
@@ -603,48 +629,44 @@ class MT5Backtest:
         Returns:
             dict: Order execution result.
         """
-        direction = self.get_trade_direction(order_type)
-        if not direction:
-            self.set_last_error(RES_E_INVALID_PARAMS, f"Invalid order type: {order_type}")
+        # Get symbol info
+        symbol_info = self.symbol_info(symbol)
+        contract_size = 100000  # For Forex standard lots
+        point = symbol_info['point']
+
+        # Calculate required margin (simplified)
+        required_margin = (contract_size * volume) / 100  # Assuming leverage of 1:100
+
+        if required_margin > self.account['free_margin']:
+            self.set_last_error(RES_E_FAIL, "Not enough free margin to open position.")
             return None
 
-        current_prices = self.get_current_price(symbol)
-        if not current_prices:
-            self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol}.")
-            return None
-
-        exec_price = current_prices['ask'] if direction == 'BUY' else current_prices['bid']
-
-        # Update account balance (simplified, ignoring leverage and margin)
-        cost = exec_price * volume
-        if direction == 'BUY':
-            self.account['balance'] -= cost
-        elif direction == 'SELL':
-            self.account['balance'] += cost
-
-        # Update equity
-        self.account['equity'] = self.account['balance'] + self.account['profit']
+        # Update account margin
+        self.account['margin'] += required_margin
         self.account['free_margin'] = self.account['equity'] - self.account['margin']
 
         # Create position
         position = {
             'ticket': self.next_ticket,
             'symbol': symbol,
-            'type': order_type,
+            'type': order_type,  # BUY or SELL
             'volume': volume,
-            'price': exec_price,
+            'price': price,
             'sl': sl,
             'tp': tp,
             'time': self.current_time,
             'comment': comment,
             'magic': magic,
-            'profit': 0.0
+            'profit': 0.0,
+            'contract_size': contract_size,
+            'point': point,
+            'margin': required_margin
         }
         self.open_positions[self.next_ticket] = position
         self.next_ticket += 1
 
         # Log the trade
-        trade_log = position
+        trade_log = position.copy()
         trade_log['action'] = 'OPEN'
         self.trade_logs.append(trade_log)
 
@@ -652,51 +674,6 @@ class MT5Backtest:
         return {
             'retcode': TRADE_RETCODE_DONE,
             'order': position['ticket']
-        }
-
-    def execute_pending_order(self, symbol, order_type, volume, price, comment, sl, tp, magic):
-        """
-        Execute a pending order by adding it to the pending_orders list.
-
-        Parameters:
-            symbol (str): The trading symbol.
-            order_type (int): The order type constant.
-            volume (float): The trade volume.
-            price (float): The order price.
-            comment (str): Order comment.
-            sl (float): Stop Loss price.
-            tp (float): Take Profit price.
-            magic (int): Magic number.
-
-        Returns:
-            dict: Pending order placement result.
-        """
-        # Add pending order to the list
-        pending_order = {
-            'symbol': symbol,
-            'type': order_type,
-            'volume': volume,
-            'price': price,
-            'comment': comment,
-            'sl': sl,
-            'tp': tp,
-            'magic': magic
-        }
-        self.pending_orders.append(pending_order)
-        # Assign a temporary ticket (could be enhanced)
-        temp_ticket = self.next_ticket
-        self.next_ticket += 1
-
-        # Log the pending order
-        pending_order_log = pending_order
-        pending_order_log['ticket'] = temp_ticket
-        pending_order_log['time'] = self.current_time
-        pending_order_log['action'] = 'PENDING'
-        self.trade_logs.append(pending_order_log)
-
-        return {
-            'retcode': TRADE_RETCODE_PLACED,
-            'order': temp_ticket
         }
 
     def modify_order(self, request):
@@ -742,35 +719,6 @@ class MT5Backtest:
             'retcode': TRADE_RETCODE_DONE
         }
 
-    def remove_pending_order(self, request):
-        """
-        Remove a pending order.
-
-        Parameters:
-            request (dict): Removal request containing 'order' (temporary ticket).
-
-        Returns:
-            dict or None: Removal result or None if error.
-        """
-        order_ticket = request.get('order')
-        # Find and remove the pending order with the ticket
-        for order in self.pending_orders:
-            if order.get('ticket') == order_ticket:
-                self.pending_orders.remove(order)
-
-                # Log the removal
-                removal_log = order
-                removal_log['ticket'] = order_ticket
-                removal_log['time'] = self.current_time
-                removal_log['action'] = 'REMOVE'
-                self.trade_logs.append(removal_log)
-
-                return {
-                    'retcode': TRADE_RETCODE_DONE
-                }
-        self.set_last_error(RES_E_NOT_FOUND, f"Pending order with ticket {order_ticket} not found.")
-        return None
-
     def close_by_order(self, request):
         """
         Close a position by an opposite one.
@@ -781,28 +729,20 @@ class MT5Backtest:
         Returns:
             dict or None: Close by result or None if error.
         """
+        # For simplicity, we'll treat this the same as closing a position
         position_ticket = request.get('position')
-        if position_ticket not in self.open_positions:
-            self.set_last_error(RES_E_NOT_FOUND, f"Position ticket {position_ticket} not found.")
-            return None
+        return self.close_position(position_ticket, reason='CLOSE_BY')
 
-        # Implement close by logic here (simplified)
-        # For this example, we'll just close the position
-        self.close_position(position_ticket)
-
-        return {
-            'retcode': TRADE_RETCODE_DONE
-        }
-
-    def get_current_price(self, symbol):
+    def get_current_price(self, symbol, order_type):
         """
         Get the current price for a symbol based on current_time and advance_timeframe.
 
         Parameters:
             symbol (str): The trading symbol.
+            order_type (int): The order type (ORDER_TYPE_BUY or ORDER_TYPE_SELL).
 
         Returns:
-            dict or None: Current bid and ask prices or None if error.
+            float or None: Current price or None if error.
         """
         tf_name = self.advance_timeframe  # Use the advance timeframe
         if symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
@@ -810,34 +750,22 @@ class MT5Backtest:
             return None
 
         df = self.symbols_data[symbol][tf_name]
-        current_bar = df[df['time'] <= self.current_time].tail(1)
-        if current_bar.empty:
-            # Use the last known price if available
-            current_bar = df.tail(1)
-            if current_bar.empty:
-                self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol}.")
-                return None
+        current_index = self.current_tick_index[symbol][tf_name]
 
-        bid = current_bar['close'].iloc[0]  # Simplified bid
-        ask = bid + (current_bar['spread'].iloc[0] * 0.0001)  # Simplified ask based on spread
-        return {'bid': bid, 'ask': ask}
-
-    def get_trade_direction(self, order_type):
-        """
-        Get trade direction based on order type.
-
-        Parameters:
-            order_type (int): The order type constant.
-
-        Returns:
-            str or None: 'BUY' or 'SELL' or None if invalid.
-        """
-        if order_type in [ORDER_TYPE_BUY, ORDER_TYPE_BUY_LIMIT, ORDER_TYPE_BUY_STOP, ORDER_TYPE_BUY_STOP_LIMIT]:
-            return 'BUY'
-        elif order_type in [ORDER_TYPE_SELL, ORDER_TYPE_SELL_LIMIT, ORDER_TYPE_SELL_STOP, ORDER_TYPE_SELL_STOP_LIMIT]:
-            return 'SELL'
-        else:
+        if current_index >= len(df):
+            self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol} at current time.")
             return None
+
+        current_bar = df.iloc[current_index]
+
+        if order_type == ORDER_TYPE_BUY:
+            price = current_bar['ask'] if 'ask' in current_bar else current_bar['close']
+        elif order_type == ORDER_TYPE_SELL:
+            price = current_bar['bid'] if 'bid' in current_bar else current_bar['close']
+        else:
+            price = current_bar['close']
+
+        return price
 
     def advance_time_step(self):
         """
@@ -852,11 +780,9 @@ class MT5Backtest:
                 current_index = self.current_tick_index[symbol][tf_name]
                 if current_index + 1 < len(df):
                     next_bar_time = df.iloc[current_index + 1]['time']
-                    if isinstance(next_bar_time, (int, float)):
-                        # Convert UNIX timestamp to datetime if necessary
-                        next_bar_time = datetime.fromtimestamp(next_bar_time)
                     if next_bar_time > self.current_time:
                         next_times.append(next_bar_time)
+            
 
         if not next_times:
             # No more data to process
@@ -872,16 +798,28 @@ class MT5Backtest:
         # Advance time
         self.current_time = next_time
 
+        # Update current_tick_index for each symbol and timeframe
+        for symbol, tfs in self.symbols_data.items():
+            for tf_name, df in tfs.items():
+                current_index = self.current_tick_index[symbol][tf_name]
+                if current_index + 1 < len(df):
+                    next_bar_time = df.iloc[current_index + 1]['time']
+                    if next_bar_time <= self.current_time:
+                        self.current_tick_index[symbol][tf_name] += 1
+                        current_index = self.current_tick_index[symbol][tf_name]
+                        # Update current_tick_data with the new current index
+                        if tf_name == self.advance_timeframe:
+                            self.current_tick_data[symbol] = df.iloc[current_index]
+
         return True
 
     def execute_trade_logic(self):
         """
-        Process pending orders and update account metrics.
+        Check if SL or TP were hit and update account metrics.
         """
-        # Simulate SL/TP hits before processing pending orders
+        # Simulate SL/TP hits before updating account metrics
         self.simulate_target_hit_close()
 
-        self.process_pending_orders()
         self.update_account_metrics()
 
     def simulate_target_hit_close(self):
@@ -907,77 +845,40 @@ class MT5Backtest:
             # Determine if SL or TP was hit
             sl_hit = False
             tp_hit = False
+            exit_price = None
+
+            # Simulate intra-bar price movement: Open -> High -> Low -> Close
+            # For simplicity, assume prices move from open to high, then low, then close
 
             if order_type == ORDER_TYPE_BUY:
-                if sl and low <= sl:
-                    sl_hit = True
-                    exit_price = sl  # Exit at SL price
-                elif tp and high >= tp:
-                    tp_hit = True
-                    exit_price = tp  # Exit at TP price
+                # Check SL and TP for Buy orders
+                prices = [bar_data['open'], bar_data['high'], bar_data['low'], bar_data['close']]
+                for price in prices:
+                    if tp and price >= tp:
+                        tp_hit = True
+                        exit_price = tp
+                        break
+                    if sl and price <= sl:
+                        sl_hit = True
+                        exit_price = sl
+                        break
             elif order_type == ORDER_TYPE_SELL:
-                if sl and high >= sl:
-                    sl_hit = True
-                    exit_price = sl  # Exit at SL price
-                elif tp and low <= tp:
-                    tp_hit = True
-                    exit_price = tp  # Exit at TP price
+                # Check SL and TP for Sell orders
+                prices = [bar_data['open'], bar_data['low'], bar_data['high'], bar_data['close']]
+                for price in prices:
+                    if tp and price <= tp:
+                        tp_hit = True
+                        exit_price = tp
+                        break
+                    if sl and price >= sl:
+                        sl_hit = True
+                        exit_price = sl
+                        break
 
             if sl_hit or tp_hit:
                 # Close the position
-                self.close_position(ticket, exit_price, reason='SL' if sl_hit else 'TP')
-
-    def process_pending_orders(self):
-        """
-        Process pending orders based on current price.
-        """
-        to_remove = []
-        for order in self.pending_orders:
-            symbol = order.get('symbol')
-            order_type = order.get('type')
-            price = order.get('price')
-            volume = order.get('volume', 0.01)
-            comment = order.get('comment', '')
-            sl = order.get('sl', 0.0)
-            tp = order.get('tp', 0.0)
-            magic = order.get('magic', 0)
-
-            current_prices = self.get_current_price(symbol)
-            if not current_prices:
-                continue  # Skip if no price data
-
-            bid = current_prices['bid']
-            ask = current_prices['ask']
-
-            # Determine if pending order conditions are met
-            if order_type == ORDER_TYPE_BUY_LIMIT:
-                if ask <= price:
-                    # Execute BUY market order
-                    result = self.execute_market_order(symbol, ORDER_TYPE_BUY, volume, price, comment, sl, tp, magic)
-                    if result and result['retcode'] == TRADE_RETCODE_DONE:
-                        to_remove.append(order)
-            elif order_type == ORDER_TYPE_SELL_LIMIT:
-                if bid >= price:
-                    # Execute SELL market order
-                    result = self.execute_market_order(symbol, ORDER_TYPE_SELL, volume, price, comment, sl, tp, magic)
-                    if result and result['retcode'] == TRADE_RETCODE_DONE:
-                        to_remove.append(order)
-            elif order_type == ORDER_TYPE_BUY_STOP:
-                if ask >= price:
-                    # Execute BUY market order
-                    result = self.execute_market_order(symbol, ORDER_TYPE_BUY, volume, price, comment, sl, tp, magic)
-                    if result and result['retcode'] == TRADE_RETCODE_DONE:
-                        to_remove.append(order)
-            elif order_type == ORDER_TYPE_SELL_STOP:
-                if bid <= price:
-                    # Execute SELL market order
-                    result = self.execute_market_order(symbol, ORDER_TYPE_SELL, volume, price, comment, sl, tp, magic)
-                    if result and result['retcode'] == TRADE_RETCODE_DONE:
-                        to_remove.append(order)
-
-        # Remove executed pending orders
-        for order in to_remove:
-            self.pending_orders.remove(order)
+                reason = 'SL' if sl_hit else 'TP'
+                self.close_position(ticket, exit_price, reason=reason)
 
     def update_account_metrics(self):
         """
@@ -986,31 +887,36 @@ class MT5Backtest:
         if not self.open_positions:
             self.account['profit'] = 0.0
         else:
-            # Create a DataFrame from open positions
-            positions_df = pd.DataFrame(self.open_positions.values())
-            # Get current prices for all symbols
-            symbols = positions_df['symbol'].unique()
-            current_prices = {symbol: self.get_current_price(symbol) for symbol in symbols}
+            total_profit = 0.0
+            for position in self.open_positions.values():
+                symbol = position['symbol']
+                order_type = position['type']
+                volume = position['volume']
+                entry_price = position['price']
+                contract_size = position['contract_size']
+                point = position['point']
 
-            # Calculate profit for each position
-            def calculate_profit(row):
-                price_data = current_prices.get(row['symbol'], {})
-                bid = price_data.get('bid', row['price'])
-                ask = price_data.get('ask', row['price'])
-                if row['type'] in [ORDER_TYPE_BUY, ORDER_TYPE_BUY_LIMIT, ORDER_TYPE_BUY_STOP, ORDER_TYPE_BUY_STOP_LIMIT]:
-                    return (bid - row['price']) * row['volume']
-                elif row['type'] in [ORDER_TYPE_SELL, ORDER_TYPE_SELL_LIMIT, ORDER_TYPE_SELL_STOP, ORDER_TYPE_SELL_STOP_LIMIT]:
-                    return (row['price'] - ask) * row['volume']
+                # Get current price
+                current_price = self.get_current_price(symbol, order_type)
+                if current_price is None:
+                    continue  # Skip if price not available
+
+                # Calculate profit
+                if order_type == ORDER_TYPE_BUY:
+                    profit = (current_price - entry_price) * volume * contract_size
+                elif order_type == ORDER_TYPE_SELL:
+                    profit = (entry_price - current_price) * volume * contract_size
                 else:
-                    return 0.0
+                    profit = 0.0
 
-            positions_df['profit'] = positions_df.apply(calculate_profit, axis=1)
-            total_profit = positions_df['profit'].sum()
+                position['profit'] = profit
+                total_profit += profit
 
             # Update account
             self.account['profit'] = total_profit
             self.account['equity'] = self.account['balance'] + self.account['profit']
             self.account['free_margin'] = self.account['equity'] - self.account['margin']
+            self.account['margin_level'] = (self.account['equity'] / self.account['margin']) * 100 if self.account['margin'] > 0 else 0.0
 
     def close_all_positions(self):
         """
@@ -1018,7 +924,7 @@ class MT5Backtest:
         """
         for ticket in list(self.open_positions.keys()):
             self.close_position(ticket)
-    
+
     def get_current_bar_data(self, symbol):
         """
         Get the current bar data for the symbol at current_time.
@@ -1034,11 +940,12 @@ class MT5Backtest:
             self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
             return None
 
+        current_index = self.current_tick_index[symbol][tf_name]
         df = self.symbols_data[symbol][tf_name]
-        current_bar = df.iloc[self.current_tick_index[symbol][tf_name]]
-        if current_bar is None:
+        if current_index >= len(df):
             return None
 
+        current_bar = df.iloc[current_index]
         bar = current_bar.to_dict()
         return bar
 
@@ -1060,23 +967,21 @@ class MT5Backtest:
         volume = position['volume']
         entry_price = position['price']
         symbol = position['symbol']
+        contract_size = position['contract_size']
 
         # Get current prices if exit_price not provided
         if exit_price is None:
-            current_prices = self.get_current_price(symbol)
-            if not current_prices:
+            current_price = self.get_current_price(symbol, order_type)
+            if current_price is None:
                 self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol}.")
                 return
-            if order_type == ORDER_TYPE_BUY:
-                exit_price = current_prices['bid']
-            elif order_type == ORDER_TYPE_SELL:
-                exit_price = current_prices['ask']
+            exit_price = current_price
 
         # Calculate profit
         if order_type == ORDER_TYPE_BUY:
-            profit = (exit_price - entry_price) * volume
+            profit = (exit_price - entry_price) * volume * contract_size
         elif order_type == ORDER_TYPE_SELL:
-            profit = (entry_price - exit_price) * volume
+            profit = (entry_price - exit_price) * volume * contract_size
         else:
             profit = 0.0
 
@@ -1084,13 +989,16 @@ class MT5Backtest:
         self.account['balance'] += profit
         self.account['profit'] -= position['profit']  # Remove unrealized profit
         self.account['equity'] = self.account['balance'] + self.account['profit']
+        self.account['margin'] -= position['margin']
         self.account['free_margin'] = self.account['equity'] - self.account['margin']
+        self.account['margin_level'] = (self.account['equity'] / self.account['margin']) * 100 if self.account['margin'] > 0 else 0.0
 
         # Move position to closed_positions
-        closed_position = position
+        closed_position = position.copy()
         closed_position['close_datetime'] = self.current_time
         closed_position['close_price'] = exit_price
         closed_position['profit'] = profit
+        closed_position['reason'] = reason
         self.closed_positions.append(closed_position)
 
         # Log the trade closure
@@ -1123,44 +1031,31 @@ class MT5Backtest:
         if not proceed:
             return False  # End of backtest or error
 
-        # Update current_tick_index for each symbol and timeframe
-        for symbol, tfs in self.symbols_data.items():
-            for tf_name, df in tfs.items():
-                current_index = self.current_tick_index[symbol][tf_name]
-                if current_index + 1 < len(df):
-                    next_bar_time = df.iloc[current_index + 1]['time']
-                    if next_bar_time <= self.current_time:
-                        self.current_tick_index[symbol][tf_name] += 1
-
-        # Execute trade logic (process pending orders, update account)
+        # Execute trade logic (Check if hit SL or TP, update account)
         self.execute_trade_logic()
 
         # Log account status if a new hour has started
-        self.log_account_status()
+        if self.current_time.hour != self.previous_hour:
+            account_info_dict = self.account_info()
+            open_trades = self.positions_get()
+            self.log_account_status(account_info_dict, open_trades)
+            self.previous_hour = self.current_time.hour
 
         return True
 
-    def log_account_status(self):
+    def log_account_status(self, account_info_dict, open_trades):
         """
         Log the account status at each simulated hour.
         """
-        current_hour = self.current_time.hour
-        if current_hour != self.previous_hour:
-            # Calculate margin level
-            margin_level = (self.account['equity'] / self.account['margin']) * 100 if self.account['margin'] > 0 else 0.0
-
-            account_doc = {
-                'datetime': self.current_time.strftime("%Y-%m-%d %H:%M:%S"),
-                'open_trades': len(self.open_positions),
-                'balance': self.account['balance'],
-                'equity': self.account['equity'],
-                'margin': self.account['margin'],
-                'margin_level': margin_level
-            }
-            self.account_docs.append(account_doc)
-
-            # Update previous_hour
-            self.previous_hour = current_hour
+        account_doc = {
+            'datetime': self.current_time.strftime("%Y-%m-%d %H:%M:%S"),
+            'open_trades': len(self.open_positions),
+            'balance': self.account['balance'],
+            'equity': self.account['equity'],
+            'margin': self.account['margin'],
+            'margin_level': self.account['margin_level']
+        }
+        self.account_docs.append(account_doc)
 
     def export_logs(self):
         """
@@ -1180,7 +1075,6 @@ class MT5Backtest:
 
         # Generate and save graph
         self.generate_account_graph()
-
 
     def generate_account_graph(self):
         """
@@ -1232,10 +1126,6 @@ class MT5Backtest:
         except Exception as e:
             print(f"Could not save graph as image. Install 'kaleido' to enable image export. Error: {e}")
 
-        # Optionally, display the graph
-        fig.show()
-            
-
     def last_error(self):
         """
         Simulate MT5.last_error() function.
@@ -1243,7 +1133,9 @@ class MT5Backtest:
         Returns:
             tuple: (error_code, error_description)
         """
-        return (self.last_error_code, self.last_error_description)
+        error = (self.last_error_code, self.last_error_description)
+        return error
+
 
     def set_last_error(self, code, description):
         """
@@ -1264,17 +1156,15 @@ class MT5Backtest:
         self.current_time = None
         self.open_positions.clear()
         self.closed_positions.clear()
-        self.pending_orders.clear()
         self.account = {
             'balance': 100000.0,
             'equity': 100000.0,
             'margin': 0.0,
             'free_margin': 100000.0,
-            'profit': 0.0
+            'profit': 0.0,
+            'margin_level': 0.0
         }
         self.set_last_error(RES_S_OK, "Shutdown complete.")
-
-
 
 # ----------------------------
 # Exported Functions
@@ -1290,8 +1180,7 @@ def initialize_backtest(strategies):
     """
     global backtest
     backtest = MT5Backtest(strategies=strategies)
-    print(f"Backtest params: {backtest.__dict__}")
-
+    print(f"Backtest initialized with parameters: {backtest.__dict__}")
 
 def account_info():
     """
@@ -1300,8 +1189,6 @@ def account_info():
     Returns:
         dict: Account information.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.account_info()
 
 def copy_rates(symbol, timeframe, count):
@@ -1316,8 +1203,6 @@ def copy_rates(symbol, timeframe, count):
     Returns:
         np.recarray or None: Array of rates up to current_time or None if error.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.copy_rates(symbol, timeframe, count)
 
 def copy_rates_from(symbol, timeframe, datetime_from, count):
@@ -1333,8 +1218,6 @@ def copy_rates_from(symbol, timeframe, datetime_from, count):
     Returns:
         np.recarray or None: Array of rates or None if error.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.copy_rates_from(symbol, timeframe, datetime_from, count)
 
 def copy_rates_from_pos(symbol, timeframe, pos, count):
@@ -1350,8 +1233,6 @@ def copy_rates_from_pos(symbol, timeframe, pos, count):
     Returns:
         np.recarray or None: Array of rates or None if error.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.copy_rates_from_pos(symbol, timeframe, pos, count)
 
 def order_send(request):
@@ -1364,8 +1245,6 @@ def order_send(request):
     Returns:
         dict or None: Order execution result or None if error.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.order_send(request)
 
 def positions_get(ticket=None):
@@ -1378,8 +1257,6 @@ def positions_get(ticket=None):
     Returns:
         dict or list or None: Single position dict, list of positions, or None if not found.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.positions_get(ticket)
 
 def symbol_info_tick(symbol):
@@ -1392,8 +1269,6 @@ def symbol_info_tick(symbol):
     Returns:
         dict or None: Tick information or None if error.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.symbol_info_tick(symbol)
 
 def symbol_info(symbol):
@@ -1419,8 +1294,6 @@ def symbol_select(symbol, select=True):
     Returns:
         bool: Success status.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.symbol_select(symbol, select)
 
 def history_deals_get(from_date, to_date):
@@ -1434,9 +1307,13 @@ def history_deals_get(from_date, to_date):
     Returns:
         list or None: List of deal dictionaries or None if no deals found.
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.history_deals_get(from_date, to_date)
+
+def log_account_status(account_info_dict, open_trades):
+    """
+    Log the account status at each simulated hour.
+    """
+    return backtest.log_account_status(account_info_dict, open_trades)
 
 def last_error():
     """
@@ -1445,8 +1322,6 @@ def last_error():
     Returns:
         tuple: (error_code, error_description)
     """
-    if backtest is None:
-        raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
     return backtest.last_error()
 
 def shutdown():
@@ -1467,7 +1342,7 @@ def run_backtest(strategies, symbols):
     """
     if backtest is None:
         raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
-    
+
     from ..run_bot import on_minute
 
     # Initialize TradeHour and TimeBar with backtest

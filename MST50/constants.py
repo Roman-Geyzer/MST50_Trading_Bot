@@ -28,10 +28,6 @@ from enum import Enum
 class DEAL_TYPE(Enum):
     BUY = 0
     SELL = 1
-    BUY_LIMIT = 2
-    SELL_LIMIT = 3
-    BUY_STOP = 4
-    SELL_STOP = 5
 
 class TRADE_DIRECTION(Enum):
     BUY = 1
@@ -41,10 +37,6 @@ class TRADE_DIRECTION(Enum):
 class TRADE_TYPE(Enum):
     BUY = 0
     SELL = 1
-    BUY_LIMIT = 2
-    SELL_LIMIT = 3
-    BUY_STOP = 4
-    SELL_STOP = 5
 
 class TRADE_DECISION(Enum):
     BUY = "buy"

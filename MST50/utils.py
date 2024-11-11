@@ -56,6 +56,7 @@ from .constants import (magic_number_base, TIMEFRAME_MAGIC_NUMBER_MAPPING,
 from datetime import datetime
 import time
 from .mt5_interface import TIMEFRAMES, copy_rates_from
+from .Backtest.mt5_backtest import log_account_status
 import math
 import platform
 import os
@@ -213,7 +214,7 @@ class TimeBar:
         return self.M1 == 59
 
 
-#TODO: check if still required
+#TODO: check if still required - use debug mode to check
 def calculate_history_length(strategy_config):
     if math.isnan(strategy_config['indicator_params']['a']):
         return 23
@@ -314,22 +315,22 @@ def safe_float_convert(value, default=0.0):
     
 
 
-def safe_date_convert(value, default='01/01/2021'):
+def safe_date_convert(value):
     """
     Safely convert a value to a datetime.
-    If conversion fails, return a default value.
+    If conversion fails, raise an error.
 
     Parameters:
         value: The value to convert.
-        default (string): The default value to return (before conversion) if conversion fails.
 
     Returns:
-        datetime: The converted datetime value or the default value.
+        datetime: The converted datetime value.
     """
     try:
-        return datetime.strptime(value, '%m/%d/%Y') if value else datetime.strptime(default, '%m/%d/%Y')
-    except (ValueError, TypeError):
-        return datetime.strptime(default, '%m/%d/%Y')
+        return pd.to_datetime(value).to_pydatetime()
+    except (ValueError, TypeError) as e:
+        print(f"Error converting value to datetime: {e}")
+        raise
 
 def safe_int_extract_from_dict(dict, key, default=0):
     """
@@ -458,8 +459,6 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
             'tradeP_days' : tradeP_days,
             'tradeP_long': str_to_bool(row['tradeP_long']),
             'tradeP_short': str_to_bool(row['tradeP_short']),
-            'tradeP_method': row['tradeP_method'],
-            'tradeP_limit_order_expiration_bars': safe_int_convert(row['tradeP_limit_order_expiration_bars']),
             'sl_method': row['sl_method'],
             'sl_param': safe_float_convert(row['sl_param']),
             'trail_method': row['trail_method'],
@@ -530,7 +529,7 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     return strategies_config
 
 
-def write_balance_performance_file(account_info_dict):
+def write_balance_performance_file(account_info_dict, open_trades):
     """
     Write the balance and performance data to a CSV file.
 
@@ -540,8 +539,11 @@ def write_balance_performance_file(account_info_dict):
         filename (str): The name of the CSV file to write.
     """
     if BACKTEST_MODE:
-        return # Skip writing the file in backtest mode
+        log_account_status(account_info_dict, open_trades)
+        return # Writing the file will be done by the backtest
     #TODO: implement the function to write the balance and performance data to a CSV file
+    # use the log_account_status() as reference
+
 
 
 

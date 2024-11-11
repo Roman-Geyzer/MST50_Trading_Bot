@@ -1,0 +1,410 @@
+
+
+****************************************************************************************************
+Level 1: MST50.utils : Line 659
+----------------------------------------------------------------------------------------------------
+Level 2: MST50.main : Line 54
+----------------------------------------------------------------------------------------------------
+Initializing MST50 Initializing MST50...
+****************************************************************************************************
+################################################################################################################################################################
+#####                                                         current_time is: 2024-11-10 12:51:17                                                         #####
+#####                                                                  Initializing MST50                                                                  #####
+#####                                                                Initializing MST50...                                                                #####
+################################################################################################################################################################
+Executing strategy no. 19
+                                                                        strategy name: dev- BT - same_direction,
+                                                                        setragy run mode: dev,
+                                                                        strategy magic number: 53019000,
+                                                                        strategy status: dev,
+                                                                        with symbols: ['EURUSD'] 
+                                                                        timeframe: 15,
+Executing strategy no. 20
+                                                                        strategy name: dev - BT - op_direction,
+                                                                        setragy run mode: dev,
+                                                                        strategy magic number: 53020000,
+                                                                        strategy status: dev,
+                                                                        with symbols: ['EURUSD'] 
+                                                                        timeframe: 15,
+    Filtered data for EURUSD on timeframe M15: 95610 out of 616046 bars retained (from 2021-01-01 00:00:00).
+    Loaded data for EURUSD on timeframe M15 with 95610 bars.
+    Initialized current_tick_index for EURUSD on M15: 0
+Backtest params: {'strategies': {19: <MST50.strategy.Strategy object at 0x127da1660>, 20: <MST50.strategy.Strategy object at 0x1290adba0>}, 'data_dir': '/Volumes/TM/historical_data', 'symbols_data': {'EURUSD': {'M15':                      time     open     high  ...     time_np  close_np  spread_np
+0     2021-01-04 00:00:00  1.22395  1.22396  ...  1609718400   1.22317         28
+1     2021-01-04 00:15:00  1.22316  1.22389  ...  1609719300   1.22372         15
+2     2021-01-04 00:30:00  1.22365  1.22398  ...  1609720200   1.22340          0
+3     2021-01-04 00:45:00  1.22342  1.22360  ...  1609721100   1.22341          0
+4     2021-01-04 01:00:00  1.22336  1.22424  ...  1609722000   1.22395          0
+...                   ...      ...      ...  ...         ...       ...        ...
+95605 2024-11-01 21:45:00  1.08350  1.08364  ...  1730497500   1.08358          4
+95606 2024-11-01 22:00:00  1.08358  1.08369  ...  1730498400   1.08323          2
+95607 2024-11-01 22:15:00  1.08323  1.08329  ...  1730499300   1.08323          0
+95608 2024-11-01 22:30:00  1.08322  1.08349  ...  1730500200   1.08342          4
+95609 2024-11-01 22:45:00  1.08342  1.08351  ...  1730501100   1.08330          0
+
+[95610 rows x 11 columns]}}, 'symbols': ['EURUSD'], 'timeframes': ['M15'], 'start_time': datetime.datetime(2021, 1, 1, 0, 0), 'end_time': datetime.datetime(2024, 5, 14, 12, 51, 17, 872130), 'advance_timeframe': 'M15', 'time_step': datetime.timedelta(seconds=900), 'current_tick_index': {'EURUSD': {'M15': 0}}, 'current_time': datetime.datetime(2021, 1, 1, 0, 0), 'previous_hour': 0, 'account': {'balance': 100000.0, 'equity': 100000.0, 'margin': 0.0, 'free_margin': 100000.0, 'profit': 0.0}, 'open_positions': {}, 'closed_positions': [], 'last_error_code': 1, 'last_error_description': 'No error', 'next_ticket': 1000, 'output_dir': '/Volumes/TM/Backtests', 'run_folder': '/Volumes/TM/Backtests/Backtest_20241110_125118', 'trade_logs': [], 'account_docs': []}
+Symbols: {'EURUSD': [15]}
+Starting backtest from 2021-01-01 00:00:00 to 2024-05-14 12:51:17.872130
+New hour: 0, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1000
+Successfully updated trade 1000. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1001
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1002
+Successfully updated trade 1002. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1003
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1004
+Successfully updated trade 1004. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1005
+New hour: 1, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1006
+Successfully updated trade 1006. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1007
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1008
+Successfully updated trade 1008. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1009
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1010
+Successfully updated trade 1010. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1011
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1012
+Successfully updated trade 1012. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1013
+Successfully updated trade 1013. New SL: 1.23469
+New hour: 2, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1014
+Successfully updated trade 1014. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1015
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1016
+Successfully updated trade 1016. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1017
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1018
+Successfully updated trade 1018. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.SELL trade on EURUSD, ticket: 1019
+New hour: 3, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1020
+Successfully updated trade 1020. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1021
+Successfully updated trade 1021. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1022
+Successfully updated trade 1022. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 4, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Opened TRADE_DIRECTION.BUY trade on EURUSD, ticket: 1023
+Successfully updated trade 1023. New SL: 1.22341
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 5, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 6, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 7, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 8, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 9, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 10, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 11, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 12, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 13, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 14, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 15, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 16, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 17, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 18, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 19, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 20, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 21, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 22, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 23, day: 4
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 0, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 1, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 2, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 3, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 4, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 5, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 6, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 7, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 8, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 9, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 10, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 11, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+New hour: 12, day: 5
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Handling new bar for strategy no. 20, strategy name: dev - BT - op_direction, strategy timeframe: M15
+Handling new bar for strategy no. 19, strategy name: dev- BT - same_direction, strategy timeframe: M15
+Backtest interrupted by user.
+documentated the profile in backtest_profile.prof
