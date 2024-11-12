@@ -150,7 +150,6 @@ class Strategy:
         self.documanted_trades_file = os.path.join(self.documentation_dir, f"strategy no.-_{self.strategy_num}, name: {self.strategy_name}_trades.csv")
         if not os.path.exists(self.documanted_trades_file):
             with open(self.documanted_trades_file, 'w') as f:
-                # TODO: update the header to match the actual data
                 # Header of file
                 f.write("ticket,magic,symbol,direction,volume,price,sl,tp,time,open_daytime,close_datetime,trading_costs,profit,open_method,close_method,comment\n")
         
@@ -160,7 +159,6 @@ class Strategy:
             with open(self.documatation_performance_file, 'w') as f:
                 # TODO: update the header for performance analysis
                 f.write("date,hour,open_trades,margin,balance,margin_level,equity,profit\n")
-                # Define the general documentation file path
 
         self.documatation_logs_file = os.path.join(self.documentation_dir, f"strategy_{self.strategy_num}_logs.csv")
         if not os.path.exists(self.documatation_logs_file):
@@ -466,7 +464,7 @@ class Strategy:
             if (TRADE_DIRECTION.BUY == position_direction and direction.value >= 0) or (TRADE_DIRECTION.SELL == position_direction and direction.value <= 0):
                 self.close_trade_loop(position)
 
-    #TODO update this method to recive and updated per trade method
+
 
     def fill_request_data(self, direction, symbol, ticket, comment):
         """     
@@ -475,7 +473,7 @@ class Strategy:
         if ticket > 0, it will be a close or update trade operation.
         if ticket < 0, it will be an open trade operation.
         """
-        #TODO: update this method per the original mql5 code - need to use paremeters from the strategy config
+        #TODO: update this method per the original mql5 code - need to use paremeters from the strategy config ???
         trade_type = get_mt5_trade_type(TRADE_DIRECTION(direction))
         price = self.get_price(symbol, direction)
         #round price to the nearest pip
