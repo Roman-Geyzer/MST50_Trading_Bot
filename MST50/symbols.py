@@ -155,6 +155,16 @@ class Symbol:
         return getattr(self, timeframe, None)
     
     def get_all_rates(self):
+        """
+        function will return all rates for all timeframes for a symbol
+        """
+
+        rates = {}
+        for tf in TIMEFRAMES.values():
+            tf_str = get_timeframe_string(tf)
+            rates[tf_str] = getattr(self, tf_str, None).rates
+
+        return rates
         
 
 

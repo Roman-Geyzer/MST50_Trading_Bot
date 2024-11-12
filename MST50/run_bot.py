@@ -45,12 +45,14 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
     time_bar.update_tf_bar()
     Timeframe.fetch_new_bar_rates(symbols, time_bar)  # Fetch new bar rates for all symbols and all *new* timeframes
     account_info_dict = account_info()
+    #TODO - check if the rates are updated correctly - if not need to "exclude" the last bar - will think about it later and how to implement it
     print("for testing purposes prints of prices in on_minute()")
     for symbol in symbols:
-        for 
-    print(f" *first* (-1) bar is: ", rates[-1])
-    print(f"*second* (-2) bar is: ", rates[-2])
-    print(f"last bar is: ", rates[end])
+        rates = symbol.get_all_rates()
+        print(f"symbol: {symbol.symbol}")
+        print(f" *first* (-1) bar is: ", rates[-1])
+        print(f"*second* (-2) bar is: ", rates[-2])
+        print(f"last bar is: ", rates[0])
 
 
     # Check if a new hour has started - if so, start new hour logic
