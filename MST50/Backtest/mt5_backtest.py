@@ -305,43 +305,9 @@ class MT5Backtest:
 
     def copy_rates(self, symbol, timeframe, count):
         """
-        Simulate MT5.copy_rates() function.
-
-        Parameters:
-            symbol (str): The trading symbol.
-            timeframe (int): The timeframe constant.
-            count (int): Number of bars to copy.
-
-        Returns:
-            np.recarray or None: NumPy recarray of rates or None if error.
+        not in use - for refrence of old code see in git history prior to 2024-11-11
         """
-        tf_name = self.get_timeframe_name(timeframe)
-        if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-            self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
-            return None
-
-        df = self.symbols_data[symbol][tf_name]
-        current_index = self.current_tick_index[symbol][tf_name]
-
-        if current_index < 0:
-            self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
-            return None
-
-        # Get data up to current_index
-        df_up_to_current = df.iloc[:current_index + 1]
-        total_bars = len(df_up_to_current)
-        if total_bars == 0:
-            self.set_last_error(RES_E_NOT_FOUND, f"No data available up to current_time for {symbol}, {tf_name}")
-            return None
-
-        # Reverse the DataFrame to have newest bar first
-        df_reversed = df_up_to_current.iloc[::-1].reset_index(drop=True)
-
-        rates = df_reversed.iloc[:count]
-
-        # Convert to NumPy recarray
-        data_array = rates.to_records(index=False)
-        return data_array
+        pass
 
 
     def copy_rates_from_pos(self, symbol, timeframe, pos, count):
@@ -392,40 +358,9 @@ class MT5Backtest:
 
     def copy_rates_from(self, symbol, timeframe, datetime_from, count):
         """
-        Simulate MT5.copy_rates_from() function.
-
-        Parameters:
-            symbol (str): The trading symbol.
-            timeframe (int): The timeframe constant.
-            datetime_from (datetime): Start datetime.
-            count (int): Number of bars to copy.
-
-        Returns:
-            np.recarray or None: NumPy recarray of rates or None if error.
+        not in use - for refrence of old code see in git history prior to 2024-11-11
         """
-        tf_name = self.get_timeframe_name(timeframe)
-        if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-            self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
-            return None
-
-        df = self.symbols_data[symbol][tf_name]
-        current_index = self.current_tick_index[symbol][tf_name]
-
-        if current_index < 0:
-            self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
-            return None
-
-        # Filter data between datetime_from and current_index
-        df_filtered = df[(df['time'] >= datetime_from) & (df.index <= current_index)]
-        if df_filtered.empty:
-            self.set_last_error(RES_E_NOT_FOUND, f"No data available from {datetime_from} to current_time for {symbol}, {tf_name}")
-            return None
-
-        rates = df_filtered.head(count)
-
-        # Convert to NumPy recarray
-        data_array = rates.to_records(index=False)
-        return data_array
+        pass
 
     def account_info(self):
         """
@@ -841,9 +776,6 @@ class MT5Backtest:
             if bar_data is None:
                 continue  # Skip if no bar data available
 
-            high = bar_data['high']
-            low = bar_data['low']
-
             # Determine if SL or TP was hit
             sl_hit = False
             tp_hit = False
@@ -851,7 +783,7 @@ class MT5Backtest:
 
             # Simulate intra-bar price movement: Open -> High -> Low -> Close
             # For simplicity, assume prices move from open to high, then low, then close
-
+            #TODO: update this to use only high and low
             if order_type == ORDER_TYPE_BUY:
                 # Check SL and TP for Buy orders
                 prices = [bar_data['open'], bar_data['high'], bar_data['low'], bar_data['close']]
@@ -896,7 +828,6 @@ class MT5Backtest:
                 volume = position['volume']
                 entry_price = position['price']
                 contract_size = position['contract_size']
-                point = position['point']
 
                 # Get current price
                 current_price = self.get_current_price(symbol, order_type)

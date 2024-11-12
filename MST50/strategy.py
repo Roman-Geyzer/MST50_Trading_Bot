@@ -812,7 +812,7 @@ class Strategy:
             print(f"mt5.last_error: {last_error()}")
         else:
             pass
-            # print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
+            print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
 
     def get_total_open_trades(self, symbol):
         """
