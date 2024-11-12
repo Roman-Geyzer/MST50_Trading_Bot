@@ -22,7 +22,7 @@ Constants:
 import os
 
 # Set BACKTEST_MODE to 'True' for backtesting, 'False' for live trading
-os.environ['BACKTEST_MODE'] = 'False'  # Change to 'True' when ready to backtest
+os.environ['BACKTEST_MODE'] = 'True'  # Change to 'True' when ready to backtest
 
 # Determine if we are in backtesting mode
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'

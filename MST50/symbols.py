@@ -24,7 +24,7 @@ Methods:
 
 import pandas as pd
 from datetime import datetime
-from .utils import TimeBar, get_timeframe_string, attempt_with_stages_and_delay, print_hashtaged_msg
+from .utils import TimeBar, get_timeframe_string, attempt_with_stages_and_delay, print_hashtaged_msg, print_with_info
 from .mt5_interface import TIMEFRAMES, copy_rates_from_pos
 import os
 
@@ -154,17 +154,6 @@ class Symbol:
         timeframe = get_timeframe_string(timeframe)
         return getattr(self, timeframe, None)
     
-    def get_all_rates(self):
-        """
-        function will return all rates for all timeframes for a symbol
-        """
-
-        rates = {}
-        for tf in TIMEFRAMES.values():
-            tf_str = get_timeframe_string(tf)
-            rates[tf_str] = getattr(self, tf_str, None).rates
-
-        return rates
         
 
 
@@ -278,6 +267,11 @@ class Timeframe:
                 # New bar detected, update rates
                 self.rates = new_rates
                 self.rates_error_flag = False
+                # TODO: for debugging - check if need to delete last bar
+                print_with_info(1, f"New bar detected for symbol: {self.symbol_str}, timeframe: {self.timeframe}")
+                print(f" *first* (-1) bar is: ", self.rates[-1])
+                print(f"*second* (-2) bar is: ", self.rates[-2])
+                print(f"last bar is: ", self.rates[0])
             else:
                 # No new bar, do not update rates
                 pass
