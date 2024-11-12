@@ -56,7 +56,6 @@ from .constants import (magic_number_base, TIMEFRAME_MAGIC_NUMBER_MAPPING,
 from datetime import datetime
 import time
 from .mt5_interface import TIMEFRAMES, copy_rates_from
-from .Backtest.mt5_backtest import log_account_status
 import math
 import platform
 import os
@@ -65,14 +64,13 @@ import os
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 if platform.system() == 'Windows':
-    drive = "Z:"
+    drive = "x:"
 else:
     drive = "/Volumes/TM"
 
 performance_dir = os.path.join(drive, 'documentation/account')
 
-performance_file = f"{drive}/Fulfillment/Forex - Algo trading/Python API/performance.csv"
-#TODO: update the path with drive
+performance_file = os.path.join(performance_dir, 'performance.csv')
 if platform.system() == 'Windows':
     file_namd_path = "Z:\\Desktop\\Fulfillment\\Forex - Algo trading\\Python API\\config.xlsx"
 else:
@@ -214,21 +212,17 @@ class TimeBar:
         return self.M1 == 59
 
 
-#TODO: check if still required - use debug mode to check
-def calculate_history_length(strategy_config):
-    if math.isnan(strategy_config['indicator_params']['a']):
-        return 23
-    return max(strategy_config['indicator_params']['a'], 20) + 3
 
 
-"""
-Check if a new bar has formed for the given timeframe.
-Args:
-    timeframe (str): The timeframe to check for a new bar.
-Returns:
-    bool: True if a new bar has formed, False otherwise.
-"""
+
 def is_new_bar(timeframe, time_bar):
+    """
+    Check if a new bar has formed for the given timeframe.
+    Args:
+        timeframe (str): The timeframe to check for a new bar.
+    Returns:
+        bool: True if a new bar has formed, False otherwise.
+    """
     timeframe = get_timeframe_string(timeframe)
     timeframe_list = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1']
     if timeframe_list.index(timeframe) <= timeframe_list.index(time_bar.current_bar): # check if the timeframe is lower or equal to the current bar - if so, new bar
@@ -539,10 +533,11 @@ def write_balance_performance_file(account_info_dict, open_trades):
         filename (str): The name of the CSV file to write.
     """
     if BACKTEST_MODE:
-        log_account_status(account_info_dict, open_trades)
         return # Writing the file will be done by the backtest
-    #TODO: implement the function to write the balance and performance data to a CSV file
-    # use the log_account_status() as reference
+    #TODO - check if this is correct
+    with open(performance_file, 'w') as f:
+        f.write(time.now().strftime('%Y-%m-%d %H:%M:%S') + '\n' , open_trades, account_info_dict)
+    
 
 
 
