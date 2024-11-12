@@ -39,12 +39,19 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
         symbols (dict): Dictionary containing symbol instances with their respective timeframes and rates.
         account_info_dict (dict): Account information dictionary.
     """
-    # TODO: uncomment the following line
-    # print_hashtaged_msg(1, "on_minute", "on_minute function started...")
+    print_hashtaged_msg(1, "on_minute function started...")
+
     # Fetch rates for all symbols and timeframes - the method will only update the rates if a new bar has started
     time_bar.update_tf_bar()
     Timeframe.fetch_new_bar_rates(symbols, time_bar)  # Fetch new bar rates for all symbols and all *new* timeframes
     account_info_dict = account_info()
+    print("for testing purposes prints of prices in on_minute()")
+    for symbol in symbols:
+        for 
+    print(f" *first* (-1) bar is: ", rates[-1])
+    print(f"*second* (-2) bar is: ", rates[-2])
+    print(f"last bar is: ", rates[end])
+
 
     # Check if a new hour has started - if so, start new hour logic
     new_hour = trade_hour.is_new_hour()

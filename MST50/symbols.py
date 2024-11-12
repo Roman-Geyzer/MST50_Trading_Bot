@@ -24,7 +24,7 @@ Methods:
 
 import pandas as pd
 from datetime import datetime
-from .utils import TimeBar, get_timeframe_string, attempt_i_times_with_s_seconds_delay, print_hashtaged_msg
+from .utils import TimeBar, get_timeframe_string, attempt_with_stages_and_delay, print_hashtaged_msg
 from .mt5_interface import TIMEFRAMES, copy_rates_from_pos
 import os
 
@@ -153,6 +153,9 @@ class Symbol:
         """
         timeframe = get_timeframe_string(timeframe)
         return getattr(self, timeframe, None)
+    
+    def get_all_rates(self):
+        
 
 
 class Timeframe:
@@ -222,8 +225,8 @@ class Timeframe:
 
         loop_error_msg = f"Failed to get rates for symbol: {symbol}, timeframe {tf}, length {length}"
 
-        rates = attempt_i_times_with_s_seconds_delay(
-            3, 1, loop_error_msg, check_return_func, copy_rates_from_pos, (symbol, tf, 0, length)
+        rates = attempt_with_stages_and_delay(
+            10 , 2, 0.05, 0.5, loop_error_msg, check_return_func, copy_rates_from_pos, (symbol, tf, 0, length)
         )
 
         if not check_return_func(rates):

@@ -32,8 +32,8 @@ import os
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 # Import utility functions and constants
-from .utils import (load_config,  get_final_magic_number, get_timeframe_string, print_with_info,
-                    print_hashtaged_msg, attempt_i_times_with_s_seconds_delay, get_future_time)
+from .utils import (load_config,  get_final_magic_number, get_timeframe_string,
+                    print_hashtaged_msg, attempt_with_stages_and_delay)
 from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_type, get_trade_direction
 from .indicators import Indicators
 from .constants import DEVIATION, TRADE_DIRECTION
@@ -42,8 +42,9 @@ from .candles import CandlePatterns
 from .plotting import plot_bars
 
 from .mt5_interface import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
-                         positions_get, order_send, symbol_info_tick, symbol_info, copy_rates,
-                         history_deals_get, symbol_select, last_error) 
+                         positions_get, order_send, symbol_info_tick, symbol_info, symbol_select, last_error) 
+
+min_pips_for_trail_update = 3
 
 drive = "x:" if os.name == 'nt' else "/Volumes/TM"
 
@@ -602,7 +603,7 @@ class Strategy:
         loop_error_msg = f"Failed to close {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}"
         comment = f"Close {direction.value}, strategy-{self.strategy_num}"
 
-        result = attempt_i_times_with_s_seconds_delay(3, 0.05, loop_error_msg, check_return_func,
+        result = attempt_with_stages_and_delay(5 , 3, 0.05, 1, loop_error_msg, check_return_func,
                                                     self.prep_and_close, (direction, symbol, ticket, comment))
         
         if not check_return_func(result):
@@ -661,7 +662,7 @@ class Strategy:
         loop_error_msg = f"Failed to open {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}"
         comment = f"{self.strategy_num}-{self.strategy_name}"
 
-        result = attempt_i_times_with_s_seconds_delay(3, 0.05, loop_error_msg, check_return_func,
+        result = attempt_with_stages_and_delay(4 , 5, 0.05, 1, loop_error_msg, check_return_func,
                                                     self.prep_and_order, (direction, symbol, -1, comment))
         if not check_return_func(result):
             print_hashtaged_msg(1, f"Failed to open {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}")
@@ -785,7 +786,7 @@ class Strategy:
             price, current_sl, self.trail_both_directions, direction,
             self.trail_method, self.trail_param, symbol_str, point, rates
         )
-        if new_sl and abs(new_sl - current_sl) > 10 * point:
+        if new_sl and abs(new_sl - current_sl) > 10 * min_pips_for_trail_update * point: # pip is 10* point
             self.update_trade(trade_id=trade_id, position=position, new_sl=new_sl)
 
 
@@ -805,11 +806,13 @@ class Strategy:
                 return False
             return result['retcode'] == TRADE_RETCODES['DONE']
         
-        result = attempt_i_times_with_s_seconds_delay(3, 0.05, f"Order update failed for trade: {trade_id}, retrying...",
+        result = attempt_with_stages_and_delay(2,2, 0.1, 1 , f"Order update failed for trade: {trade_id}, retrying...",
                                                      check_return_func, self.prep_and_update, (trade_id, position, new_sl))
         if result['retcode'] != TRADE_ACTIONS['DONE']:
             print_hashtaged_msg(1, f"Failed to update trade {trade_id}. Retcode: {result['retcode']}")
             print(f"mt5.last_error: {last_error()}")
+            print(f"new SL is:" , new_sl)
+            print(f"position data: ", position)
         else:
             pass
             print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
