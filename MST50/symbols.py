@@ -200,7 +200,7 @@ class Timeframe:
                         timeframe_length_in_strategies.append(strategy.config['candle_params']['lower_tf']['barsP_pattern_count'])
 
         # Convert all elements to integers using list comprehension
-        timeframe_length_in_strategies = [int(length) for length in timeframe_length_in_strategies if length is not None and not pd.isna(length)]
+        timeframe_length_in_strategies = [int(length) for length in timeframe_length_in_strategies if length  and not pd.isna(length)]
         return max(timeframe_length_in_strategies) + 3
         
     def fetch_rates(self, symbol):
@@ -249,17 +249,17 @@ class Timeframe:
         for symbol in symbols.values():
             for tf in time_frames_list:
                 tf_obj = getattr(symbol, tf, None)
-                if tf_obj is not None and time_frames_list.index(tf) <= time_frames_list.index(timebar.current_bar):
+                if tf_obj  and time_frames_list.index(tf) <= time_frames_list.index(timebar.current_bar):
                     tf_obj.update_rates_if_new_bar()
 
     def update_rates_if_new_bar(self):
         """
         Update rates if there is a new bar since the last update.
         """
-        latest_time = self.rates['time'][-1] if self.rates is not None and len(self.rates) > 0 else None
+        latest_time = self.rates['time'][-1] if len(self.rates) > 0 else None
         new_rates = self.fetch_rates(self.symbol_str)
 
-        if new_rates is not None and len(new_rates) > 0:
+        if len(new_rates) > 0:
             new_latest_time = new_rates['time'][-1]
             if latest_time != new_latest_time:
                 # New bar detected, update rates

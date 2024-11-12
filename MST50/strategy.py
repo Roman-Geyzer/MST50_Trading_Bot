@@ -89,12 +89,14 @@ class Strategy:
         # higher_tf
         self.higher_tf_candle_patterns =  CandlePatterns(self.candle_params.get('higher_tf', {}))
         self.higher_timeframe = strategy_config['candle_params']['higher_tf']['timeframe']
+        # self.higher_str_timeframe = get_timeframe_string(self.higher_timeframe)
         self.higher_candle_patterns_active = self.higher_tf_candle_patterns.check_candle_patterns_active()
         self.higher_candle_patterns_history_length = max(self.higher_tf_candle_patterns.pattern_candles_count, 4)
 
         # lower_tf
         self.lower_tf_candle_patterns = CandlePatterns(self.candle_params.get('lower_tf', {}))
         self.lower_timeframe = strategy_config['candle_params']['lower_tf']['timeframe']
+        # self.lower_str_timeframe = get_timeframe_string(self.lower_timeframe)
         self.lower_candle_patterns_active = self.lower_tf_candle_patterns.check_candle_patterns_active()
         self.lower_candle_patterns_history_length = max(self.lower_tf_candle_patterns.pattern_candles_count, 4)
         
@@ -128,6 +130,7 @@ class Strategy:
         self.backtest_params = strategy_config['backtest_params']
         self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
         self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
+        # self.backtest_str_tf = get_timeframe_string(self.backtest_tf)
 
         self.cached_rsi = {}    # Cache for RSI values per symbol and timeframe
 

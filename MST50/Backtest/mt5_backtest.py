@@ -160,6 +160,7 @@ class MT5Backtest:
             symbols_set.update(strategy.symbols)
             # Add the strategy's main timeframe
             timeframes_set.add(strategy.str_timeframe)
+            timeframes_set.add(get_mt5_tf_str(strategy.backtest_tf))
             # Add higher and lower timeframes from strategy, ignoring None
             higher_tf_str = get_mt5_tf_str(strategy.higher_timeframe)
             lower_tf_str = get_mt5_tf_str(strategy.lower_timeframe)
@@ -359,6 +360,7 @@ class MT5Backtest:
         tf_name = self.get_timeframe_name(timeframe)
         if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
             self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
+            print(f"Symbol or timeframe not found: {symbol}, {tf_name}")
             return None
 
         df = self.symbols_data[symbol][tf_name]
@@ -445,7 +447,7 @@ class MT5Backtest:
         Returns:
             dict or list or None: Single position dict, list of positions, or None if not found.
         """
-        if ticket is not None:
+        if ticket:
             position = self.open_positions.get(ticket, None)
             if position:
                 return position  # Return single position dict
@@ -468,7 +470,7 @@ class MT5Backtest:
             dict or None: Tick information or None if error.
         """
         tick_data = self.get_current_bar_data(symbol)
-        if tick_data is None:
+        if not tick_data:
             self.set_last_error(RES_E_NOT_FOUND, f"No tick data available for {symbol}.")
             return None
 
@@ -970,7 +972,7 @@ class MT5Backtest:
         contract_size = position['contract_size']
 
         # Get current prices if exit_price not provided
-        if exit_price is None:
+        if not exit_price:
             current_price = self.get_current_price(symbol, order_type)
             if current_price is None:
                 self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol}.")
