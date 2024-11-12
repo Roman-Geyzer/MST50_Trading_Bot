@@ -40,7 +40,7 @@ Functions:
     write_balance_performance_file: Write the balance and performance data to a CSV file.
     wait_for_new_minute: Wait for a new minute to start based on the TimeBar object.
     print_with_info: Prints information about the call stack up to 'levels_up' levels.
-    attempt_i_times_with_s_seconds_delay: Attempt to execute a function a specified number of times with a delay between attempts.
+    attempt_with_stages_and_delay: Attempt to execute a function a specified number of times with a delay between attempts.
     catch_i_times_with_s_seconds_delay: Attempt to execute a function a specified number of times with a delay between attempts.
     calculate_history_length: Calculate the history length based on the strategy configuration.
 Functions:
@@ -590,29 +590,50 @@ def print_with_info(*args, levels_up=1, **kwargs):
 
 
 
-def attempt_i_times_with_s_seconds_delay(i, s, loop_error_msg, func_check_func, func, args_tuple):
+def attempt_with_stages_and_delay(
+    stages,
+    attempts_per_stage,
+    inner_stage_delay,
+    delay_between_stages,
+    loop_error_msg,
+    func_check_func,
+    func,
+    args_tuple,
+):
     """
-    Attempt to execute a function a specified number of times with a delay between attempts.
+    Attempt to execute a function across multiple stages with varying delays between attempts.
     This function is useful for handling intermittent connection issues or other transient errors.
-    
+
     Args:
-        i (int): Number of attempts to make.
-        s (float): Number (or part of 1) of seconds to wait between attempts.
+        stages (int): Number of stages to attempt.
+        attempts_per_stage (int): Number of attempts in each stage.
+        inner_stage_delay (float): wait in seconds between attempts in stage
+        delay_between_stages (float): wait in seconds between stages
+        loop_error_msg (str): Error message to display on each failed attempt.
         func_check_func (function): Function to check the result of the function.
         func (function): Function to execute.
-        loop_error_msg (str): Error message to display on each failed attempt.
-        final_error_msg (str): Error message to display if all attempts fail.
         args_tuple (tuple): Tuple of arguments to pass to the function.
-    
+        final_error_msg (str, optional): Error message to display if all attempts fail.
+
     Returns:
-        Any: Result of the function execution.
+        Any: Result of the function execution if successful.
+
+    Raises:
+        Exception: Raises an exception with the final error message if all attempts fail.
     """
-    for attempt in range(i):
-        result = func(*args_tuple)
-        if func_check_func(result):  
-            return result
-        print(f"{loop_error_msg} on attempt {attempt + 1}")
-        time.sleep(s)
+    total_attempts = 0
+
+    for stage in range(1, stages + 1):
+        for attempt in range(1, attempts_per_stage + 1):
+            total_attempts += 1
+            result = func(*args_tuple)
+            if func_check_func(result):
+                return result
+            time.sleep(inner_stage_delay)
+        # Increase the delay for the next stage
+        print(f"{loop_error_msg} on stage {stage}, attempts so far: {total_attempts}, waiting {delay_between_stages} seconds till next stage")
+        time.sleep(delay_between_stages)
+    # After all attempts have failed
     return result
 
 def catch_i_times_with_s_seconds_delay(i, s , loop_error_msg, final_error_msg, func, *args):

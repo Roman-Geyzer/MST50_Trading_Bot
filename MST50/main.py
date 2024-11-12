@@ -35,7 +35,7 @@ from .symbols import Symbol
 from .Backtest.main_backtest import main_backtest
 
 # no need for conditional import - always import the following modules (backtest will import the other modules)
-from .utils import TradeHour, TimeBar, print_hashtaged_msg, print_with_info
+from .utils import TradeHour, TimeBar, print_hashtaged_msg, print_with_info, wait_for_new_minute
 
 # Always import account_info, shutdown, and last_error from mt5_interface
 from .mt5_interface import account_info, shutdown, last_error
@@ -74,7 +74,7 @@ def main():
     ############################################
     #    TODO: uncomment the following line    #
     ############################################
-    # wait_for_new_minute(time_bar)  # Make sure that each run of on_minute is at the start of a new minute
+    wait_for_new_minute(time_bar)  # Make sure that each run of on_minute is at the start of a new minute
     on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict)  # Run once immediately
     schedule.every(1).minutes.do(
         on_minute,
