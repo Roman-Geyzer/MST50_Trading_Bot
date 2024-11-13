@@ -71,6 +71,7 @@ else:
 performance_dir = os.path.join(drive, 'documentation/account')
 
 performance_file = os.path.join(performance_dir, 'performance.csv')
+
 if platform.system() == 'Windows':
     file_namd_path = "Z:\\Desktop\\Fulfillment\\Forex - Algo trading\\Python API\\config.xlsx"
 else:
@@ -523,6 +524,10 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     return strategies_config
 
 
+def initialize_balance_performance_file():
+    with open(self.documatation_performance_file, 'w') as f:
+        f.write("date,hour,open_trades,margin,balance,margin_level,equity,profit\n")
+
 def write_balance_performance_file(account_info_dict, open_trades):
     """
     Write the balance and performance data to a CSV file.
@@ -536,7 +541,7 @@ def write_balance_performance_file(account_info_dict, open_trades):
         return # Writing the file will be done by the backtest
     #TODO - check if this is correct
     with open(performance_file, 'w') as f:
-        f.write(time.now().strftime('%Y-%m-%d %H:%M:%S') + '\n' , open_trades, account_info_dict)
+        f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '\n' , open_trades, account_info_dict)
     
 
 
