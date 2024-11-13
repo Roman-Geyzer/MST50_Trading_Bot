@@ -524,24 +524,52 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     return strategies_config
 
 
+
+
 def initialize_balance_performance_file():
-    with open(self.documatation_performance_file, 'w') as f:
-        f.write("date,hour,open_trades,margin,balance,margin_level,equity,profit\n")
+    """
+    Initialize the performance CSV file with headers.
+    If the file already exists, skip initialization.
+    """
+    if not os.path.exists(performance_file):
+        with open(performance_file, 'w') as f:
+            f.write("date,hour,open_trades,margin,balance,margin_level,equity,profit\n")
+        print(f"Initialized {performance_file} with headers.")
+    else:
+        print(f"{performance_file} already exists. Initialization skipped.")
 
 def write_balance_performance_file(account_info_dict, open_trades):
     """
     Write the balance and performance data to a CSV file.
 
     Parameters:
-        balance (list): List of balance data.
-        performance (list): List of performance data.
-        filename (str): The name of the CSV file to write.
+        account_info_dict (dict): Dictionary containing account information.
+            Expected keys: 'margin', 'balance', 'margin_level', 'equity', 'profit'
+        open_trades (int): Number of open trades.
     """
     if BACKTEST_MODE:
-        return # Writing the file will be done by the backtest
-    #TODO - check if this is correct
-    with open(performance_file, 'w') as f:
-        f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + '\n' , open_trades, account_info_dict)
+        return  # Skip writing if in backtest mode
+
+    # Extract data from account_info_dict with default values
+    margin = account_info_dict.get('margin', 0)
+    balance = account_info_dict.get('balance', 0)
+    margin_level = account_info_dict.get('margin_level', 0)
+    equity = account_info_dict.get('equity', 0)
+    profit = account_info_dict.get('profit', 0)
+
+    # Get current date and hour
+    now = datetime.now()
+    date_str = now.strftime('%Y-%m-%d')
+    hour_str = now.strftime('%H:%M:%S')
+
+    # Prepare the CSV line according to the header
+    csv_line = f"{date_str},{hour_str},{open_trades},{margin},{balance},{margin_level},{equity},{profit}\n"
+
+    # Append the CSV line to the performance file
+    with open(performance_file, 'a') as f:
+        f.write(csv_line)
+    
+    print(f"Appended data to {performance_file}: {csv_line.strip()}")
     
 
 

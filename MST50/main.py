@@ -35,7 +35,7 @@ from .symbols import Symbol
 from .Backtest.main_backtest import main_backtest
 
 # no need for conditional import - always import the following modules (backtest will import the other modules)
-from .utils import TradeHour, TimeBar, print_hashtaged_msg, print_with_info, wait_for_new_minute
+from .utils import TradeHour, TimeBar, print_hashtaged_msg, initialize_balance_performance_file, wait_for_new_minute
 
 # Always import account_info, shutdown, and last_error from mt5_interface
 from .mt5_interface import account_info, shutdown, last_error
@@ -61,6 +61,8 @@ def main():
     symbols = Symbol.initialize_symbols(strategies)
     account_info_dict = account_info()
     print("Account info:", account_info_dict)
+
+    initialize_balance_performance_file()
 
     # Initialize the previous hour and day to -1 to ensure the first iteration runs the on_hour function
     trade_hour = TradeHour()
