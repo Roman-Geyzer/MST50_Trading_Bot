@@ -23,6 +23,7 @@ Methods:
 """
 
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from .utils import TimeBar, get_timeframe_string, attempt_with_stages_and_delay, print_hashtaged_msg, print_with_info
 from .mt5_interface import TIMEFRAMES, copy_rates_from_pos
@@ -227,7 +228,6 @@ class Timeframe:
         rates = attempt_with_stages_and_delay(
             10 , 2, 0.05, 0.5, loop_error_msg, check_return_func, copy_rates_from_pos, (symbol, tf, 0, length)
         )
-
         if not check_return_func(rates):
             print_hashtaged_msg(3, f"Failed to get rates for symbol: {symbol}, timeframe {tf}, length {length}")
             return None
@@ -254,6 +254,7 @@ class Timeframe:
                 if tf_obj  and time_frames_list.index(tf) <= time_frames_list.index(timebar.current_bar):
                     tf_obj.update_rates_if_new_bar()
 
+
     def update_rates_if_new_bar(self):
         """
         Update rates if there is a new bar since the last update.
@@ -267,11 +268,7 @@ class Timeframe:
                 # New bar detected, update rates
                 self.rates = new_rates
                 self.rates_error_flag = False
-                # TODO: for debugging - check if need to delete last bar
-                print_with_info(1, f"New bar detected for symbol: {self.symbol_str}, timeframe: {self.timeframe}")
-                print(f" *first* (-1) bar is: ", self.rates[-1])
-                print(f"*second* (-2) bar is: ", self.rates[-2])
-                print(f"last bar is: ", self.rates[0])
+                return
             else:
                 # No new bar, do not update rates
                 pass

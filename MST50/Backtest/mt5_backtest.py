@@ -245,6 +245,7 @@ class MT5Backtest:
 			# Sort by 'time' ascending
 			df.sort_values('time', inplace=True)
 
+			# TODO: this needs update - need to add data "before start time" - so it will be enough for the copy_rates_from_pos
 			# Filter data to include only rows where 'time' >= self.start_time
 			if self.start_time:
 				initial_row_count = len(df)
@@ -306,43 +307,9 @@ class MT5Backtest:
 
 	def copy_rates(self, symbol, timeframe, count):
 		"""
-		Simulate MT5.copy_rates() function.
-
-		Parameters:
-			symbol (str): The trading symbol.
-			timeframe (int): The timeframe constant.
-			count (int): Number of bars to copy.
-
-		Returns:
-			np.recarray or None: NumPy recarray of rates or None if error.
+		not in use in current code, for full old code function see in git prioro to nov 2024
 		"""
-		tf_name = self.get_timeframe_name(timeframe)
-		if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-			self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
-			return None
-
-		df = self.symbols_data[symbol][tf_name]
-		current_index = self.current_tick_index[symbol][tf_name]
-
-		if current_index < 0:
-			self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
-			return None
-
-		# Get data up to current_index
-		df_up_to_current = df.iloc[:current_index + 1]
-		total_bars = len(df_up_to_current)
-		if total_bars == 0:
-			self.set_last_error(RES_E_NOT_FOUND, f"No data available up to current_time for {symbol}, {tf_name}")
-			return None
-
-		# Reverse the DataFrame to have newest bar first
-		df_reversed = df_up_to_current.iloc[::-1].reset_index(drop=True)
-
-		rates = df_reversed.iloc[:count]
-
-		# Convert to NumPy recarray
-		data_array = rates.to_records(index=False)
-		return data_array
+		pass
 
 
 	def copy_rates_from_pos(self, symbol, timeframe, pos, count):
@@ -359,33 +326,17 @@ class MT5Backtest:
 			np.recarray or None: NumPy recarray of rates or None if error.
 		"""
 		tf_name = self.get_timeframe_name(timeframe)
-		if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-			self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
-			print(f"Symbol or timeframe not found: {symbol}, {tf_name}")
-			return None
-
-		df = self.symbols_data[symbol][tf_name]
 		current_index = self.current_tick_index[symbol][tf_name]
-
-		if current_index < 0:
-			self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
-			return None
-
 		# Get data up to current_index
-		df_up_to_current = df.iloc[:current_index + 1]
-		total_bars = len(df_up_to_current)
-		if total_bars == 0:
-			self.set_last_error(RES_E_NOT_FOUND, f"No data available up to current_time for {symbol}, {tf_name}")
-			return None
-		if pos < 0 or pos >= total_bars:
-			self.set_last_error(RES_E_INVALID_PARAMS, f"Invalid position: {pos} for {symbol}, {tf_name}")
-			return None
+		#TODO: validate that I'm looking at "the last completed bar" - as in real live trading
+		#TODO: validate "this works" - updated and did not check
+		start = current_index - count
 
-		# Reverse the DataFrame to have newest bar first
-		df_reversed = df_up_to_current.iloc[::-1].reset_index(drop=True)
-
-		end_index = min(pos + count, total_bars)
-		rates = df_reversed.iloc[pos:end_index]
+		# main logic
+		# TODO: check is can and needed optimization - pre reverse the data?
+		rates = self.symbols_data[symbol][tf_name].iloc[current_index:start:-1] # use only needed bars and reverse the DataFrame to have newest bar first
+											 								# no need for the last bar since it's the "current bar"
+																			# this simluates live trading since we don't see the current bar
 
 		# Convert to NumPy recarray
 		data_array = rates.to_records(index=False)
@@ -393,40 +344,11 @@ class MT5Backtest:
 
 	def copy_rates_from(self, symbol, timeframe, datetime_from, count):
 		"""
-		Simulate MT5.copy_rates_from() function.
-
-		Parameters:
-			symbol (str): The trading symbol.
-			timeframe (int): The timeframe constant.
-			datetime_from (datetime): Start datetime.
-			count (int): Number of bars to copy.
-
-		Returns:
-			np.recarray or None: NumPy recarray of rates or None if error.
+		not in use in current code, for full old code function see in git prioro to nov 2024
 		"""
-		tf_name = self.get_timeframe_name(timeframe)
-		if not tf_name or symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-			self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
-			return None
+		pass
 
-		df = self.symbols_data[symbol][tf_name]
-		current_index = self.current_tick_index[symbol][tf_name]
 
-		if current_index < 0:
-			self.set_last_error(RES_E_NOT_FOUND, f"No data available for {symbol} at current time.")
-			return None
-
-		# Filter data between datetime_from and current_index
-		df_filtered = df[(df['time'] >= datetime_from) & (df.index <= current_index)]
-		if df_filtered.empty:
-			self.set_last_error(RES_E_NOT_FOUND, f"No data available from {datetime_from} to current_time for {symbol}, {tf_name}")
-			return None
-
-		rates = df_filtered.head(count)
-
-		# Convert to NumPy recarray
-		data_array = rates.to_records(index=False)
-		return data_array
 
 	def account_info(self):
 		"""
@@ -1158,6 +1080,10 @@ class MT5Backtest:
 		"""
 		self.last_error_code = code
 		self.last_error_description = description
+	
+	def time_current(self):
+		# TODO: implement to simulate current server time - it's the same as the time in the df
+		pass
 
 	def shutdown(self):
 		"""
@@ -1334,6 +1260,9 @@ def last_error():
 		tuple: (error_code, error_description)
 	"""
 	return backtest.last_error()
+
+def time_current():
+	return backtest.time_current()
 
 def shutdown():
 	"""

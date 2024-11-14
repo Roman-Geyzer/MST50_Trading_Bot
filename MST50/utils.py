@@ -70,6 +70,7 @@ else:
 
 performance_dir = os.path.join(drive, 'documentation/account')
 
+#TODO: update the perfomance file to include broker and account number
 performance_file = os.path.join(performance_dir, 'performance.csv')
 
 if platform.system() == 'Windows':
@@ -562,14 +563,17 @@ def write_balance_performance_file(account_info_dict, open_trades):
     date_str = now.strftime('%Y-%m-%d')
     hour_str = now.strftime('%H:%M:%S')
 
+    # Get trades ammount:
+    trades_num = len(open_trades)
+
     # Prepare the CSV line according to the header
-    csv_line = f"{date_str},{hour_str},{open_trades},{margin},{balance},{margin_level},{equity},{profit}\n"
+    csv_line = f"{date_str},{hour_str},{trades_num},{margin},{balance},{margin_level},{equity},{profit}\n"
 
     # Append the CSV line to the performance file
     with open(performance_file, 'a') as f:
         f.write(csv_line)
     
-    print(f"Appended data to {performance_file}: {csv_line.strip()}")
+    print_with_info(f"Appended data to {performance_file}: {csv_line.strip()}", levels_up=2)
     
 
 

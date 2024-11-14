@@ -147,26 +147,26 @@ class Strategy:
             os.makedirs(self.documentation_dir)
 
         # Define the documented trades file path
-        self.documanted_trades_file = os.path.join(self.documentation_dir, f"strategy no.-_{self.strategy_num}, name: {self.strategy_name}_trades.csv")
+        self.documanted_trades_file = os.path.join(self.documentation_dir, f"trades.csv")
         if not os.path.exists(self.documanted_trades_file):
             with open(self.documanted_trades_file, 'w') as f:
                 # Header of file
                 f.write("ticket,magic,symbol,direction,volume,price,sl,tp,time,open_daytime,close_datetime,trading_costs,profit,open_method,close_method,comment\n")
         
         # Define the general documentation file path
-        self.documatation_performance_file = os.path.join(self.documentation_dir, f"strategy_{self.strategy_num}_performance.csv")
+        self.documatation_performance_file = os.path.join(self.documentation_dir, f"performance.csv")
         if not os.path.exists(self.documatation_performance_file):
             with open(self.documatation_performance_file, 'w') as f:
-                # TODO: update the header for performance analysis
+                # Header of file
                 f.write("date,hour,open_trades,margin,balance,margin_level,equity,profit\n")
 
-        self.documatation_logs_file = os.path.join(self.documentation_dir, f"strategy_{self.strategy_num}_logs.csv")
+        self.documatation_logs_file = os.path.join(self.documentation_dir, f"logs.csv")
         if not os.path.exists(self.documatation_logs_file):
             with open(self.documatation_logs_file, 'w') as f:
                 #TODO: update the header for logs
                 pass
 
-        self.documatation_errors_file = os.path.join(self.documentation_dir, f"strategy_{self.strategy_num}_errors.csv")
+        self.documatation_errors_file = os.path.join(self.documentation_dir, f"errors.csv")
         if not os.path.exists(self.documatation_errors_file):
             with open(self.documatation_errors_file, 'w') as f:
                 #TODO: update the header for errors

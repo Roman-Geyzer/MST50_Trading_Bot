@@ -47,6 +47,7 @@ symbol_select = mt5_module.symbol_select
 history_deals_get = mt5_module.history_deals_get
 last_error = mt5_module.last_error
 shutdown = mt5_module.shutdown
+time_current = mt5_module.time_current
 
 # Constants
 TIMEFRAMES = mt5_module.TIMEFRAMES
