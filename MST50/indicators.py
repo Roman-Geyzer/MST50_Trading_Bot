@@ -965,15 +965,16 @@ class RangeIndicator(Indicator):
         """
         super().__init__(params)
         self.period_for_sr = safe_int_extract_from_dict(params, 'a', 100)
-        self.slack_for_sr_perc_div = safe_float_extract_from_dict(params, 'c', 10.0)
-        self.perc_rejection_multiplier = safe_float_extract_from_dict(params, 'd', 1.0)
-        self.max_distance_from_sr_perc = safe_float_extract_from_dict(params, 'e', 2.0)
+        self.touches_for_sr = safe_int_extract_from_dict(params, 'b', 3)
+        self.slack_for_sr_atr_div = safe_float_extract_from_dict(params, 'c', 10.0)
+        self.atr_rejection_multiplier = safe_float_extract_from_dict(params, 'd', 1.0)
+        self.max_distance_from_sr_atr = safe_float_extract_from_dict(params, 'e', 2.0)
         self.min_height_of_sr_distance = safe_float_extract_from_dict(params, 'f', 3.0)
         self.max_height_of_sr_distance = safe_float_extract_from_dict(params, 'g', 200.0)
         self.bars_from_fakeout = safe_int_extract_from_dict(params, 'h', 2)
         self.bars_before_fakeout = safe_int_extract_from_dict(params, 'i', 2)
-        self.fakeout_perc_slack = safe_float_extract_from_dict(params, 'j', 0.5)
-        self.slack_for_breakout_perc = safe_float_extract_from_dict(params, 'k', 0.1)
+        self.fakeout_atr_slack = safe_float_extract_from_dict(params, 'j', 0.5)
+        self.slack_for_breakout_atr = safe_float_extract_from_dict(params, 'k', 0.1)
 
         # Initialize SR levels
         self.upper_sr = 0.0
