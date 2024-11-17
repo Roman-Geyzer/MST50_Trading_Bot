@@ -1021,7 +1021,7 @@ class RangeIndicator(Indicator):
 
         # Adjust levels based on slack percentage
         price_range = highest_high - lowest_low
-        slack = price_range / self.slack_for_sr_perc_div
+        slack = price_range / self.slack_for_sr_atr_div
 
         self.upper_sr = highest_high + slack
         self.lower_sr = lowest_low - slack
@@ -1040,12 +1040,13 @@ class RangeIndicator(Indicator):
         self.calculate_sr_levels(rates)
         current_open = rates['open'][-1]
         current_close = rates['close'][-1]
+        atr = rates['atr'][-1]
 
         distance_from_upper = self.upper_sr - current_open
         distance_from_lower = current_open - self.lower_sr
         price_range = current_open
 
-        if distance_from_lower < (self.max_distance_from_sr_perc / 100) * price_range:
+        if distance_from_lower < (self.max_distance_from_sr_atr) * atr:
             # Buy signal
             return 'buy', {'entry': current_close, 'sl': self.lower_sr - 10, 'tp': self.upper_sr}
         elif distance_from_upper < (self.max_distance_from_sr_perc / 100) * price_range:

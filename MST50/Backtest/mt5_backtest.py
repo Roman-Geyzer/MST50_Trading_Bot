@@ -6,7 +6,7 @@ The class provides methods to simulate the MetaTrader 5 client functions for bac
 The class is designed to be used with the MT5Strategy class to backtest trading strategies.
 Functions:
 	MT5Backtest: A class to simulate the MetaTrader 5 (MT5) client for backtesting purposes.
-	extract_backtest_parameters: Extract symbols, timeframes, start_time, end_time, and time_step from strategies.
+	extract_backtest_parameters: Extract symbols, timeframes, start_time,data_start_time end_time, and time_step from strategies.
 	load_data: Load historical data from CSV files into symbols_data.
 	get_timeframe_name: Get the timeframe name from its value.
 	copy_rates: Simulate MT5.copy_rates() function.
@@ -143,7 +143,13 @@ class MT5Backtest:
 		for symbol, tfs in self.symbols_data.items():
 			self.current_tick_index[symbol] = {}
 			for tf_name in tfs.keys():
-				self.current_tick_index[symbol][tf_name] = 0  # Start at the first bar
+				# find the first index where 'time' >= self.start_time
+				first_valid_index = self.symbols_data[symbol][tf_name].index[self.symbols_data[symbol][tf_name]['time'] >= self.start_time].tolist()[0]
+				self.current_tick_index[symbol][tf_name] = first_valid_index
+
+
+
+				#self.current_tick_index[symbol][tf_name] = 0  # Start at the first bar
 
 		self.current_tick_data = {}  # Store current tick data for each symbol
 
@@ -179,6 +185,13 @@ class MT5Backtest:
 		# Use the earliest start date among strategies
 		self.start_time = min(backtest_start_dates)
 
+		if strategy.str_timeframe == 'D1':
+			# set the first bar to load (time) - to be history length before the start time
+			self.data_start_time = self.start_time - timedelta(days=205)  # Load 205 days of data - more than enough for D1
+		else:
+			# set the first bar to load (time) - to be history length before the start time
+			self.data_start_time = self.start_time - timedelta(days=30) #  Load 30 days of data - more than enough for any other timeframe
+
 		# Set end date as X days before today
 		self.end_time = datetime.now() - timedelta(days=backtest_end_relative_to_today)
 
@@ -198,7 +211,7 @@ class MT5Backtest:
 	def load_data(self):
 		"""
 		Load historical data from CSV files into symbols_data.
-		Only loads data for specified symbols and timeframes, starting from self.start_time.
+		Only loads data for specified symbols and timeframes, starting from self.data_start_time.
 		"""
 		if not self.symbols or not self.timeframes:
 			print("No symbols or timeframes specified for data loading.")
@@ -249,9 +262,9 @@ class MT5Backtest:
 			# Filter data to include only rows where 'time' >= self.start_time
 			if self.start_time:
 				initial_row_count = len(df)
-				df = df[df['time'] >= self.start_time]
+				df = df[df['time'] >= self.data_start_time]
 				filtered_row_count = len(df)
-				print(f"    Filtered data for {symbol} on timeframe {tf_name}: {filtered_row_count} out of {initial_row_count} bars retained (from {self.start_time}).")
+				print(f"    Filtered data for {symbol} on timeframe {tf_name}: {filtered_row_count} out of {initial_row_count} bars retained (from {self.data_start_time} for strategy testing starting at: {self.start_time}).")
 			else:
 				print(f"    No start_time specified. Loading all data for {symbol} on timeframe {tf_name}.")
 
@@ -334,7 +347,7 @@ class MT5Backtest:
 
 		# main logic
 		# TODO: check is can and needed optimization - pre reverse the data?
-		rates = self.symbols_data[symbol][tf_name].iloc[current_index:start:-1] # use only needed bars and reverse the DataFrame to have newest bar first
+		rates = self.symbols_data[symbol][tf_name].iloc[start:current_index] # use only needed bars and reverse the DataFrame to have newest bar first
 											 								# no need for the last bar since it's the "current bar"
 																			# this simluates live trading since we don't see the current bar
 

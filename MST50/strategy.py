@@ -420,19 +420,19 @@ class Strategy:
         indicator_decision_set = {'both'} # Set to store indicators decisions from different indicators, 'both' is used as a flag to use candle decision
         # Proceed with normal indicator-based trade decision - up to 3 indicators can be used
         if self.first_indicator: # Check if indicator is active
-            first_indicator_decision, first_indicator_trade_data = self.first_indicator.make_trade_decision(rates, tf_obj)
+            first_indicator_decision, first_indicator_trade_data = self.first_indicator.make_trade_decision(rates)
             if first_indicator_decision is None:
                 return
             else:
                 indicator_decision_set.add(first_indicator_decision)
         if self.second_indicator:
-            second_indicator_decision, second_indicator_trade_data = self.second_indicator.make_trade_decision(rates, tf_obj)
+            second_indicator_decision, second_indicator_trade_data = self.second_indicator.make_trade_decision(rates)
             if second_indicator_decision is None:
                 return
             else:
                 indicator_decision_set.add(second_indicator_decision)
         if self.third_indicator:
-            third_indicator_decision, third_indicator_trade_data = self.third_indicator.make_trade_decision(rates, tf_obj)
+            third_indicator_decision, third_indicator_trade_data = self.third_indicator.make_trade_decision(rates)
             if third_indicator_decision is None:
                 return
             else:
