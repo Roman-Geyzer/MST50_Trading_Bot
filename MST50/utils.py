@@ -421,6 +421,7 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     df = pd.read_excel(file_namd_path, sheet_name=sheet_name)
 
 
+
     # Initialize an empty dictionary to hold strategy configurations
     strategies_config = {}
 

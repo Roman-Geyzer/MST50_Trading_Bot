@@ -198,7 +198,13 @@ class Timeframe:
                             timeframe_length_in_strategies.append(strategy.trail_param)
                         if strategy.use_fast_trail:
                             timeframe_length_in_strategies.append(strategy.fast_trail_minutes_count)
-                    timeframe_length_in_strategies.append(strategy.config['indicator_params']['a'])
+
+                    if strategy.first_indicator:
+                        timeframe_length_in_strategies.append(strategy.config['indicators']['first_indicator']['indicator_params']['a'])
+                        if strategy.second_indicator:
+                            timeframe_length_in_strategies.append(strategy.config['indicators']['second_indicator']['indicator_params']['a'])
+                            if strategy.third_indicator:
+                                timeframe_length_in_strategies.append(strategy.config['indicators']['third_indicator']['indicator_params']['a'])
                     timeframe_length_in_strategies.append(config['filterP_rsi_period'])
                 if strategy.higher_candle_patterns_active:
                     if self.timeframe == config['candle_params']['higher_tf']['timeframe']:

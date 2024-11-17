@@ -68,7 +68,7 @@ class Indicators:
         }
 
         # Initialize the appropriate indicator class based on strategy config
-        self.indicator_name = self.strategy_config['indicator']
+        self.indicator_name = self.strategy_config['indicator_name']
         self.indicator_instance = self.initialize_indicator()
 
     def initialize_indicator(self):
