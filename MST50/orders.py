@@ -272,6 +272,23 @@ def UseMA_SL(price, direction, sl_param, symbol, point):
     # This function needs implementation based on your MA data
     pass
 
+def UseATR_SL(price, direction, sl_param, symbol, point):
+    """
+    Calculate SL based on Average True Range (ATR).
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        sl_param (int): MA period.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated SL price.
+    """
+    # This function needs implementation based on your MA data
+    pass
+
 sl_methods = {
     'UsePerc_SL': UsePerc_SL,
     'UseFixed_SL': UseFixed_SL,
@@ -279,6 +296,7 @@ sl_methods = {
     'UseSR_SL': UseSR_SL,
     'UseTrend_SL': UseTrend_SL,
     'UseMA_SL': UseMA_SL,
+    'UseATR_SL': UseATR_SL,
 }
 
 # TP methods
@@ -446,6 +464,23 @@ def UseRR_TP(price, direction, tp_param, symbol, point, sl):
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
+def UseATR_TP(price, direction, tp_param, symbol, point):
+    """
+    Calculate TP based on Average True Range (ATR).
+
+    Parameters:
+        price (float): Current price.
+        direction (int): Trade direction.
+        tp_param (int): ATR period.
+        symbol (str): Symbol name.
+        point (float): Point value.
+
+    Returns:
+        float: Calculated TP price.
+    """
+    # This function needs implementation based on your ATR data
+    pass
+
 tp_methods = {
     'UsePerc_TP': UsePerc_TP,
     'UseFixed_TP': UseFixed_TP,
@@ -454,6 +489,7 @@ tp_methods = {
     'UseTrend_TP': UseTrend_TP,
     'UseMA_TP': UseMA_TP,
     'UseRR_TP': UseRR_TP,
+    'UseATR_TP': UseATR_TP,
 }
 
 # Trail methods
@@ -674,6 +710,26 @@ def UseMA_Trail(price, current_sl, both_sides_trail, direction, trail_param, sym
     # This function needs implementation based on your MA data
     pass
 
+def UseATR_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+    """
+    Calculate trailing stop based on Average True Range (ATR).
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (int): ATR period.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    # This function needs implementation based on your ATR data
+    pass
+
 trail_methods = {
     'UsePerc_Trail': UsePerc_Trail,
     'UseFixed_Trail': UseFixed_Trail,
@@ -682,7 +738,30 @@ trail_methods = {
     'UseSR_Trail': UseSR_Trail,
     'UseTrend_Trail': UseTrend_Trail,
     'UseMA_Trail': UseMA_Trail,
+    'UseATR_Trail': UseATR_Trail,
 }
+
+
+def fast_moving_trail(price, current_sl, both_sides_trail, direction, n_candles, symbol, point, rates_df):
+    """
+    Calculate trailing stop based on fast price movement on the last N 1 minutes candles (N is counfigures in strategy).
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        n_candles (int): Number of candles to consider.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (np.recarray): Historical price data.
+
+    Returns:
+        float or None: New stop-loss price if conditions are met, otherwise None.
+    """
+    # This function needs implementation based on your MA data
+    pass
+
 
 # Additional functions as needed
 #TODO: Implement this function

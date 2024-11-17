@@ -74,7 +74,21 @@ class Strategy:
         self.tradeP_long = strategy_config['tradeP_long']
         self.tradeP_short = strategy_config['tradeP_short']
         self.open_trades = self.get_open_trades_from_terminal()   # Dictionary to hold open trades: trade_id -> trade_info
-        self.indicator = Indicators(strategy_config)  # Instantiate the Indicators class
+
+        # Initialize indicators
+        if strategy_config['indicators']['first_indicator']['indicator_name']:
+            self.first_indicator = Indicators(strategy_config['indicators']['first_indicator'])
+        else:
+            self.first_indicator = None
+        if strategy_config['indicators']['second_indicator']['indicator_name']:
+            self.second_indicator = Indicators(strategy_config['indicators']['second_indicator'])
+        else:
+            self.second_indicator = None
+        if strategy_config['indicators']['third_indicator']['indicator_name']:
+            self.third_indicator = Indicators(strategy_config['indicators']['third_indicator'])
+        else:
+            self.third_indicator = None
+
         self.rsi_signal = RSISignal(
             rsi_period=self.config.get('filterP_rsi_period', 14),
             max_deviation=self.config['filterP_max_rsi_deviation'],
@@ -118,15 +132,20 @@ class Strategy:
         self.tp_param = strategy_config['tp_param']
         if self.tp_method in {'UseCandles_TP'}:
             self.tp_param = int(self.tp_param)
-
+        #TODO: update the exit params to be part of the class to avoid using get from dict
         self.exit_params = strategy_config.get('exit_params', {})
 
-        self.trail_method = strategy_config['trail_method']
-        self.trail_param = strategy_config['trail_param']
-        if self.trail_method in {'UseCandles_Trail_Close' , 'UseCandles_Trail_Extreme'}:
-            self.trail_param = int(self.trail_param)
-        self.trail_both_directions = strategy_config['trail_both_directions']
-        self.trail_enabled = self.check_trail_active()
+        self.trail_method = strategy_config['trail_params']['trail_method']
+        self.trail_param = strategy_config['trail_params']['trail_param']
+        self.trail_both_directions = strategy_config['trail_params']['trail_both_directions']
+        self.use_fast_trail = strategy_config['trail_params']['use_fast_trail']
+        self.fast_trail_minutes_count = strategy_config['trail_params']['fast_trail_minutes_count']
+        self.fast_trail_ATR_start_multiplier = strategy_config['trail_params']['fast_trail_ATR_start_multiplier']
+        self.fast_trail_ATR_trail_multiplier = strategy_config['trail_params']['fast_trail_ATR_trail_multiplier']
+        self.use_move_to_breakeven = strategy_config['trail_params']['use_move_to_breakeven']
+        self.breakeven_ATRs = strategy_config['trail_params']['breakeven_ATRs']
+        self.trail_enabled = self.trail_method or self.use_fast_trail or self.use_move_to_breakeven
+
 
         self.backtest_params = strategy_config['backtest_params']
         self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
@@ -172,12 +191,6 @@ class Strategy:
                 #TODO: update the header for errors
                 pass
         
-    def check_trail_active(self):
-        """
-        Check if trailing is active for the strategy.
-        """
-        problem =  self.trail_method is None or self.trail_method == 0 or self.trail_method == '0' or self.trail_method == "" or self.trail_param is None or self.trail_param <= 0
-        return not problem
     
 
     def get_open_trades_from_terminal(self):
@@ -404,27 +417,35 @@ class Strategy:
                 else:
                     candle_decision_set.add(lower_tf_candle_decision)
 
-        # Proceed with normal indicator-based trade decision
-        if self.indicator.indicator_name != 0 : # Check if indicator is active
-            indicator_decision, indicator_trade_data = self.indicator.make_trade_decision(rates, tf_obj)
-            if indicator_decision is None: 
-                return  # No trade if indicator fails
-            if len(candle_decision_set) == 1:# Use indicator decision if candle decision is 'both' (the default value - which is a flag to use indicator decision)
-                final_decision = indicator_decision
+        indicator_decision_set = {'both'} # Set to store indicators decisions from different indicators, 'both' is used as a flag to use candle decision
+        # Proceed with normal indicator-based trade decision - up to 3 indicators can be used
+        if self.first_indicator: # Check if indicator is active
+            first_indicator_decision, first_indicator_trade_data = self.first_indicator.make_trade_decision(rates, tf_obj)
+            if first_indicator_decision is None:
+                return
             else:
-                candle_decision_set.remove('both')
-                candle_decision = candle_decision_set.pop()
-                if candle_decision == indicator_decision:
-                    final_decision = indicator_decision
-                else:
-                    return  # No trade if candle and indicator decisions are conflicting
-        else: # No indicator active - use candle decision
-            if len(candle_decision_set) == 1:
-                print_hashtaged_msg(2, f"No indicator active and candle decision is 'both' - double check the strategy configuration and logic")
-                return # we should not be here!!! - No trade if no indicator and candle decision is 'both'
-            candle_decision_set.remove('both')
-            final_decision = candle_decision_set.pop()
-
+                indicator_decision_set.add(first_indicator_decision)
+        if self.second_indicator:
+            second_indicator_decision, second_indicator_trade_data = self.second_indicator.make_trade_decision(rates, tf_obj)
+            if second_indicator_decision is None:
+                return
+            else:
+                indicator_decision_set.add(second_indicator_decision)
+        if self.third_indicator:
+            third_indicator_decision, third_indicator_trade_data = self.third_indicator.make_trade_decision(rates, tf_obj)
+            if third_indicator_decision is None:
+                return
+            else:
+                indicator_decision_set.add(third_indicator_decision)
+        
+        # merge the candle and indicator decisions
+        fincal_decision_set = candle_decision_set.union(indicator_decision_set)
+        if len(fincal_decision_set) == 1: # No trade if no decision is made
+            return
+        fincal_decision_set.remove('both')
+        if len(fincal_decision_set) == 2: # conflicting decisions - no trade
+            return
+        final_decision = fincal_decision_set.pop()
 
         # Get the RSI values for filtering using the cached method
         rsi_values = self.get_cached_rsi(stra_symbol, self.timeframe, rates)
@@ -435,6 +456,10 @@ class Strategy:
         # Check the RSI signal before making a trade
         if not self.rsi_signal.check_rsi_signal(rsi_values[-1], final_decision): 
             return  # No trade if RSI filter fails
+        
+
+        #TODO: implement ATR filter
+        # check for ATR filter
     
 
         if final_decision == 'buy' and self.tradeP_long:
@@ -711,21 +736,24 @@ class Strategy:
 
             profit = position['profit']
 
+            #TODO: after updating the exit params to be part of the class, update the following conditions
             # Check daily profit close condition
             if self.exit_params.get('exitP_daily_profit_close', False):
                 required_days = self.exit_params.get('exitP_daily_profit_close_days', 1)
                 if days_in_trade >= required_days and profit > 0:
-                    print(f"Closing trade {trade_id} due to daily profit close condition.")
-                    self.close_trade(position)
-                    continue  # Move to the next trade
+                    if self.exit_params.get('exitP_daily_close_hour', 22) == current_time.hour:
+                        print(f"Closing trade {trade_id} due to daily profit close condition.")
+                        self.close_trade(position)
+                        continue  # Move to the next trade
 
             # Check daily close condition
             if self.exit_params.get('exitP_daily_close', False):
                 required_days = self.exit_params.get('exitP_daily_close_days', 1)
                 if days_in_trade >= required_days:
-                    print(f"Closing trade {trade_id} due to daily close condition.")
-                    self.close_trade(position)
-                    continue  # Move to the next trade
+                    if self.exit_params.get('exitP_daily_close_hour', 22) == current_time.hour:
+                        print(f"Closing trade {trade_id} due to daily close condition.")
+                        self.close_trade(position)
+                        continue  # Move to the next trade
 
             # Check bars close condition
             bars_close = self.exit_params.get('exitP_bars_close', 0)

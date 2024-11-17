@@ -184,15 +184,20 @@ class Timeframe:
 
     
     def calculate_tr_length(self, symbol_str, strategies):
-        timeframe_length_in_strategies = [2]
+        timeframe_length_in_strategies = [12] # ATR needs minimum of 14 candles - since I'm always adding 3 candles to the max length, I can start with 12
         for strategy in strategies.values():
             if symbol_str in strategy.symbols:
                 config = strategy.config
                 if self.timeframe == strategy.timeframe:
-                    timeframe_length_in_strategies.append(strategy.sl_param)
-                    timeframe_length_in_strategies.append(strategy.tp_param)
+                    if strategy.sl_method in ['UseCandles_SL', 'UseATR_SL']:
+                        timeframe_length_in_strategies.append(strategy.sl_param)
+                    if strategy.tp_method in ['UseCandles_TP', 'UseATR_TP']:
+                        timeframe_length_in_strategies.append(strategy.tp_param)
                     if strategy.trail_enabled:
-                        timeframe_length_in_strategies.append(strategy.trail_param)
+                        if strategy.trail_method in ['UseCandles_Trail_Close', 'UseCandles_Trail_Extreme', 'UseATR_Tral']:
+                            timeframe_length_in_strategies.append(strategy.trail_param)
+                        if strategy.use_fast_trail:
+                            timeframe_length_in_strategies.append(strategy.fast_trail_minutes_count)
                     timeframe_length_in_strategies.append(strategy.config['indicator_params']['a'])
                     timeframe_length_in_strategies.append(config['filterP_rsi_period'])
                 if strategy.higher_candle_patterns_active:
