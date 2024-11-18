@@ -75,25 +75,14 @@ class Strategy:
         self.tradeP_short = strategy_config['tradeP_short']
         self.open_trades = self.get_open_trades_from_terminal()   # Dictionary to hold open trades: trade_id -> trade_info
 
-        # Initialize indicators
-        if strategy_config['indicators']['first_indicator']['indicator_name']:
-            self.first_indicator = Indicators(strategy_config['indicators']['first_indicator'])
-        else:
-            self.first_indicator = None
-        if strategy_config['indicators']['second_indicator']['indicator_name']:
-            self.second_indicator = Indicators(strategy_config['indicators']['second_indicator'])
-        else:
-            self.second_indicator = None
-        if strategy_config['indicators']['third_indicator']['indicator_name']:
-            self.third_indicator = Indicators(strategy_config['indicators']['third_indicator'])
-        else:
-            self.third_indicator = None
+        # Initialize required columns set
+        self.required_columns = set(['time', 'open', 'high', 'low', 'close', 'spread'])
 
-        self.rsi_signal = RSISignal(
-            rsi_period=self.config.get('filterP_rsi_period', 14),
-            max_deviation=self.config['filterP_max_rsi_deviation'],
-            min_deviation=self.config['filterP_min_rsi_deviation']
-        )
+        # Add ATR and RSI columns (they are always needed)
+        self.required_columns.update(['ATR', 'RSI'])
+
+        # Initialize Indicators and collect required columns(in rates df) based on indicators
+        self.init_indicators_and_collect_required_columns()
 
         self.candle_params = strategy_config['candle_params']
         # current_tf 
@@ -152,7 +141,11 @@ class Strategy:
         self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
         # self.backtest_str_tf = get_timeframe_string(self.backtest_tf)
 
-        self.cached_rsi = {}    # Cache for RSI values per symbol and timeframe
+        self.rsi_signal = RSISignal(
+            rsi_period=self.config.get('filterP_rsi_period', 14),
+            max_deviation=self.config['filterP_max_rsi_deviation'],
+            min_deviation=self.config['filterP_min_rsi_deviation']
+        )
 
 
 
@@ -191,7 +184,67 @@ class Strategy:
                 #TODO: update the header for errors
                 pass
         
-    
+    def init_indicators_and_collect_required_columns(self):
+        """
+        Initialize indicator and collect the required columns based on the indicators used in the strategy.
+        """
+        # First Indicator
+        first_indicator_config = self.config['indicators']['first_indicator']
+        if first_indicator_config['indicator_name']:
+            self.first_indicator = Indicators(first_indicator_config)
+            self.add_indicator_columns(first_indicator_config)
+        else:
+            self.first_indicator = None
+
+        # Second Indicator
+        second_indicator_config = self.config['indicators']['second_indicator']
+        if second_indicator_config['indicator_name']:
+            self.second_indicator = Indicators(second_indicator_config)
+            self.add_indicator_columns(second_indicator_config)
+        else:
+            self.second_indicator = None
+
+        # Third Indicator
+        third_indicator_config = self.config['indicators']['third_indicator']
+        if third_indicator_config['indicator_name']:
+            self.third_indicator = Indicators(third_indicator_config)
+            self.add_indicator_columns(third_indicator_config)
+        else:
+            self.third_indicator = None
+
+    def add_indicator_columns(self, indicator_config):
+        """
+        Add required columns based on the indicator configuration.
+
+        Parameters:
+            indicator_config (dict): Configuration of the indicator.
+        """
+        indicator_name = indicator_config['indicator_name']
+        indicator_params = indicator_config['indicator_params']
+
+        if indicator_name == 'BB':
+            # For Bollinger Bands, we need to add columns based on the deviation
+            deviation = indicator_params.get('d', None)  # Assuming 'd' is the deviation parameter
+            if deviation:
+                deviation_str = str(int(float(deviation) * 10))
+                self.required_columns.update({
+                    f'BB{deviation_str}_Upper',
+                    f'BB{deviation_str}_Middle',
+                    f'BB{deviation_str}_Lower',
+                    f'BB{deviation_str}_Bool_Above',
+                    f'BB{deviation_str}_Bool_Below',
+                })
+        elif indicator_name == 'MA':
+            # For Moving Averages, if present, load all MA columns
+            self.required_columns.update({'MA_7', 'MA_21', 'MA_50', 'MA_200'})
+            self.required_columns.update({'MA_7_comp', 'MA_21_comp', 'MA_50_comp'})
+        elif indicator_name == 'GA':
+            # For Guppy Averages, load all GA columns
+            self.required_columns.update({'GA_50', 'GA_100', 'GA_200', 'GA_500'})
+        else:
+            pass
+            # place holder for other indicators
+
 
     def get_open_trades_from_terminal(self):
         """
@@ -345,32 +398,7 @@ class Strategy:
 
         return True # Passed all filters - continue checking for entry signals and indicators in check_and_place_orders
 
-    def get_cached_rsi(self, symbol_str, timeframe, rates):
-        """
-        Retrieve cached RSI values or calculate and cache them if not already cached.
 
-        Parameters:
-            symbol_str (str): The symbol string.
-            timeframe (int): The timeframe.
-            rates (np.recarray): The rates data.
-
-        Returns:
-            np.ndarray: The RSI values.
-        """
-        cache_key = (symbol_str, timeframe)
-        last_bar_time = rates['time'][-1]
-
-        # Check if the RSI is cached and up to date
-        if cache_key in self.cached_rsi:
-            cached_rsi, cached_time = self.cached_rsi[cache_key]
-            if cached_time == last_bar_time:
-                # Use cached RSI values
-                return cached_rsi
-
-        # Calculate RSI and cache it
-        rsi_values = self.rsi_signal.calculate_rsi(rates)
-        self.cached_rsi[cache_key] = (rsi_values, last_bar_time)
-        return rsi_values
 
     def check_and_place_orders(self, stra_symbol, symbol):
         """
@@ -454,7 +482,7 @@ class Strategy:
             return  # Exit the method early if RSI values are not available
 
         # Check the RSI signal before making a trade
-        if not self.rsi_signal.check_rsi_signal(rsi_values[-1], final_decision): 
+        if self.rsi_signal.check_rsi_signal(rates['RSI'][-1], final_decision): 
             return  # No trade if RSI filter fails
         
 

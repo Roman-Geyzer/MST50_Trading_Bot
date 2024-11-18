@@ -21,7 +21,6 @@ Classes:
 Main Functions:
     initialize_indicator: Initialize the correct indicator instance based on the strategy configuration.
     make_trade_decision: Make a trade decision based on the selected indicator class.
-    get_rsi_indicator: Return the RSI indicator instance for calculation.
 """
 
 import numpy as np
@@ -101,12 +100,6 @@ class Indicators:
         else:
             return None, None
 
-    def get_rsi_indicator(self):
-        """
-        Return the RSI indicator instance for calculation.
-        """
-        return self.indicator_instance if isinstance(self.indicator_instance, RSIIndicator) else None
-
 class Indicator:
     def __init__(self, params):
         """
@@ -149,6 +142,7 @@ class Indicator:
         else:
             return None, None
 
+
 class NoIndicator(Indicator):
     def __init__(self, params):
         """
@@ -169,167 +163,478 @@ class NoIndicator(Indicator):
         """
         return None, None
 
+
 class BBIndicator(Indicator):
     def __init__(self, params):
         """
-        Initialize the Bollinger Bands Indicator with the given parameters, inherited from the Indicator superclass.
-
-        Parameters:
-            params (dict): A dictionary of parameters for the BB indicator (e.g., period, deviation).
+        Initialize the Bollinger Bands Indicator with the given parameters.
         """
         super().__init__(params)
-        self.bb_period = safe_int_extract_from_dict(params, 'a', 20)  # Default period of 20 if not provided
-        self.bb_deviation = safe_float_extract_from_dict(params, 'b', 2.0)  # Default deviation of 2.0 if not provided
+        self.bb_period = safe_int_extract_from_dict(params, 'a', 20)     # Default period of 20
+        self.bb_deviation = safe_float_extract_from_dict(params, 'b', 2.0)  # Default deviation of 2.0
 
-        # Mapping for BB trade decision methods
-        self.decision_methods = {
+        # Construct label based on deviation
+        deviation_int = int(self.bb_deviation * 10)
+        self.bb_label = f'BB{deviation_int}'
+
+        # Store the specific trade decision method
+        self.trade_decision_method = self.get_trade_decision_method()
+
+    def get_trade_decision_method(self):
+        """
+        Return the appropriate trade decision method for this indicator based on the parameters.
+        """
+        indicator_type = self.params.get('indicator_name', 'BB_With')
+        decision_methods = {
             'BB_With': self.calculate_bb_with,
             'BB_Return': self.calculate_bb_return,
             'BB_Over': self.calculate_bb_over,
+        }
+        return decision_methods.get(indicator_type, self.calculate_bb_with)
+
+    def calculate_bb_with(self, rates):
+        """
+        Determine trade decision based on BB_With strategy using precomputed boolean columns.
+        """
+        bool_above_col = f'{self.bb_label}_Bool_Above'
+        bool_below_col = f'{self.bb_label}_Bool_Below'
+
+        # Ensure the required columns are present
+        required_cols = [bool_above_col, bool_below_col]
+        if not all(col in rates.columns for col in required_cols):
+            print_hashtaged_msg(1, f"Missing Bollinger Bands boolean columns in rates DataFrame: {required_cols}")
+            return None, None
+
+        bool_above = rates[bool_above_col].iloc[-1]
+        bool_below = rates[bool_below_col].iloc[-1]
+        current_close = rates['close'].iloc[-1]
+
+        if bool_above:
+            return 'sell', {'entry': current_close, 'sl': current_close + 10, 'tp': current_close - 20}
+        elif bool_below:
+            return 'buy', {'entry': current_close, 'sl': current_close - 10, 'tp': current_close + 20}
+        else:
+            return None, None
+
+    def calculate_bb_return(self, rates):
+        """
+        Determine trade decision based on BB_Return strategy using precomputed boolean columns.
+        """
+        bool_above_col = f'{self.bb_label}_Bool_Above'
+        bool_below_col = f'{self.bb_label}_Bool_Below'
+
+        # Ensure the required columns are present
+        required_cols = [bool_above_col, bool_below_col]
+        if not all(col in rates.columns for col in required_cols):
+            print_hashtaged_msg(1, f"Missing Bollinger Bands boolean columns in rates DataFrame: {required_cols}")
+            return None, None
+
+        bool_above_prev = rates[bool_above_col].iloc[-2]
+        bool_below_prev = rates[bool_below_col].iloc[-2]
+        bool_above_curr = rates[bool_above_col].iloc[-1]
+        bool_below_curr = rates[bool_below_col].iloc[-1]
+        current_close = rates['close'].iloc[-1]
+
+        if bool_below_prev and not bool_below_curr:
+            # Price was below lower band and has returned inside
+            return 'buy', {'entry': current_close, 'sl': current_close - 10, 'tp': current_close + 20}
+        elif bool_above_prev and not bool_above_curr:
+            # Price was above upper band and has returned inside
+            return 'sell', {'entry': current_close, 'sl': current_close + 10, 'tp': current_close - 20}
+        else:
+            return None, None
+
+    def calculate_bb_over(self, rates):
+        """
+        Determine trade decision based on BB_Over strategy using precomputed middle band.
+        """
+        middle_band_col = f'{self.bb_label}_Middle'
+
+        if middle_band_col not in rates.columns:
+            print_hashtaged_msg(1, f"Missing Bollinger Bands middle band column in rates DataFrame: {middle_band_col}")
+            return None, None
+
+        middle_band = rates[middle_band_col].iloc[-1]
+        current_close = rates['close'].iloc[-1]
+
+        if current_close > middle_band:
+            return 'buy', {'entry': current_close, 'sl': current_close - 10, 'tp': current_close + 20}
+        elif current_close < middle_band:
+            return 'sell', {'entry': current_close, 'sl': current_close + 10, 'tp': current_close - 20}
+        else:
+            return None, None
+
+
+class MAIndicator(Indicator):
+    def __init__(self, params):
+        """
+        Initialize the Moving Average Indicator with the given parameters.
+        """
+        super().__init__(params)
+        self.fast_ma_period = safe_int_extract_from_dict(params, 'a', 7)   # Fast MA period
+        self.slow_ma_period = safe_int_extract_from_dict(params, 'b', 21)  # Slow MA period
+        self.long_ma_period = safe_int_extract_from_dict(params, 'c', 50)  # Long MA period
+
+        # Store the specific trade decision method
+        self.trade_decision_method = self.calculate_trade_decision
+
+    def calculate_trade_decision(self, rates):
+        """
+        Determine trade decision based on Moving Average strategy using precomputed columns.
+        """
+        # Access precomputed MA comparison columns
+        fast_ma_comp_col = f'MA_{self.fast_ma_period}_comp'
+        slow_ma_comp_col = f'MA_{self.slow_ma_period}_comp'
+        long_ma_comp_col = f'MA_{self.long_ma_period}_comp'
+
+        # Ensure the required columns are present
+        required_cols = [fast_ma_comp_col, slow_ma_comp_col, long_ma_comp_col]
+        if not all(col in rates.columns for col in required_cols):
+            print_hashtaged_msg(1, f"Missing MA comparison columns in rates DataFrame: {required_cols}")
+            return None, None
+
+        fast_ma_comp = rates[fast_ma_comp_col].iloc[-1]
+        slow_ma_comp = rates[slow_ma_comp_col].iloc[-1]
+        long_ma_comp = rates[long_ma_comp_col].iloc[-1]
+
+        current_close = rates['close'].iloc[-1]
+
+        #TODO: update this method to be for crossover strategy
+        #TODO: consider using the following method for MA trade filtering
+        #TODO: make use of MA_7 , MA_21, and MA_50 - a column with  data on price versus higher ma - MA_7_comp -> can get 1 of 3 string values: 'above' , 'below' , 'equal'  
+        if fast_ma_comp == 'above' and slow_ma_comp == 'above' and long_ma_comp == 'above':
+            # All MAs are below the price, indicating upward trend
+            return 'buy', {'entry': current_close, 'sl': current_close - 10, 'tp': current_close + 20}
+        elif fast_ma_comp == 'below' and slow_ma_comp == 'below' and long_ma_comp == 'below':
+            # All MAs are above the price, indicating downward trend
+            return 'sell', {'entry': current_close, 'sl': current_close + 10, 'tp': current_close - 20}
+        else:
+            return None, None
+
+
+
+class GRIndicator(Indicator):
+    def __init__(self, params):
+        """
+        Initialize the GR Indicator with strategy parameters.
+
+        Parameters:
+            params (dict): Contains specific parameters for GR Ratio calculation.
+        """
+        super().__init__(params)
+        self.ratio_candles_count = safe_int_extract_from_dict(params, 'a', 100)  # Number of candles to calculate ratio
+        self.buy_enter_limit = safe_float_extract_from_dict(params, 'b', 1.35)  # Buy entry limit for GR ratio
+        self.sell_enter_limit = safe_float_extract_from_dict(params, 'c', 1.35)  # Sell entry limit for GR ratio
+        self.buy_exit_limit = safe_float_extract_from_dict(params, 'd', 1.0)  # Buy exit limit for GR ratio
+        self.sell_exit_limit = safe_float_extract_from_dict(params, 'e', 1.0)  # Sell exit limit for GR ratio
+
+        # Store the specific trade decision method
+        self.trade_decision_method = self.claculuate_and_make_make_trade_decision
+
+
+    def calculate_and_make_trade_decision(self, rates):
+        """
+        Make a trade decision based on the precomputed GR ratio.
+
+        Returns:
+            Tuple: ('buy'/'sell'/None, trade_data)
+        """
+        ga_col = f'GA_{self.ratio_candles_count}'
+
+        if ga_col not in rates.columns:
+            print_hashtaged_msg(1, f"Missing GR ratio column in rates DataFrame: {ga_col}")
+            return None, None
+
+        gr_ratio = rates[ga_col].iloc[-1]
+
+        current_close = rates['close'].iloc[-1]
+        current_low = rates['low'].iloc[-1]
+        current_high = rates['high'].iloc[-1]
+
+        # If GR ratio signals a buy
+        if gr_ratio > self.buy_enter_limit:
+            return 'buy', {'entry': current_close, 'sl': current_low - 10, 'tp': current_close + 20}
+        # If GR ratio signals a sell
+        elif gr_ratio < self.sell_enter_limit:
+            return 'sell', {'entry': current_close, 'sl': current_high + 10, 'tp': current_close - 20}
+        else:
+            return None, None
+
+
+
+class RSIIndicator(Indicator):
+    def __init__(self, params):
+        """
+        Initialize the RSI Indicator with strategy parameters.
+
+        Parameters:
+            params (dict): Contains specific parameters for RSI calculation.
+        """
+        super().__init__(params)
+        self.rsi_period = safe_int_extract_from_dict(params, 'a', 14)  # RSI period
+        self.rsi_over_extended = safe_float_extract_from_dict(params, 'b', 20.0)
+        self.rsi_div_lookback_period = safe_int_extract_from_dict(params, 'c', 50)
+
+        # Mapping for RSI trade decision methods
+        self.decision_methods = {
+            'RSI_Div': self.calculate_rsi_div,
+            'RSI_Div_Hidden': self.calculate_rsi_div_hidden,
+            'RSI_Over': self.calculate_rsi_over,
+            'RSI_With': self.calculate_rsi_with
         }
 
         # Store the specific trade decision method based on the parameters
         self.trade_decision_method = self.get_trade_decision_method()
 
-    def calculate_indicator_rates(self, rates):
-        """
-        Calculate the Bollinger Bands (upper, middle, lower) using historical price data (OHLC).
-        """
-        close_prices = rates['close']
-
-        if len(close_prices) < self.bb_period:
-            return None, None, None
-
-        # Use talib to calculate Bollinger Bands
-        upper_band, middle_band, lower_band = talib.BBANDS(
-            close_prices,
-            timeperiod=self.bb_period,
-            nbdevup=self.bb_deviation,
-            nbdevdn=self.bb_deviation,
-            matype=0  # Simple Moving Average
-        )
-
-        return upper_band, middle_band, lower_band
-
     def get_trade_decision_method(self):
         """
-        Return the appropriate trade decision method for this indicator based on the parameters.
+        Return the appropriate trade decision method for this indicator.
 
         Returns:
             function: The trade decision method.
         """
-        indicator_type = self.params.get('type', 'BB_With')
-        return self.decision_methods.get(indicator_type, self.calculate_bb_with)
+        indicator_type = self.params.get('type', 'RSI_Div')
+        return self.decision_methods.get(indicator_type, self.calculate_rsi_div)
 
-    def calculate_bb_with(self, rates):
+    def calculate_rsi_div(self, rates):
         """
-        Determine trade decision based on BB_With strategy.
+        Determine trade decision based on RSI divergence strategy.
 
         Returns:
             Tuple: (decision, trade_data)
         """
-        upper_band, middle_band, lower_band = self.calculate_indicator_rates(rates)
-        if upper_band is None:
+        if 'RSI' not in rates.columns:
+            print_hashtaged_msg(1, "Missing RSI column in rates DataFrame")
             return None, None
 
-        current_close = rates['close'][-1]
+        self.rsi_values = rates['RSI'].values
+        if len(self.rsi_values) < self.rsi_period:
+            return None, None
 
-        if current_close > upper_band[-1]:
-            return 'buy', {'entry': current_close, 'sl': lower_band[-1], 'tp': upper_band[-1] + 10}
-        elif current_close < lower_band[-1]:
-            return 'sell', {'entry': current_close, 'sl': upper_band[-1], 'tp': lower_band[-1] - 10}
+        if self.rsi_divergence_check_is_buy(rates):
+            return 'buy', None
+        elif self.rsi_divergence_check_is_sell(rates):
+            return 'sell', None
         return None, None
 
-    def calculate_bb_return(self, rates):
+    def calculate_rsi_div_hidden(self, rates):
         """
-        Determine trade decision based on BB_Return strategy.
+        Determine trade decision based on hidden RSI divergence strategy.
 
         Returns:
             Tuple: (decision, trade_data)
         """
-        upper_band, middle_band, lower_band = self.calculate_indicator_rates(rates)
-        if upper_band is None:
+        if 'RSI' not in rates.columns:
+            print_hashtaged_msg(1, "Missing RSI column in rates DataFrame")
             return None, None
 
-        close = rates['close']
-        if close[-1] > lower_band[-1] and close[-2] < lower_band[-2]:
-            return 'buy', {'entry': close[-1], 'sl': lower_band[-1], 'tp': upper_band[-1]}
-        elif close[-1] < upper_band[-1] and close[-2] > upper_band[-2]:
-            return 'sell', {'entry': close[-1], 'sl': upper_band[-1], 'tp': lower_band[-1]}
+        self.rsi_values = rates['RSI'].values
+        if len(self.rsi_values) < self.rsi_period:
+            return None, None
+
+        if self.rsi_hidden_divergence_check_is_buy(rates):
+            return 'buy', None
+        elif self.rsi_hidden_divergence_check_is_sell(rates):
+            return 'sell', None
         return None, None
 
-    def calculate_bb_over(self, rates):
+    def calculate_rsi_over(self, rates):
         """
-        Determine trade decision based on BB_Over strategy.
+        Determine trade decision based on RSI overbought/oversold levels.
 
         Returns:
             Tuple: (decision, trade_data)
         """
-        upper_band, middle_band, lower_band = self.calculate_indicator_rates(rates)
-        if upper_band is None:
+        if 'RSI' not in rates.columns:
+            print_hashtaged_msg(1, "Missing RSI column in rates DataFrame")
             return None, None
 
-        current_close = rates['close'][-1]
+        self.rsi_values = rates['RSI'].values
+        if len(self.rsi_values) < self.rsi_period:
+            return None, None
 
-        if current_close > middle_band[-1]:
-            return 'buy', {'entry': current_close, 'sl': lower_band[-1], 'tp': upper_band[-1]}
-        elif current_close < middle_band[-1]:
-            return 'sell', {'entry': current_close, 'sl': upper_band[-1], 'tp': lower_band[-1]}
+        if self.rsi_oversold_check_is_buy():
+            return 'buy', None
+        elif self.rsi_overbought_check_is_sell():
+            return 'sell', None
         return None, None
 
-class MAIndicator(Indicator):
-    def __init__(self, params):
+    def calculate_rsi_with(self, rates):
         """
-        Initialize the Moving Average Indicator with the given parameters, inherited from the Indicator superclass.
+        Determine trade decision based on RSI trending with overbought/oversold levels.
+
+        Returns:
+            Tuple: (decision, trade_data)
+        """
+        if 'RSI' not in rates.columns:
+            print_hashtaged_msg(1, "Missing RSI column in rates DataFrame")
+            return None, None
+
+        self.rsi_values = rates['RSI'].values
+        if len(self.rsi_values) < self.rsi_period:
+            return None, None
+
+        if self.rsi_with_trend_check_is_buy():
+            return 'buy', None
+        elif self.rsi_with_trend_check_is_sell():
+            return 'sell', None
+        return None, None
+
+    def rsi_divergence_check_is_buy(self, rates):
+        """
+        Check for a bullish RSI divergence.
 
         Parameters:
-            params (dict): A dictionary of parameters for the MA indicator.
-        """
-        super().__init__(params)
-        self.fast_ma_period = safe_int_extract_from_dict(params, 'a', 7)  # Fast MA period
-        self.slow_ma_period = safe_int_extract_from_dict(params, 'b', 21)  # Slow MA period
-        self.long_ma_period = safe_int_extract_from_dict(params, 'c', 50)  # Long MA period
-        self.use_ema = safe_bool_extract_from_dict(params, 'd', False)  # Whether to use EMA instead of SMA
-
-        # Store the specific trade decision method
-        self.trade_decision_method = self.calculate_trade_decision
-
-    def calculate_indicator_rates(self, rates):
-        """
-        Calculate Moving Averages (fast, slow, long) based on the historical price data.
-        """
-        close_prices = rates['close']
-
-        # Calculate Fast, Slow, Long MA using talib
-        if self.use_ema:
-            self.fast_ma = talib.EMA(close_prices, timeperiod=self.fast_ma_period)
-            self.slow_ma = talib.EMA(close_prices, timeperiod=self.slow_ma_period)
-            self.long_ma = talib.EMA(close_prices, timeperiod=self.long_ma_period)
-        else:
-            self.fast_ma = talib.SMA(close_prices, timeperiod=self.fast_ma_period)
-            self.slow_ma = talib.SMA(close_prices, timeperiod=self.slow_ma_period)
-            self.long_ma = talib.SMA(close_prices, timeperiod=self.long_ma_period)
-
-    def calculate_trade_decision(self, rates):
-        """
-        Determine trade decision based on Moving Average strategy.
+            rates (DataFrame): Historical price data (OHLC).
 
         Returns:
-            Tuple: (decision, trade_data)
+            bool: True if a bullish divergence is detected, False otherwise.
         """
-        self.calculate_indicator_rates(rates)
+        idx = -3  # Current index
+        if not self.is_local_rsi_min(idx):
+            return False
 
-        if np.isnan(self.fast_ma[-1]) or np.isnan(self.slow_ma[-1]) or np.isnan(self.long_ma[-1]):
-            return None, None
+        for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
+            if abs(i) >= len(self.rsi_values):
+                break
+            if self.rsi_values[i] < 50 - self.rsi_over_extended:
+                if self.rsi_values[i] < self.rsi_values[idx]:
+                    if self.is_local_rsi_min(i):
+                        if rates['close'].iloc[i] > rates['close'].iloc[idx]:
+                            return True
+        return False
 
-        current_close = rates['close'][-1]
+    def rsi_divergence_check_is_sell(self, rates):
+        """
+        Check for a bearish RSI divergence.
 
-        # Example trade decision logic based on MA alignment
-        if self.fast_ma[-1] > self.slow_ma[-1] > self.long_ma[-1]:
-            return 'buy', {'entry': current_close, 'sl': self.slow_ma[-1], 'tp': current_close + 10}
-        elif self.fast_ma[-1] < self.slow_ma[-1] < self.long_ma[-1]:
-            return 'sell', {'entry': current_close, 'sl': self.slow_ma[-1], 'tp': current_close - 10}
-        return None, None
+        Parameters:
+            rates (DataFrame): Historical price data (OHLC).
+
+        Returns:
+            bool: True if a bearish divergence is detected, False otherwise.
+        """
+        idx = -3  # Current index
+        if not self.is_local_rsi_max(idx):
+            return False
+
+        for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
+            if abs(i) >= len(self.rsi_values):
+                break
+            if self.rsi_values[i] > 50 + self.rsi_over_extended:
+                if self.rsi_values[i] > self.rsi_values[idx]:
+                    if self.is_local_rsi_max(i):
+                        if rates['close'].iloc[i] < rates['close'].iloc[idx]:
+                            return True
+        return False
+
+    def rsi_hidden_divergence_check_is_buy(self, rates):
+        """
+        Check for a hidden bullish RSI divergence.
+
+        Parameters:
+            rates (DataFrame): Historical price data (OHLC).
+
+        Returns:
+            bool: True if a hidden bullish divergence is detected, False otherwise.
+        """
+        idx = -3
+        if not self.is_local_rsi_min(idx):
+            return False
+        if self.rsi_values[idx] < 50 - self.rsi_over_extended:
+            for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
+                if abs(i) >= len(self.rsi_values):
+                    break
+                if self.rsi_values[i] > self.rsi_values[idx]:
+                    if self.is_local_rsi_min(i):
+                        if rates['close'].iloc[i] < rates['close'].iloc[idx]:
+                            return True
+        return False
+
+    def rsi_hidden_divergence_check_is_sell(self, rates):
+        """
+        Check for a hidden bearish RSI divergence.
+
+        Parameters:
+            rates (DataFrame): Historical price data (OHLC).
+
+        Returns:
+            bool: True if a hidden bearish divergence is detected, False otherwise.
+        """
+        idx = -3
+        if not self.is_local_rsi_max(idx):
+            return False
+        if self.rsi_values[idx] > 50 + self.rsi_over_extended:
+            for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
+                if abs(i) >= len(self.rsi_values):
+                    break
+                if self.rsi_values[i] < self.rsi_values[idx]:
+                    if self.is_local_rsi_max(i):
+                        if rates['close'].iloc[i] > rates['close'].iloc[idx]:
+                            return True
+        return False
+
+    def rsi_overbought_check_is_sell(self):
+        """
+        Check if the RSI indicates overbought conditions (sell signal).
+        """
+        idx = -3
+        return self.rsi_values[idx] > 50 + self.rsi_over_extended and self.is_local_rsi_max(idx)
+
+    def rsi_oversold_check_is_buy(self):
+        """
+        Check if the RSI indicates oversold conditions (buy signal).
+        """
+        idx = -3
+        return self.rsi_values[idx] < 50 - self.rsi_over_extended and self.is_local_rsi_min(idx)
+
+    def rsi_with_trend_check_is_buy(self):
+        """
+        Check if RSI indicates a buy signal when trending with oversold conditions.
+        """
+        return self.rsi_values[-1] > 50 + self.rsi_over_extended
+
+    def rsi_with_trend_check_is_sell(self):
+        """
+        Check if RSI indicates a sell signal when trending with overbought conditions.
+        """
+        return self.rsi_values[-1] < 50 - self.rsi_over_extended
+
+    def is_local_rsi_max(self, idx):
+        """
+        Check if the RSI value at a given index is a local maximum.
+
+        Parameters:
+            idx (int): Index to check for local max.
+
+        Returns:
+            bool: True if the RSI is a local max, False otherwise.
+        """
+        try:
+            return (
+                self.rsi_values[idx] > self.rsi_values[idx + 1] and self.rsi_values[idx] > self.rsi_values[idx + 2] and
+                self.rsi_values[idx] > self.rsi_values[idx - 1] and self.rsi_values[idx] > self.rsi_values[idx - 2]
+            )
+        except IndexError:
+            return False
+
+    def is_local_rsi_min(self, idx):
+        """
+        Check if the RSI value at a given index is a local minimum.
+
+        Parameters:
+            idx (int): Index to check for local min.
+
+        Returns:
+            bool: True if the RSI is a local min, False otherwise.
+        """
+        try:
+            return (
+                self.rsi_values[idx] < self.rsi_values[idx + 1] and self.rsi_values[idx] < self.rsi_values[idx + 2] and
+                self.rsi_values[idx] < self.rsi_values[idx - 1] and self.rsi_values[idx] < self.rsi_values[idx - 2]
+            )
+        except IndexError:
+            return False
 
 class DoubleIndicator(Indicator):
     def __init__(self, params):
@@ -493,366 +798,7 @@ class DoubleIndicator(Indicator):
         self.first_touch_value = 0.0
         self.second_touch_value = 0.0
 
-class GRIndicator(Indicator):
-    def __init__(self, params):
-        """
-        Initialize the GR Indicator with strategy parameters.
 
-        Parameters:
-            params (dict): Contains specific parameters for GR Ratio calculation.
-        """
-        super().__init__(params)
-        self.ratio_candles_count = safe_int_extract_from_dict(params, 'a', 100)  # Number of candles to calculate ratio
-        self.buy_enter_limit = safe_float_extract_from_dict(params, 'b', 1.35)  # Buy entry limit for GR ratio
-        self.sell_enter_limit = safe_float_extract_from_dict(params, 'c', 1.35)  # Sell entry limit for GR ratio
-        self.buy_exit_limit = safe_float_extract_from_dict(params, 'd', 1.0)  # Buy exit limit for GR ratio
-        self.sell_exit_limit = safe_float_extract_from_dict(params, 'e', 1.0)  # Sell exit limit for GR ratio
-
-        # Store the specific trade decision method
-        self.trade_decision_method = self.claculuate_and_make_make_trade_decision
-
-    def calculate_gr_ratio(self, rates):
-        """
-        Calculate the Green/Red (GR) ratio over the given period.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            float: The Green/Red ratio.
-        """
-        if len(rates) < self.ratio_candles_count:
-            return None
-
-        # Get the last N candles
-        recent_rates = rates[-self.ratio_candles_count:]
-
-        # Calculate green and red candles
-        up_moves = recent_rates['close'] > recent_rates['open']
-        down_moves = recent_rates['close'] < recent_rates['open']
-
-        green_count = np.sum(up_moves)
-        red_count = np.sum(down_moves)
-
-        if red_count == 0:
-            return float('inf')  # Infinite ratio (only green candles)
-
-        gr_ratio = green_count / red_count
-
-        return gr_ratio
-
-    def gr_check_is_buy(self, gr_ratio):
-        """
-        Check if the GR ratio signals a buy entry.
-
-        Parameters:
-            gr_ratio (float): The current GR ratio.
-
-        Returns:
-            bool: True if it's a buy signal, False otherwise.
-        """
-        return gr_ratio > self.buy_enter_limit
-
-    def gr_check_is_sell(self, gr_ratio):
-        """
-        Check if the GR ratio signals a sell entry.
-
-        Parameters:
-            gr_ratio (float): The current GR ratio.
-
-        Returns:
-            bool: True if it's a sell signal, False otherwise.
-        """
-        return (1 / gr_ratio) > self.sell_enter_limit
-
-    def claculuate_and_make_make_trade_decision(self, rates):
-        """
-        Make a trade decision based on the GR ratio.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            Tuple: ('buy'/'sell'/None, trade_data) - Where trade_data contains entry, SL, TP.
-        """
-        gr_ratio = self.calculate_gr_ratio(rates)
-        if gr_ratio is None:
-            return None, None
-
-        current_close = rates['close'][-1]
-        current_low = rates['low'][-1]
-        current_high = rates['high'][-1]
-
-        # If GR ratio signals a buy
-        if self.gr_check_is_buy(gr_ratio):
-            return 'buy', {'entry': current_close, 'sl': current_low - 10, 'tp': current_close + 20}
-
-        # If GR ratio signals a sell
-        if self.gr_check_is_sell(gr_ratio):
-            return 'sell', {'entry': current_close, 'sl': current_high + 10, 'tp': current_close - 20}
-
-        return None, None
-
-class RSIIndicator(Indicator):
-    def __init__(self, params):
-        """
-        Initialize the RSI Indicator with strategy parameters.
-
-        Parameters:
-            params (dict): Contains specific parameters for RSI calculation.
-        """
-        super().__init__(params)
-        self.rsi_period = safe_int_extract_from_dict(params, 'a', 14)  # RSI period
-        self.rsi_over_extended = safe_float_extract_from_dict(params, 'b', 20.0)
-        self.rsi_div_lookback_period = safe_int_extract_from_dict(params, 'c', 50)
-
-        # Mapping for RSI trade decision methods
-        self.decision_methods = {
-            'RSI_Div': self.calculate_rsi_div,
-            'RSI_Div_Hidden': self.calculate_rsi_div_hidden,
-            'RSI_Over': self.calculate_rsi_over,
-            'RSI_With': self.calculate_rsi_with
-        }
-
-        # Store the specific trade decision method based on the parameters
-        self.trade_decision_method = self.get_trade_decision_method()
-
-    def calculate_indicator_rates(self, rates):
-        """
-        Calculate the RSI based on the given OHLC data using talib.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            np.ndarray: Calculated RSI values.
-        """
-        close_prices = rates['close']
-        if len(close_prices) < self.rsi_period:
-            return None
-
-        rsi = talib.RSI(close_prices, timeperiod=self.rsi_period)
-        return rsi
-
-    def get_trade_decision_method(self):
-        """
-        Return the appropriate trade decision method for this indicator.
-
-        Returns:
-            function: The trade decision method.
-        """
-        indicator_type = self.params.get('type', 'RSI_Div')
-        return self.decision_methods.get(indicator_type, self.calculate_rsi_div)
-
-    def calculate_rsi_div(self, rates):
-        """
-        Determine trade decision based on RSI divergence strategy.
-
-        Returns:
-            Tuple: (decision, trade_data)
-        """
-        self.rsi_values = self.calculate_indicator_rates(rates)
-        if self.rsi_values is None:
-            return None, None
-
-        if self.rsi_divergence_check_is_buy(rates):
-            return 'buy', {'entry': rates['close'][-1], 'sl': rates['low'][-1] - 10, 'tp': rates['close'][-1] + 20}
-        elif self.rsi_divergence_check_is_sell(rates):
-            return 'sell', {'entry': rates['close'][-1], 'sl': rates['high'][-1] + 10, 'tp': rates['close'][-1] - 20}
-        return None, None
-
-    def calculate_rsi_div_hidden(self, rates):
-        """
-        Determine trade decision based on hidden RSI divergence strategy.
-
-        Returns:
-            Tuple: (decision, trade_data)
-        """
-        self.rsi_values = self.calculate_indicator_rates(rates)
-        if self.rsi_values is None:
-            return None, None
-
-        if self.rsi_hidden_divergence_check_is_buy(rates):
-            return 'buy', {'entry': rates['close'][-1], 'sl': rates['low'][-1] - 10, 'tp': rates['close'][-1] + 20}
-        elif self.rsi_hidden_divergence_check_is_sell(rates):
-            return 'sell', {'entry': rates['close'][-1], 'sl': rates['high'][-1] + 10, 'tp': rates['close'][-1] - 20}
-        return None, None
-
-    def calculate_rsi_over(self, rates):
-        """
-        Determine trade decision based on RSI overbought/oversold levels.
-
-        Returns:
-            Tuple: (decision, trade_data)
-        """
-        self.rsi_values = self.calculate_indicator_rates(rates)
-        if self.rsi_values is None:
-            return None, None
-
-        if self.rsi_oversold_check_is_buy():
-            return 'buy', {'entry': rates['close'][-1], 'sl': rates['low'][-1] - 10, 'tp': rates['close'][-1] + 20}
-        elif self.rsi_overbought_check_is_sell():
-            return 'sell', {'entry': rates['close'][-1], 'sl': rates['high'][-1] + 10, 'tp': rates['close'][-1] - 20}
-        return None, None
-
-    def calculate_rsi_with(self, rates):
-        """
-        Determine trade decision based on RSI trending with overbought/oversold levels.
-
-        Returns:
-            Tuple: (decision, trade_data)
-        """
-        self.rsi_values = self.calculate_indicator_rates(rates)
-        if self.rsi_values is None:
-            return None, None
-
-        if self.rsi_with_trend_check_is_buy():
-            return 'buy', {'entry': rates['close'][-1], 'sl': rates['low'][-1] - 10, 'tp': rates['close'][-1] + 20}
-        elif self.rsi_with_trend_check_is_sell():
-            return 'sell', {'entry': rates['close'][-1], 'sl': rates['high'][-1] + 10, 'tp': rates['close'][-1] - 20}
-        return None, None
-
-    def rsi_divergence_check_is_buy(self, rates):
-        """
-        Check for a bullish RSI divergence.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            bool: True if a bullish divergence is detected, False otherwise.
-        """
-        idx = -3  # Current index
-        if not self.is_local_rsi_min(idx):
-            return False
-
-        for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
-            if self.rsi_values[i] < 50 - self.rsi_over_extended:
-                if self.rsi_values[i] < self.rsi_values[idx]:
-                    if self.is_local_rsi_min(i):
-                        if rates['close'][i] > rates['close'][idx]:
-                            return True
-        return False
-
-    def rsi_divergence_check_is_sell(self, rates):
-        """
-        Check for a bearish RSI divergence.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            bool: True if a bearish divergence is detected, False otherwise.
-        """
-        idx = -3  # Current index
-        if not self.is_local_rsi_max(idx):
-            return False
-
-        for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
-            if self.rsi_values[i] > 50 + self.rsi_over_extended:
-                if self.rsi_values[i] > self.rsi_values[idx]:
-                    if self.is_local_rsi_max(i):
-                        if rates['close'][i] < rates['close'][idx]:
-                            return True
-        return False
-
-    def rsi_hidden_divergence_check_is_buy(self, rates):
-        """
-        Check for a hidden bullish RSI divergence.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            bool: True if a hidden bullish divergence is detected, False otherwise.
-        """
-        idx = -3
-        if not self.is_local_rsi_min(idx):
-            return False
-        if self.rsi_values[idx] < 50 - self.rsi_over_extended:
-            for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
-                if self.rsi_values[i] > self.rsi_values[idx]:
-                    if self.is_local_rsi_min(i):
-                        if rates['close'][i] < rates['close'][idx]:
-                            return True
-        return False
-
-    def rsi_hidden_divergence_check_is_sell(self, rates):
-        """
-        Check for a hidden bearish RSI divergence.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            bool: True if a hidden bearish divergence is detected, False otherwise.
-        """
-        idx = -3
-        if not self.is_local_rsi_max(idx):
-            return False
-        if self.rsi_values[idx] > 50 + self.rsi_over_extended:
-            for i in range(idx - 3, idx - self.rsi_div_lookback_period, -1):
-                if self.rsi_values[i] < self.rsi_values[idx]:
-                    if self.is_local_rsi_max(i):
-                        if rates['close'][i] > rates['close'][idx]:
-                            return True
-        return False
-
-    def rsi_overbought_check_is_sell(self):
-        """
-        Check if the RSI indicates overbought conditions (sell signal).
-        """
-        idx = -3
-        return self.rsi_values[idx] > 50 + self.rsi_over_extended and self.is_local_rsi_max(idx)
-
-    def rsi_oversold_check_is_buy(self):
-        """
-        Check if the RSI indicates oversold conditions (buy signal).
-        """
-        idx = -3
-        return self.rsi_values[idx] < 50 - self.rsi_over_extended and self.is_local_rsi_min(idx)
-
-    def rsi_with_trend_check_is_buy(self):
-        """
-        Check if RSI indicates a buy signal when trending with oversold conditions.
-        """
-        return self.rsi_values[-1] > 50 + self.rsi_over_extended
-
-    def rsi_with_trend_check_is_sell(self):
-        """
-        Check if RSI indicates a sell signal when trending with overbought conditions.
-        """
-        return self.rsi_values[-1] < 50 - self.rsi_over_extended
-
-    def is_local_rsi_max(self, idx):
-        """
-        Check if the RSI value at a given index is a local maximum.
-
-        Parameters:
-            idx (int): Index to check for local max.
-
-        Returns:
-            bool: True if the RSI is a local max, False otherwise.
-        """
-        return (
-            self.rsi_values[idx] > self.rsi_values[idx + 1] and self.rsi_values[idx] > self.rsi_values[idx + 2] and
-            self.rsi_values[idx] > self.rsi_values[idx - 1] and self.rsi_values[idx] > self.rsi_values[idx - 2]
-        )
-
-    def is_local_rsi_min(self, idx):
-        """
-        Check if the RSI value at a given index is a local minimum.
-
-        Parameters:
-            idx (int): Index to check for local min.
-
-        Returns:
-            bool: True if the RSI is a local min, False otherwise.
-        """
-        return (
-            self.rsi_values[idx] < self.rsi_values[idx + 1] and self.rsi_values[idx] < self.rsi_values[idx + 2] and
-            self.rsi_values[idx] < self.rsi_values[idx - 1] and self.rsi_values[idx] < self.rsi_values[idx - 2]
-        )
 
 class KAMAIndicator(Indicator):
     def __init__(self, params):
@@ -1040,7 +986,7 @@ class RangeIndicator(Indicator):
         self.calculate_sr_levels(rates)
         current_open = rates['open'][-1]
         current_close = rates['close'][-1]
-        atr = rates['atr'][-1]
+        atr = rates['ATR'][-1]
 
         distance_from_upper = self.upper_sr - current_open
         distance_from_lower = current_open - self.lower_sr
@@ -1049,7 +995,7 @@ class RangeIndicator(Indicator):
         if distance_from_lower < (self.max_distance_from_sr_atr) * atr:
             # Buy signal
             return 'buy', {'entry': current_close, 'sl': self.lower_sr - 10, 'tp': self.upper_sr}
-        elif distance_from_upper < (self.max_distance_from_sr_perc / 100) * price_range:
+        elif distance_from_upper < (self.max_distance_from_sr_atr / 100) * price_range:
             # Sell signal
             return 'sell', {'entry': current_close, 'sl': self.upper_sr + 10, 'tp': self.lower_sr}
         return None, None

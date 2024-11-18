@@ -162,6 +162,7 @@ class MT5Backtest:
 		timeframes_set = set()
 		backtest_start_dates = []
 		backtest_time_steps = []
+		required_columns_set = set()
 
 		for strategy in self.strategies.values():
 			symbols_set.update(strategy.symbols)
@@ -179,8 +180,12 @@ class MT5Backtest:
 			backtest_start_dates.append(strategy.backtest_start_date)
 			backtest_time_steps.append(strategy.backtest_tf)
 
+			# Collect required columns from the strategy
+			required_columns_set.update(strategy.required_columns)
+
 		self.symbols = list(symbols_set)
 		self.timeframes = list(timeframes_set)
+		self.required_columns = required_columns_set  # Store the required columns
 
 		# Use the earliest start date among strategies
 		self.start_time = min(backtest_start_dates)
@@ -217,7 +222,8 @@ class MT5Backtest:
 			print("No symbols or timeframes specified for data loading.")
 			return
 
-		required_columns = {'time', 'open', 'high', 'low', 'close', 'spread'}
+		# Convert required columns to a set of strings
+		required_columns = self.required_columns
 
 		for filename in os.listdir(self.data_dir):
 			filepath = os.path.join(self.data_dir, filename)
@@ -231,9 +237,18 @@ class MT5Backtest:
 			if symbol not in self.symbols or tf_name not in self.timeframes:
 				continue  # Skip unnecessary data
 
-			df = pd.read_csv(filepath)
+			# Read only required columns and set data types to float32 for numerical columns
+			try:
+				df = pd.read_csv(
+					filepath,
+					usecols=lambda col: col in required_columns,
+					dtype={col: 'float32' for col in required_columns if col != 'time'}
+				)
+			except ValueError as e:
+				print(f"Error reading {filename}: {e}. Skipping.")
+				continue
 
-			# Check if 'time' column exists
+			# Ensure 'time' column is present and convert to datetime
 			if 'time' not in df.columns:
 				print(f"Error: 'time' column missing in {filename}. Skipping.")
 				continue
@@ -244,12 +259,6 @@ class MT5Backtest:
 				print(f"Error parsing 'time' column in {filename}: {e}. Skipping.")
 				continue
 
-			# Check for required columns
-			if not required_columns.issubset(df.columns):
-				missing = required_columns - set(df.columns)
-				print(f"Error: Missing columns {missing} in {filename}. Skipping.")
-				continue
-
 			# Remove rows with any NaT in 'time'
 			if df['time'].isnull().any():
 				print(f"Warning: Some 'time' entries could not be parsed in {filename}. They will be dropped.")
@@ -258,8 +267,7 @@ class MT5Backtest:
 			# Sort by 'time' ascending
 			df.sort_values('time', inplace=True)
 
-			# TODO: this needs update - need to add data "before start time" - so it will be enough for the copy_rates_from_pos
-			# Filter data to include only rows where 'time' >= self.start_time
+			# Filter data to include only rows where 'time' >= self.data_start_time
 			if self.start_time:
 				initial_row_count = len(df)
 				df = df[df['time'] >= self.data_start_time]
@@ -277,7 +285,6 @@ class MT5Backtest:
 			if symbol not in self.symbols_data:
 				self.symbols_data[symbol] = {}
 
-			# Assign the DataFrame to the specific timeframe
 			self.symbols_data[symbol][tf_name] = df
 
 			print(f"    Loaded data for {symbol} on timeframe {tf_name} with {len(df)} bars.")
@@ -341,8 +348,6 @@ class MT5Backtest:
 		tf_name = self.get_timeframe_name(timeframe)
 		current_index = self.current_tick_index[symbol][tf_name]
 		# Get data up to current_index
-		#TODO: validate that I'm looking at "the last completed bar" - as in real live trading
-		#TODO: validate "this works" - updated and did not check
 		start = current_index - count
 
 		# main logic

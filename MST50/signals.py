@@ -30,29 +30,7 @@ class RSISignal:
         self.rsi_period = int(rsi_period)
         self.max_deviation = int(max_deviation)
         self.min_deviation = int(min_deviation)
-        self.rsi = None  # Placeholder for RSI values
 
-    def calculate_rsi(self, rates):
-        """
-        Calculate the RSI using the ta library for better performance.
-
-        Parameters:
-            rates (np.recarray): Historical price data (OHLC).
-
-        Returns:
-            np.ndarray: Calculated RSI values.
-        """
-        close_prices = rates['close']
-        if len(close_prices) < self.rsi_period + 1:
-            return np.array([])  # Return an empty array if not enough data
-
-        # Convert np.recarray to pandas Series for ta compatibility
-        close_series = pd.Series(close_prices)
-
-        # Calculate RSI using ta library
-        self.rsi = ta.momentum.RSIIndicator(close=close_series, window=self.rsi_period, fillna=False).rsi().to_numpy()
-
-        return self.rsi
 
     def check_rsi_signal(self, last_rsi_value, trade_direction):
         """
@@ -74,6 +52,8 @@ class RSISignal:
             # Overbought or oversold
             return False
         return True  # Within acceptable range
+    
+
 
 
 class ERSignal:

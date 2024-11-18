@@ -59,6 +59,12 @@ def main():
         main_backtest(strategies)
 
     # Live trading mode (no need for else since main backtes has quit the program)
+
+    # Initialize required indicators based on strategies
+
+    from .mt5_client import initialize_required_indicators
+    initialize_required_indicators(strategies)
+    
     symbols = Symbol.initialize_symbols(strategies)
     account_info_dict = account_info()
     print("Account info:", account_info_dict)
