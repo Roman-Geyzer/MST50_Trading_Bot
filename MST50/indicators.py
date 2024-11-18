@@ -79,9 +79,9 @@ class Indicators:
         """
         if self.indicator_name in self.indicator_mapping:
             indicator_class = self.indicator_mapping[self.indicator_name]
-            return indicator_class(self.params)
+            return indicator_class(self.indicator_name, self.params)
         else:
-            return NoIndicator(self.params)  # Fallback to no indicator
+            return NoIndicator(self.indicator_name, self.params)  # Fallback to no indicator
 
     def make_trade_decision(self, rates):
         """
@@ -101,15 +101,17 @@ class Indicators:
             return None, None
 
 class Indicator:
-    def __init__(self, params):
+    def __init__(self, name, params):
         """
         Initialize the base Indicator class with common parameters.
 
         Parameters:
             params (dict): A dictionary of indicator parameters (common across all indicators).
         """
+        self.name = name
         self.params = params
         self.trade_decision_method = None  # To be set by subclasses
+        self.exit_decision_method = None  # To be set by subclasses
 
     def calculate_indicator_rates(self, rates):
         """
@@ -144,14 +146,14 @@ class Indicator:
 
 
 class NoIndicator(Indicator):
-    def __init__(self, params):
+    def __init__(self,name, params):
         """
         Initialize the No Indicator class with the given parameters, inherited from the Indicator superclass.
 
         Parameters:
             params (dict): A dictionary of parameters for the No Indicator.
         """
-        super().__init__(params)
+        super().__init__(name, params)
         self.trade_decision_method = self.claculuate_and_make_make_trade_decision
 
     def claculuate_and_make_make_trade_decision(self, rates):
@@ -902,14 +904,14 @@ class KAMAIndicator(Indicator):
 
 
 class RangeIndicator(Indicator):
-    def __init__(self, params):
+    def __init__(self,name, params):
         """
         Initialize the Range Indicator with strategy parameters.
 
         Parameters:
             params (dict): Contains specific parameters for SR, Breakout, and Fakeout calculations.
         """
-        super().__init__(params)
+        super().__init__(name,params)
         self.period_for_sr = safe_int_extract_from_dict(params, 'a', 100)
         self.touches_for_sr = safe_int_extract_from_dict(params, 'b', 3)
         self.slack_for_sr_atr_div = safe_float_extract_from_dict(params, 'c', 10.0)
@@ -931,24 +933,39 @@ class RangeIndicator(Indicator):
         # Determine the strategy type
         self.strategy_type = self.params.get('type', 'SR')
 
-        # Mapping for trade decision methods
-        self.decision_methods = {
-            'SR': self.sr_trade_decision,
-            'Breakout': self.breakout_trade_decision,
-            'Fakeout': self.fakeout_trade_decision
-        }
+
 
         # Store the specific trade decision method based on the parameters
         self.trade_decision_method = self.get_trade_decision_method()
+        self.exit_decision_method = self.get_exit_decision_method()
 
     def get_trade_decision_method(self):
         """
         Return the appropriate trade decision method for this indicator based on the parameters.
-
         Returns:
             function: The trade decision method.
         """
-        return self.decision_methods.get(self.strategy_type, self.sr_trade_decision)
+        # Mapping for trade decision methods
+        decision_methods = {
+            'SR': self.sr_trade_decision,
+            'Breakout': self.breakout_trade_decision,
+            'Fakeout': self.fakeout_trade_decision
+        }
+        return decision_methods.get(self.name)
+    
+    def get_exit_decision_method(self):
+        """
+        Return the appropriate exit decision method for this indicator based on the parameters.
+        Returns:
+            function: The exit decision method.
+        """
+        # Mapping for exit decision methods
+        exit_methods = {
+            'SR': self.sr_exit_decision,
+            'Breakout': self.breakout_exit_decision,
+            'Fakeout': self.fakeout_exit_decision
+        }
+        return exit_methods.get(self.name)
 
     def calculate_sr_levels(self, rates):
         """
@@ -1000,6 +1017,20 @@ class RangeIndicator(Indicator):
             return 'sell', {'entry': current_close, 'sl': self.upper_sr + 10, 'tp': self.lower_sr}
         return None, None
 
+    def sr_exit_decision(self, rates, direction):
+        """
+        Return an exit decision based on SR strategy.
+        returns:
+            Bool: True if the trade should be closed, False otherwise.
+        """
+        sr_trade = self.sr_trade_decision(rates)
+        if sr_trade is 'buy' and direction is 'sell':
+            return True # close the trade
+        elif sr_trade is 'sell' and direction is 'buy':
+            return True # close the trade
+        return False # do not close the trade
+
+
     def breakout_trade_decision(self, rates):
         """
         Make a trade decision based on Breakout strategy.
@@ -1018,6 +1049,20 @@ class RangeIndicator(Indicator):
             # Sell signal
             return 'sell', {'entry': current_close, 'sl': self.prev_upper_sr_level + 10, 'tp': current_close - 20}
         return None, None
+    
+    def breakout_exit_decision(self, rates, direction):
+        """
+        Make an exit decision based on SR strategy.
+
+        Returns:
+            Bool: True if the trade should be closed, False otherwise.
+        """
+        breakout_trade = self.breakout_trade_decision(rates)
+        if breakout_trade is 'buy' and direction is 'sell':
+            return True
+        elif breakout_trade is 'sell' and direction is 'buy':
+            return True
+        return False
 
     def fakeout_trade_decision(self, rates):
         """
@@ -1049,6 +1094,20 @@ class RangeIndicator(Indicator):
             # Sell signal
             return 'sell', {'entry': rates['close'][-1], 'sl': self.upper_sr + 10, 'tp': self.lower_sr}
         return None, None
+    
+    def fakeout_exit_decision(self, rates, direction):
+        """
+        Make an exit decision based on SR strategy.
+
+        Returns:
+            Tuple: (decision, trade_data)
+        """
+        fakeout_trade = self.fakeout_trade_decision(rates)
+        if fakeout_trade is 'buy' and direction is 'sell':
+            return True # close the trade
+        elif fakeout_trade is 'sell' and direction is 'buy':
+            return True # close the trade
+        return False # do not close the trade
 
     def claculuate_and_make_make_trade_decision(self, rates):
         """

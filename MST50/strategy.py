@@ -192,25 +192,60 @@ class Strategy:
         first_indicator_config = self.config['indicators']['first_indicator']
         if first_indicator_config['indicator_name']:
             self.first_indicator = Indicators(first_indicator_config)
+            self.first_indicator_name = first_indicator_config['indicator_name']
             self.add_indicator_columns(first_indicator_config)
-        else:
+            if first_indicator_config['indicator_use'] in ['Enter', 'Both']:
+                self.first_indicator_enter = True
+            else:
+                self.first_indicator_enter = False
+            if first_indicator_config['indicator_use'] in ['Exit', 'Both']:
+                self.first_indicator_exit = True
+            else:
+                self.first_indicator_exit = False
+        else: # No indicator
             self.first_indicator = None
+            self.first_indicator_enter = False
+            self.first_indicator_exit = False
 
         # Second Indicator
         second_indicator_config = self.config['indicators']['second_indicator']
         if second_indicator_config['indicator_name']:
             self.second_indicator = Indicators(second_indicator_config)
+            self.second_indicator_name = second_indicator_config['indicator_name']
             self.add_indicator_columns(second_indicator_config)
+            if second_indicator_config['indicator_use'] in ['Enter', 'Both']:
+                self.second_indicator_enter = True
+            else:
+                self.second_indicator_enter = False
+            if second_indicator_config['indicator_use'] in ['Exit', 'Both']:
+                self.second_indicator_exit = True
+            if second_indicator_config['indicator_use'] in ['Exit', 'Both']:
+                self.second_indicator_exit = True
+            else:
+                self.second_indicator_exit = False
         else:
             self.second_indicator = None
+            self.second_indicator_enter = False
+            self.second_indicator_exit = False
 
         # Third Indicator
         third_indicator_config = self.config['indicators']['third_indicator']
         if third_indicator_config['indicator_name']:
             self.third_indicator = Indicators(third_indicator_config)
+            self.third_indicator_name = third_indicator_config['indicator_name']
             self.add_indicator_columns(third_indicator_config)
+            if third_indicator_config['indicator_use'] in ['Enter', 'Both']:
+                self.third_indicator_enter = True
+            else:
+                self.third_indicator_enter = False
+            if third_indicator_config['indicator_use'] in ['Exit', 'Both']:
+                self.third_indicator_exit = True
+            else:
+                self.third_indicator_exit = False
         else:
             self.third_indicator = None
+            self.third_indicator_enter = False
+            self.third_indicator_exit = False
 
     def add_indicator_columns(self, indicator_config):
         """
@@ -447,19 +482,19 @@ class Strategy:
 
         indicator_decision_set = {'both'} # Set to store indicators decisions from different indicators, 'both' is used as a flag to use candle decision
         # Proceed with normal indicator-based trade decision - up to 3 indicators can be used
-        if self.first_indicator: # Check if indicator is active
+        if self.first_indicator_enter: # Check if indicator is active
             first_indicator_decision, first_indicator_trade_data = self.first_indicator.make_trade_decision(rates)
             if first_indicator_decision is None:
                 return
             else:
                 indicator_decision_set.add(first_indicator_decision)
-        if self.second_indicator:
+        if self.second_indicator_enter:
             second_indicator_decision, second_indicator_trade_data = self.second_indicator.make_trade_decision(rates)
             if second_indicator_decision is None:
                 return
             else:
                 indicator_decision_set.add(second_indicator_decision)
-        if self.third_indicator:
+        if self.third_indicator_enter:
             third_indicator_decision, third_indicator_trade_data = self.third_indicator.make_trade_decision(rates)
             if third_indicator_decision is None:
                 return
@@ -467,22 +502,16 @@ class Strategy:
                 indicator_decision_set.add(third_indicator_decision)
         
         # merge the candle and indicator decisions
-        fincal_decision_set = candle_decision_set.union(indicator_decision_set)
-        if len(fincal_decision_set) == 1: # No trade if no decision is made
+        final_decision_set = candle_decision_set.union(indicator_decision_set)
+        if len(final_decision_set) == 1: # No trade if no decision is made
             return
-        fincal_decision_set.remove('both')
-        if len(fincal_decision_set) == 2: # conflicting decisions - no trade
+        final_decision_set.remove('both')
+        if len(final_decision_set) == 2: # conflicting decisions - no trade
             return
-        final_decision = fincal_decision_set.pop()
-
-        # Get the RSI values for filtering using the cached method
-        rsi_values = self.get_cached_rsi(stra_symbol, self.timeframe, rates)
-        if rsi_values.size == 0:
-            print_hashtaged_msg(1, f"Failed to calculate RSI for {stra_symbol} and timeframe {self.str_timeframe}")
-            return  # Exit the method early if RSI values are not available
+        final_decision = final_decision_set.pop()
 
         # Check the RSI signal before making a trade
-        if self.rsi_signal.check_rsi_signal(rates['RSI'][-1], final_decision): 
+        if not self.rsi_signal.check_rsi_signal(rates['RSI'][-1], final_decision): 
             return  # No trade if RSI filter fails
         
 
@@ -732,7 +761,6 @@ class Strategy:
 
 
 
-
     def check_exit_conditions(self, symbol, rates):
         """
         Check exit conditions for all open trades of the given symbol.
@@ -747,7 +775,8 @@ class Strategy:
         for trade_id, trade_info in list(self.open_trades.items()):
             if trade_info['symbol'] != symbol:
                 continue  # Skip trades not related to the current symbol
-
+            
+            #TODO: optimize - move this to the relvent place in the code - only calculate bars in trade when needed
             # Calculate how long the trade has been open
             open_time = trade_info['time']
             time_diff = current_time - datetime.fromtimestamp(open_time)
@@ -789,6 +818,23 @@ class Strategy:
                 print(f"Closing trade {trade_id} due to bars close condition.")
                 self.close_trade(position)
                 continue  # Move to the next trade
+
+            # check strategy close condition
+            if self.first_indicator_exit:
+                if self.first_indicator.check_exit_condition(rates, position['type']):
+                    print(f"Closing trade {trade_id} due to first indicator: {self.first_indicator} exit condition.")
+                    self.close_trade(position)
+                    continue # Move to the next trade
+            if self.second_indicator_exit:
+                if self.second_indicator.check_exit_condition(rates, position['type']):
+                    print(f"Closing trade {trade_id} due to second indicator: {self.second_indicator,} exit condition.")
+                    self.close_trade(position)
+                    continue
+            if self.third_indicator_exit:
+                if self.third_indicator.check_exit_condition(rates, position['type']):
+                    print(f"Closing trade {trade_id} due to third indicator: {self.third_indicator} exit condition.")
+                    self.close_trade(position)
+                    continue
             
             if self.trail_enabled:
                 self.monitor_open_trades(symbol, rates)
