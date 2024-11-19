@@ -505,7 +505,7 @@ tp_methods = {
 }
 
 # Trail methods
-def check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail):
+def check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point):
     """
     Check if the trailing stop conditions are met.
 
@@ -519,6 +519,11 @@ def check_trail_conditions(price, direction, trail_price, current_sl, both_sides
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
+    # Round to the number of decimal places based on the point size
+    point_decimal = Decimal(str(point))
+    decimal_places = -point_decimal.as_tuple().exponent
+    decimal_places = min(decimal_places, 5)
+    trail_price = round(trail_price, decimal_places)
     if both_sides_trail:
         return trail_price
     if direction == 0: # Buy
@@ -581,7 +586,7 @@ def UsePerc_Trail(price, current_sl, both_sides_trail, direction, trail_param, s
         trail_price = price + trail_param * price / 100
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
 
 def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
     """
@@ -606,7 +611,7 @@ def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_param, 
         trail_price = price + trail_param * point
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
 
 def UseCandles_Trail_Close(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
     """
@@ -633,7 +638,7 @@ def UseCandles_Trail_Close(price, current_sl, both_sides_trail, direction, trail
         trail_price = max(trail_prices)
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
 
 def UseCandles_Trail_Extreme(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
     """
@@ -660,7 +665,7 @@ def UseCandles_Trail_Extreme(price, current_sl, both_sides_trail, direction, tra
         trail_price = max(trail_prices)
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
 
 def UseSR_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
     """
@@ -747,7 +752,7 @@ def UseATR_Trail(price, current_sl, both_sides_trail, direction, trail_param, sy
         trail_price = price + trail_param * atr
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
 
 trail_methods = {
     'UsePerc_Trail': UsePerc_Trail,
@@ -791,14 +796,14 @@ def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minut
         UpMove = price - MinutesMin
         if UpMove > start_multi * atr:
             trail_price = price - trail_multi * atr
-            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
     elif direction == 1:
         # Get the maximum high in the last N minutes (excluding the current minute)
         MinutesMax = rates['high'][-(n_minutes+1):-1].max()
         DownMove = MinutesMax - price
         if DownMove > start_multi * atr:
             trail_price = price + trail_multi * atr
-            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
     return None
@@ -830,54 +835,19 @@ def calculate_breakeven(price, current_sl, direction,  both_sides_trail, BE_ATRs
         trail_price = open_price + pip_value
         if trail_price > current_sl:
             if price > open_price + BE_ATRs * atr and price > trail_price:
-                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
     elif direction == TRADE_DIRECTION.SELL:
         trail_price = open_price - pip_value
         if trail_price < current_sl:
             if price < open_price - BE_ATRs * atr and price < trail_price:
-                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
     return None
 
 
 
-def UseMoveToBreakeven(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df, **kwargs):
-    """
-    Move stop-loss to breakeven when conditions are met.
 
-    Parameters:
-        price (float): Current price.
-        current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
-        direction (int): Trade direction.
-        trail_param (dict): Contains 'BE_ATRs'.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (DataFrame): Historical price data.
-        **kwargs: Should include 'open_price' (float): Open price of the position.
-    """
-    BE_ATRs = trail_param['BE_ATRs']
-    open_price = kwargs.get('open_price')
-    if open_price is None:
-        raise ValueError("open_price is required for UseMoveToBreakeven method")
-
-    atr = rates_df['ATR'].iloc[-1]
-
-    pip_value = point  # Assuming 1 pip = point size
-    if direction == TRADE_DIRECTION.BUY:
-        trail_price = open_price + pip_value
-        if trail_price > current_sl:
-            if price > open_price + BE_ATRs * atr and price > trail_price:
-                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
-    elif direction == TRADE_DIRECTION.SELL:
-        trail_price = open_price - pip_value
-        if trail_price < current_sl:
-            if price < open_price - BE_ATRs * atr and price < trail_price:
-                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return None
 
 # Additional functions as needed
 #TODO: Implement this function
