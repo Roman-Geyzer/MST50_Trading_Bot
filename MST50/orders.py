@@ -770,7 +770,7 @@ trail_methods = {
 
 
 
-def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minutes,start_multi, trail_multi, rates):
+def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minutes,start_multi, trail_multi,point, rates):
     """
     Calculate trailing stop based on fast price movement on the last N minutes candles.
 
