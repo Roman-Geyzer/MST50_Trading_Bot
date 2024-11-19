@@ -933,7 +933,7 @@ class MT5Backtest:
 			exit_price = current_price
 
 		# Define pip size based on currency pair
-		pip_size = symbol_info[symbol]['point']
+		pip_size = symbol_info(symbol)['point'] * 10
 
 		# Calculate pips profit
 		if order_type == 0:
@@ -1087,6 +1087,9 @@ class MT5Backtest:
 			print(f"Account balance and equity graph saved to {graph_path_png}")
 		except Exception as e:
 			print(f"Could not save graph as image. Install 'kaleido' to enable image export. Error: {e}")
+
+		#show the graph
+		fig.show()
 
 	def last_error(self):
 		"""
