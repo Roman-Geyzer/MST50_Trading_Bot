@@ -71,6 +71,8 @@ backtest = None  # Global backtest instance to be initialized later
 
 drive = "x:" if os.name == 'nt' else "/Volumes/TM"
 
+initial_balance = 100_000.0
+
 class MT5Backtest:
 	"""
 	A class to simulate the MetaTrader 5 (MT5) client for backtesting purposes.
@@ -109,10 +111,10 @@ class MT5Backtest:
 
 		# Initialize account
 		self.account = {
-			'balance': 100000.0,
-			'equity': 100000.0,
+			'balance': initial_balance,
+			'equity': initial_balance,
 			'margin': 0.0,
-			'free_margin': 100000.0,
+			'free_margin': initial_balance,
 			'profit': 0.0,
 			'margin_level': 0.0
 		}
@@ -930,13 +932,22 @@ class MT5Backtest:
 				return
 			exit_price = current_price
 
-		# Calculate profit
-		if order_type == ORDER_TYPE_BUY:
-			profit = (exit_price - entry_price) * volume * contract_size
-		elif order_type == ORDER_TYPE_SELL:
-			profit = (entry_price - exit_price) * volume * contract_size
+		# Define pip size based on currency pair
+		pip_size = symbol_info[symbol]['point']
+
+		# Calculate pips profit
+		if order_type == 0:
+			pips_profit = (exit_price - entry_price) / pip_size
+		elif order_type == 1:
+			pips_profit = (entry_price - exit_price) / pip_size
 		else:
-			profit = 0.0
+			pips_profit = 0.0
+
+		# Calculate pip value
+		pip_value = contract_size * pip_size
+
+		# Calculate profit
+		profit = pips_profit * pip_value * volume
 
 		# Update account balance
 		self.account['balance'] += profit
