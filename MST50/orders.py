@@ -102,7 +102,7 @@ def get_trade_direction(trade_type):
     else:
         raise ValueError(f"Invalid trade type: {trade_type}")
 
-def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, symbol):
+def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, symbol, rates):
     """
     Calculate the stop-loss and take-profit prices based on the given parameters.
 
@@ -114,6 +114,7 @@ def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, 
         tp_method (str): Take-profit calculation method name.
         tp_param (float): Take-profit parameter value.
         symbol (str): Symbol name.
+        rates (np.recarray): Historical price data.
 
     Returns:
         tuple: (stop-loss price, take-profit price)
@@ -121,11 +122,8 @@ def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, 
     symbol_i = symbol_info(symbol)
     point = symbol_i['point']
 
-    sl = calculate_sl(price, direction, sl_method, sl_param, symbol, point)
-    if tp_method == 'UseRR_TP':
-        tp = calculate_tp(price, direction, tp_method, tp_param, symbol, point, sl)
-    else:
-        tp = calculate_tp(price, direction, tp_method, tp_param, symbol, point)
+    sl = calculate_sl(price, direction, sl_method, sl_param, symbol, point, rates)
+    tp = calculate_tp(price, direction, tp_method, tp_param, symbol, point,rates, sl)
 
     # Round to the number of decimal places based on the point size
     point_decimal = Decimal(str(point))
@@ -137,7 +135,7 @@ def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, 
     return sl, tp
 
 # SL methods
-def calculate_sl(price, direction, sl_method_name, sl_param, symbol, point):
+def calculate_sl(price, direction, sl_method_name, sl_param, symbol, point, rates):
     """
     Calculate the stop loss (SL) price using sl_method based on the given parameters.
 
@@ -158,9 +156,9 @@ def calculate_sl(price, direction, sl_method_name, sl_param, symbol, point):
         raise ValueError(f"Invalid SL method: {sl_method_name}")
 
     # Call the SL method function with the provided parameters
-    return sl_method_func(price, direction, sl_param, symbol, point)
+    return sl_method_func(price, direction, sl_param, symbol, point,rates)
 
-def UsePerc_SL(price, direction, sl_param, symbol, point):
+def UsePerc_SL(price, direction, sl_param, symbol, point,rates):
     """
     Calculate SL using percentage.
 
@@ -182,7 +180,7 @@ def UsePerc_SL(price, direction, sl_param, symbol, point):
         raise ValueError(f"Invalid trade direction: {direction}")
     return sl
 
-def UseFixed_SL(price, direction, sl_param, symbol, point):
+def UseFixed_SL(price, direction, sl_param, symbol, point,rates):
     """
     Calculate SL using a fixed number of points.
 
@@ -204,7 +202,7 @@ def UseFixed_SL(price, direction, sl_param, symbol, point):
         raise ValueError(f"Invalid trade direction: {direction}")
     return sl
 
-def UseCandles_SL(price, direction, sl_param, symbol, point):
+def UseCandles_SL(price, direction, sl_param, symbol, point,rates):
     """
     Calculate SL based on candle data.
 
@@ -221,7 +219,7 @@ def UseCandles_SL(price, direction, sl_param, symbol, point):
     # This function needs implementation based on your candle data availability
     pass
 
-def UseSR_SL(price, direction, sl_param, symbol, point):
+def UseSR_SL(price, direction, sl_param, symbol, point,rates):
     """
     Calculate SL based on Support and Resistance levels.
 
@@ -238,7 +236,7 @@ def UseSR_SL(price, direction, sl_param, symbol, point):
     # This function needs implementation based on your SR levels
     pass
 
-def UseTrend_SL(price, direction, sl_param, symbol, point):
+def UseTrend_SL(price, direction, sl_param, symbol, point,rates):
     """
     Calculate SL based on trend lines.
 
@@ -255,7 +253,7 @@ def UseTrend_SL(price, direction, sl_param, symbol, point):
     # This function needs implementation based on your trend line data
     pass
 
-def UseMA_SL(price, direction, sl_param, symbol, point):
+def UseMA_SL(price, direction, sl_param, symbol, point,rates):
     """
     Calculate SL based on Moving Averages.
 
@@ -269,10 +267,12 @@ def UseMA_SL(price, direction, sl_param, symbol, point):
     Returns:
         float: Calculated SL price.
     """
-    # This function needs implementation based on your MA data
-    pass
+    ma_column = f'MA_{sl_param}'
+    ma = rates[ma_column][-1]
+    return ma
 
-def UseATR_SL(price, direction, sl_param, symbol, point):
+
+def UseATR_SL(price, direction, sl_param, symbol, point,rates):
     """
     Calculate SL based on Average True Range (ATR).
 
@@ -286,8 +286,14 @@ def UseATR_SL(price, direction, sl_param, symbol, point):
     Returns:
         float: Calculated SL price.
     """
-    # This function needs implementation based on your MA data
-    pass
+    atr = rates['ATR'][-1]
+    if direction == TRADE_DIRECTION.BUY:
+        sl = price - sl_param * atr
+    elif direction == TRADE_DIRECTION.SELL:
+        sl = price + sl_param * atr
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return sl
 
 sl_methods = {
     'UsePerc_SL': UsePerc_SL,
@@ -300,7 +306,7 @@ sl_methods = {
 }
 
 # TP methods
-def calculate_tp(price, direction, tp_method_name, tp_param, symbol, point, sl=None):
+def calculate_tp(price, direction, tp_method_name, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate the take profit (TP) price using tp_method based on the given parameters.
 
@@ -322,12 +328,10 @@ def calculate_tp(price, direction, tp_method_name, tp_param, symbol, point, sl=N
         raise ValueError(f"Invalid TP method: {tp_method_name}")
 
     # Call the TP method function with the provided parameters
-    if tp_method_name == 'UseRR_TP' and sl is not None:
-        return tp_method_func(price, direction, tp_param, symbol, point, sl)
-    else:
-        return tp_method_func(price, direction, tp_param, symbol, point)
+    return tp_method_func(price, direction, tp_param, symbol, point, rates, sl)
 
-def UsePerc_TP(price, direction, tp_param, symbol, point):
+
+def UsePerc_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate TP using percentage.
 
@@ -349,7 +353,7 @@ def UsePerc_TP(price, direction, tp_param, symbol, point):
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
-def UseFixed_TP(price, direction, tp_param, symbol, point):
+def UseFixed_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate TP using a fixed number of points.
 
@@ -371,7 +375,7 @@ def UseFixed_TP(price, direction, tp_param, symbol, point):
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
-def UseCandles_TP(price, direction, tp_param, symbol, point):
+def UseCandles_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate TP based on candle data.
 
@@ -385,10 +389,10 @@ def UseCandles_TP(price, direction, tp_param, symbol, point):
     Returns:
         float: Calculated TP price.
     """
-    # This function needs implementation based on your candle data availability
-    pass
+    tp = max(rates['close'][-tp_param:-1])
+    return tp
 
-def UseSR_TP(price, direction, tp_param, symbol, point):
+def UseSR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate TP based on Support and Resistance levels.
 
@@ -405,7 +409,7 @@ def UseSR_TP(price, direction, tp_param, symbol, point):
     # This function needs implementation based on your SR levels
     pass
 
-def UseTrend_TP(price, direction, tp_param, symbol, point):
+def UseTrend_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate TP based on trend lines.
 
@@ -422,7 +426,7 @@ def UseTrend_TP(price, direction, tp_param, symbol, point):
     # This function needs implementation based on your trend line data
     pass
 
-def UseMA_TP(price, direction, tp_param, symbol, point):
+def UseMA_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate TP based on Moving Averages.
 
@@ -436,10 +440,11 @@ def UseMA_TP(price, direction, tp_param, symbol, point):
     Returns:
         float: Calculated TP price.
     """
-    # This function needs implementation based on your MA data
-    pass
+    ma_column = f'MA_{tp_param}'
+    ma = rates[ma_column][-1]
+    return ma
 
-def UseRR_TP(price, direction, tp_param, symbol, point, sl):
+def UseRR_TP(price, direction, tp_param, symbol, point, rates=None, sl=None):
     """
     Calculate TP using Risk-Reward ratio.
 
@@ -464,7 +469,7 @@ def UseRR_TP(price, direction, tp_param, symbol, point, sl):
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
-def UseATR_TP(price, direction, tp_param, symbol, point):
+def UseATR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     Calculate TP based on Average True Range (ATR).
 
@@ -479,7 +484,14 @@ def UseATR_TP(price, direction, tp_param, symbol, point):
         float: Calculated TP price.
     """
     # This function needs implementation based on your ATR data
-    pass
+    atr = rates['ATR'][-1]
+    if direction == TRADE_DIRECTION.BUY:
+        tp = price + tp_param * atr
+    elif direction == TRADE_DIRECTION.SELL:
+        tp = price - tp_param * atr
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return tp
 
 tp_methods = {
     'UsePerc_TP': UsePerc_TP,
@@ -707,8 +719,9 @@ def UseMA_Trail(price, current_sl, both_sides_trail, direction, trail_param, sym
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    # This function needs implementation based on your MA data
-    pass
+    ma_column = f'MA_{trail_param}'
+    ma = rates_df[ma_column][-1]
+    return ma
 
 def UseATR_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
     """
@@ -727,8 +740,14 @@ def UseATR_Trail(price, current_sl, both_sides_trail, direction, trail_param, sy
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    # This function needs implementation based on your ATR data
-    pass
+    atr = rates_df['ATR'][-1]
+    if direction == TRADE_DIRECTION.BUY:
+        trail_price = price - trail_param * atr
+    elif direction == TRADE_DIRECTION.SELL:
+        trail_price = price + trail_param * atr
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
 
 trail_methods = {
     'UsePerc_Trail': UsePerc_Trail,
@@ -741,27 +760,124 @@ trail_methods = {
     'UseATR_Trail': UseATR_Trail,
 }
 
+# Additional trailing functions
 
-def fast_moving_trail(price, current_sl, both_sides_trail, direction, n_candles, symbol, point, rates_df):
+
+
+
+def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minutes,start_multi, trail_multi, rates):
     """
-    Calculate trailing stop based on fast price movement on the last N 1 minutes candles (N is counfigures in strategy).
+    Calculate trailing stop based on fast price movement on the last N minutes candles.
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
         both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
-        n_candles (int): Number of candles to consider.
+        n_minutes (int): Number of minutes to consider.
+        start_multi (float): Multiplier for the start of the move.
+        trail_multi (float): Multiplier for the trailing stop.
         symbol (str): Symbol name.
         point (float): Point value.
-        rates_df (np.recarray): Historical price data.
+        rates (numpy.ndarray): Historical price data.
+    """
 
+
+    atr = rates['ATR'][-1]
+
+    if direction == 0:
+        # Get the minimum low in the last N minutes (excluding the current minute)
+        MinutesMin = rates['low'][-(n_minutes+1):-1].min()
+        UpMove = price - MinutesMin
+        if UpMove > start_multi * atr:
+            trail_price = price - trail_multi * atr
+            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    elif direction == 1:
+        # Get the maximum high in the last N minutes (excluding the current minute)
+        MinutesMax = rates['high'][-(n_minutes+1):-1].max()
+        DownMove = MinutesMax - price
+        if DownMove > start_multi * atr:
+            trail_price = price + trail_multi * atr
+            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return None
+    
+
+def calculate_breakeven(price, current_sl, direction,  both_sides_trail, BE_ATRs ,open_price, point, rates_df):
+    """
+    Calculate trailing stop based on breakeven level.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        direction (int): Trade direction.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        BE_ATRs (float): ATR multiplier for breakeven.
+        open_price (float): Open price of the position.
+        point (float): Point value.
+        rates_df (DataFrame): Historical price data
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    # This function needs implementation based on your MA data
-    pass
+    if open_price is None:
+        raise ValueError("open_price is required for UseMoveToBreakeven method")
 
+    atr = rates_df['ATR'].iloc[-1]
+
+    pip_value = point  # Assuming 1 pip = point size
+    if direction == TRADE_DIRECTION.BUY:
+        trail_price = open_price + pip_value
+        if trail_price > current_sl:
+            if price > open_price + BE_ATRs * atr and price > trail_price:
+                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    elif direction == TRADE_DIRECTION.SELL:
+        trail_price = open_price - pip_value
+        if trail_price < current_sl:
+            if price < open_price - BE_ATRs * atr and price < trail_price:
+                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return None
+
+
+
+def UseMoveToBreakeven(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df, **kwargs):
+    """
+    Move stop-loss to breakeven when conditions are met.
+
+    Parameters:
+        price (float): Current price.
+        current_sl (float): Current stop-loss price.
+        both_sides_trail (bool): Whether trailing is allowed in both directions.
+        direction (int): Trade direction.
+        trail_param (dict): Contains 'BE_ATRs'.
+        symbol (str): Symbol name.
+        point (float): Point value.
+        rates_df (DataFrame): Historical price data.
+        **kwargs: Should include 'open_price' (float): Open price of the position.
+    """
+    BE_ATRs = trail_param['BE_ATRs']
+    open_price = kwargs.get('open_price')
+    if open_price is None:
+        raise ValueError("open_price is required for UseMoveToBreakeven method")
+
+    atr = rates_df['ATR'].iloc[-1]
+
+    pip_value = point  # Assuming 1 pip = point size
+    if direction == TRADE_DIRECTION.BUY:
+        trail_price = open_price + pip_value
+        if trail_price > current_sl:
+            if price > open_price + BE_ATRs * atr and price > trail_price:
+                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    elif direction == TRADE_DIRECTION.SELL:
+        trail_price = open_price - pip_value
+        if trail_price < current_sl:
+            if price < open_price - BE_ATRs * atr and price < trail_price:
+                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail)
+    else:
+        raise ValueError(f"Invalid trade direction: {direction}")
+    return None
 
 # Additional functions as needed
 #TODO: Implement this function

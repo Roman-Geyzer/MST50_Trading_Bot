@@ -594,7 +594,7 @@ class MT5Backtest:
 			'symbol': symbol,
 			'type': order_type,  # BUY or SELL
 			'volume': volume,
-			'price': price,
+			'price_open': price,
 			'sl': sl,
 			'tp': tp,
 			'time': self.current_time,
@@ -648,7 +648,7 @@ class MT5Backtest:
 			'symbol': position['symbol'],
 			'type': position['type'],
 			'volume': position['volume'],
-			'price': position['price'],
+			'price': position['price_open'],
 			'sl': position['sl'],
 			'tp': position['tp'],
 			'time': self.current_time,
@@ -845,7 +845,7 @@ class MT5Backtest:
 				symbol = position['symbol']
 				order_type = position['type']
 				volume = position['volume']
-				entry_price = position['price']
+				entry_price = position['price_open']
 				contract_size = position['contract_size']
 				point = position['point']
 
@@ -918,7 +918,7 @@ class MT5Backtest:
 		position = self.open_positions[ticket]
 		order_type = position['type']
 		volume = position['volume']
-		entry_price = position['price']
+		entry_price = position['price_open']
 		symbol = position['symbol']
 		contract_size = position['contract_size']
 

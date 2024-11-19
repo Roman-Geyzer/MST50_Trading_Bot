@@ -34,7 +34,7 @@ BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 # Import utility functions and constants
 from .utils import (load_config,  get_final_magic_number, get_timeframe_string,
                     print_hashtaged_msg, attempt_with_stages_and_delay)
-from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_type, get_trade_direction
+from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_type, get_trade_direction, calculate_fast_trail, calculate_breakeven
 from .indicators import Indicators
 from .constants import DEVIATION, TRADE_DIRECTION
 from .signals import RSISignal
@@ -44,7 +44,7 @@ from .plotting import plot_bars
 from .mt5_interface import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
                          positions_get, order_send, symbol_info_tick, symbol_info, symbol_select, last_error) 
 
-min_pips_for_trail_update = 3
+min_pips_for_trail_update = 2
 
 drive = "x:" if os.name == 'nt' else "/Volumes/TM"
 
@@ -124,17 +124,21 @@ class Strategy:
         #TODO: update the exit params to be part of the class to avoid using get from dict
         self.exit_params = strategy_config.get('exit_params', {})
 
+        self.trail_both_directions = strategy_config['trail_params']['trail_both_directions']
+
+        # Trailing stop parameters
         self.trail_method = strategy_config['trail_params']['trail_method']
         self.trail_param = strategy_config['trail_params']['trail_param']
-        self.trail_both_directions = strategy_config['trail_params']['trail_both_directions']
+        # Fast trail parameters
         self.use_fast_trail = strategy_config['trail_params']['use_fast_trail']
         self.fast_trail_minutes_count = strategy_config['trail_params']['fast_trail_minutes_count']
         self.fast_trail_ATR_start_multiplier = strategy_config['trail_params']['fast_trail_ATR_start_multiplier']
         self.fast_trail_ATR_trail_multiplier = strategy_config['trail_params']['fast_trail_ATR_trail_multiplier']
+        # Move to breakeven parameters
         self.use_move_to_breakeven = strategy_config['trail_params']['use_move_to_breakeven']
         self.breakeven_ATRs = strategy_config['trail_params']['breakeven_ATRs']
+        # Check if trailing is enabled
         self.trail_enabled = self.trail_method or self.use_fast_trail or self.use_move_to_breakeven
-
 
         self.backtest_params = strategy_config['backtest_params']
         self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
@@ -522,11 +526,11 @@ class Strategy:
         if final_decision == 'buy' and self.tradeP_long:
             self.close_all_trades(TRADE_DIRECTION.SELL, stra_symbol)
             if self.get_total_open_trades(stra_symbol) < self.config['tradeP_max_trades']: # Check if max trades reached
-                self.place_order(TRADE_DIRECTION.BUY, stra_symbol)
+                self.place_order(TRADE_DIRECTION.BUY, stra_symbol, rates)
         elif final_decision == 'sell' and self.tradeP_short:
             self.close_all_trades(TRADE_DIRECTION.BUY, stra_symbol)
             if self.get_total_open_trades(stra_symbol) < self.config['tradeP_max_trades']: # Check if max trades reached
-                self.place_order(TRADE_DIRECTION.SELL, stra_symbol)
+                self.place_order(TRADE_DIRECTION.SELL, stra_symbol, rates)
 
     def close_all_trades(self, direction, symbol):
         """
@@ -548,7 +552,7 @@ class Strategy:
 
 
 
-    def fill_request_data(self, direction, symbol, ticket, comment):
+    def fill_request_data(self, direction, symbol, ticket, comment, rates):
         """     
         Fill the request data for a trade operation.
         Type of operation will be based on ticket value.
@@ -565,7 +569,7 @@ class Strategy:
             volume = position['volume']
             magic_num = position['magic']
         else:
-            sl, tp = calculate_sl_tp(price, direction,self.config['sl_method'], self.config['sl_param'], self.config['tp_method'], self.config['tp_param'], symbol)
+            sl, tp = calculate_sl_tp(price, direction,self.config['sl_method'], self.config['sl_param'], self.config['tp_method'], self.config['tp_param'], symbol, rates)
             volume = calculate_lot_size(symbol, self.config['tradeP_risk'],sl)
             magic_num = get_final_magic_number(symbol, self.magic_num)
 
@@ -587,12 +591,12 @@ class Strategy:
             request["tp"] = tp
         return request
     
-    def prep_and_order(self, direction, symbol, ticket, comment):
+    def prep_and_order(self, direction, symbol, ticket, comment, rates):
         """
         prepare and order
         used in order to retry the order in case of failure
         """
-        request = self.fill_request_data(direction, symbol, ticket, comment)
+        request = self.fill_request_data(direction, symbol, ticket, comment, rates)
         result =  order_send(request)
         if result['retcode'] == TRADE_ACTIONS['DONE']:
             pass
@@ -607,7 +611,7 @@ class Strategy:
         used in order to retry the order in case of failure
         """
         close_direction = -(direction.value) # Close the the position so need the opposite direction
-        request = self.fill_request_data(close_direction, symbol, ticket, comment)
+        request = self.fill_request_data(close_direction, symbol, ticket, comment, rates=None)
         result =  order_send(request)
         return result
     
@@ -713,7 +717,7 @@ class Strategy:
             raise ValueError("Invalid trade direction")
 
     #TODO: add indicator trade data and implement logic when and how to use it
-    def place_order(self, direction, symbol):
+    def place_order(self, direction, symbol, rates):
         """
         Place an order for a given symbol and direction.
 
@@ -743,7 +747,7 @@ class Strategy:
         comment = f"{self.strategy_num}-{self.strategy_name}"
 
         result = attempt_with_stages_and_delay(4 , 5, 0.05, 1, loop_error_msg, check_return_func,
-                                                    self.prep_and_order, (direction, symbol, -1, comment))
+                                                    self.prep_and_order, (direction, symbol, -1, comment, rates))
         if not check_return_func(result):
             print_hashtaged_msg(1, f"Failed to open {direction} trade for {symbol}, strategy: {self.strategy_num}-{self.strategy_name}")
             print("mt5.last_error:", last_error())
@@ -881,11 +885,25 @@ class Strategy:
             price = tick['bid']
         current_sl = position['sl']
         point = symbol_info(symbol_str)['point']
+        sl_price = [position['sl']]
+        if self.use_fast_trail:
+            sl_price.append(calculate_fast_trail(price, current_sl, self.trail_both_directions, direction, self.fast_trail_minutes_count, 
+                                            self.fast_trail_ATR_start_multiplier, self.fast_trail_ATR_trail_multiplier, rates))
+        if self.use_move_to_breakeven:
+            sl_price.append(calculate_breakeven(price, current_sl, direction,self.trail_both_directions, self.breakeven_ATRs, position['POSITION_PRICE_OPEN'], symbol_str, point, rates))
+        if self.trail_method:
+            sl_price.append(calculate_trail(
+                price, current_sl, self.trail_both_directions, direction,
+                self.trail_method, self.trail_param, symbol_str, point, rates
+            ))
+        # Choose the new SL by comparing the new SLs from different methods
 
-        new_sl = calculate_trail(
-            price, current_sl, self.trail_both_directions, direction,
-            self.trail_method, self.trail_param, symbol_str, point, rates
-        )
+        # remove NaN values
+        sl_price = [sl for sl in sl_price if sl is not None]
+        if direction == 0:  # buy
+            new_sl = max(sl_price)
+        else:  # sell
+            new_sl = min(sl_price)
         if new_sl and abs(new_sl - current_sl) > 10 * min_pips_for_trail_update * point: # pip is 10* point
             self.update_trade(trade_id=trade_id, position=position, new_sl=new_sl)
 

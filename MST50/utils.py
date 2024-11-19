@@ -417,9 +417,10 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     # Construct the full path to the configuration file
     
     
-    # Read the specified sheet into a DataFrame
+    # Read the specified sheet into a DataFrame and handle missing values
     df = pd.read_excel(file_namd_path, sheet_name=sheet_name)
-
+    import numpy as np
+    df.replace({np.nan: None}, inplace=True)
 
 
     # Initialize an empty dictionary to hold strategy configurations

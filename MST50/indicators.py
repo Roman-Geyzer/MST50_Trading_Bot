@@ -99,6 +99,22 @@ class Indicators:
             return self.indicator_instance.claculuate_and_make_make_trade_decision(rates)
         else:
             return None, None
+        
+    def check_exit_condition(self, rates, direction):
+        """
+        Check if the exit condition is met based on the selected indicator class.
+
+        Parameters:
+            rates (np.recarray): Historical price data (OHLC).
+            direction (str): The current trade direction ('buy' or 'sell').
+
+        Returns:
+            bool: True if the exit condition is met, False otherwise.
+        """
+        if self.indicator_instance and self.indicator_instance.exit_decision_method:
+            return self.indicator_instance.exit_decision_method(rates, direction)
+        else:
+            return False
 
 class Indicator:
     def __init__(self, name, params):
@@ -143,6 +159,22 @@ class Indicator:
             return self.trade_decision_method(rates)
         else:
             return None, None
+        
+    def check_and_make_exit_decision(self, rates, direction):
+        """
+        Check if the exit condition is met based on the selected indicator class.
+
+        Parameters:
+            rates (np.recarray): Historical price data (OHLC).
+            direction (str): The current trade direction ('buy' or 'sell').
+
+        Returns:
+            bool: True if the exit condition is met, False otherwise.
+        """
+        if self.exit_decision_method:
+            return self.exit_decision_method(rates, direction)
+        else:
+            return False
 
 
 class NoIndicator(Indicator):
@@ -1072,6 +1104,7 @@ class RangeIndicator(Indicator):
             Tuple: (decision, trade_data)
         """
         self.calculate_sr_levels(rates)
+        atr = rates['ATR'][-1]
         total_bars_needed = self.bars_from_fakeout + self.bars_before_fakeout
         if len(rates) < total_bars_needed:
             return None, None
@@ -1081,18 +1114,44 @@ class RangeIndicator(Indicator):
         lows = recent_rates['low']
         highs = recent_rates['high']
 
-        lowest_in_fakeout = np.min(lows[-self.bars_from_fakeout:])
-        previous_lowest = np.min(lows[:-self.bars_from_fakeout])
+        # Define slicing indices
+        fakeout_start = -self.bars_from_fakeout
+        if fakeout_start == 0:
+            fakeout_lows = lows[:]
+            previous_lows = []
+            fakeout_highs = highs[:]
+            previous_highs = []
+        else:
+            fakeout_lows = lows[fakeout_start:]
+            previous_lows = lows[:fakeout_start]
+            fakeout_highs = highs[fakeout_start:]
+            previous_highs = highs[:fakeout_start]
 
-        highest_in_fakeout = np.max(highs[-self.bars_from_fakeout:])
-        previous_highest = np.max(highs[:-self.bars_from_fakeout])
+        # Check for empty previous_lows or previous_highs
+        if len(previous_lows) == 0 or len(previous_highs) == 0:
+            return None, None
 
-        if (lowest_in_fakeout > self.lower_sr - (self.fakeout_perc_slack / 100) * lowest_in_fakeout) and (previous_lowest < self.lower_sr):
+        # Calculate minimum and maximum
+        try:
+            lowest_in_fakeout = np.min(fakeout_lows)
+            previous_lowest = np.min(previous_lows)
+
+            highest_in_fakeout = np.max(fakeout_highs)
+            previous_highest = np.max(previous_highs)
+        except ValueError as e:
+            return None, None
+
+        # Decision logic
+        buy_condition = (lowest_in_fakeout > self.lower_sr - (self.fakeout_atr_slack * atr) * lowest_in_fakeout) and (previous_lowest < self.lower_sr)
+        sell_condition = (highest_in_fakeout < self.upper_sr + (self.fakeout_atr_slack * atr) * highest_in_fakeout) and (previous_highest > self.upper_sr)
+
+        if buy_condition:
             # Buy signal
             return 'buy', {'entry': rates['close'][-1], 'sl': self.lower_sr - 10, 'tp': self.upper_sr}
-        elif (highest_in_fakeout < self.upper_sr + (self.fakeout_perc_slack / 100) * highest_in_fakeout) and (previous_highest > self.upper_sr):
+        elif sell_condition:
             # Sell signal
             return 'sell', {'entry': rates['close'][-1], 'sl': self.upper_sr + 10, 'tp': self.lower_sr}
+        
         return None, None
     
     def fakeout_exit_decision(self, rates, direction):
@@ -1102,7 +1161,7 @@ class RangeIndicator(Indicator):
         Returns:
             Tuple: (decision, trade_data)
         """
-        fakeout_trade = self.fakeout_trade_decision(rates)
+        fakeout_trade , _ = self.fakeout_trade_decision(rates)
         if fakeout_trade is 'buy' and direction is 'sell':
             return True # close the trade
         elif fakeout_trade is 'sell' and direction is 'buy':
