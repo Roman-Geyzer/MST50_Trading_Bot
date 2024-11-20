@@ -60,21 +60,23 @@ import math
 import platform
 import os
 
+#TODO: update the perfomance file to include broker and account number
+
 # Determine if we are in backtesting mode
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 if platform.system() == 'Windows':
-    drive = "x:"
+    drive = "x:\\"
 else:
     drive = "/Volumes/TM"
 
-performance_dir = os.path.join(drive, 'documentation/account')
+performance_dir = os.path.join(drive, 'documentation', 'account')
 
-#TODO: update the perfomance file to include broker and account number
+
 performance_file = os.path.join(performance_dir, 'performance.csv')
 
 if platform.system() == 'Windows':
-    file_namd_path = "Z:\\Desktop\\Fulfillment\\Forex - Algo trading\\Python API\\config.xlsx"
+    file_namd_path = "Z:\Desktop\Fulfillment\Forex - Algo trading\Python API\config.xlsx"
 else:
     file_namd_path = "/Users/macmini/Desktop/Fulfillment/Forex - Algo trading/Python API/config.xlsx"
 
@@ -583,6 +585,11 @@ def initialize_balance_performance_file():
     Initialize the performance CSV file with headers.
     If the file already exists, skip initialization.
     """
+    # check if dir exsits - if not: create it
+    if not os.path.exists(performance_dir):
+        os.makedirs(performance_dir, exist_ok=True)
+        print(f"Created directory: {performance_dir}")
+
     if not os.path.exists(performance_file):
         with open(performance_file, 'w') as f:
             f.write("date,hour,open_trades,margin,balance,margin_level,equity,profit\n")

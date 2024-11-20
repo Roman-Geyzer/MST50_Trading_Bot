@@ -56,14 +56,15 @@ dtype = [
 # Global variable for required columns per symbol and timeframe
 REQUIRED_COLUMNS = {}  # e.g., {'EURUSD': {'H1': set([...]), ...}, ...}
 
-def initialize_required_columns(strategies):
+def initialize_required_indicator_columns(strategies):
     """
     Initialize the global REQUIRED_COLUMNS variable based on the required columns in the strategies.
     Parameters:
         strategies: A list of strategy instances that contain required_columns.
     """
     global REQUIRED_COLUMNS
-    for strategy in strategies:
+    for i in strategies:
+        strategy = strategies[i]
         timeframe = strategy.str_timeframe  # String representation of timeframe, e.g., 'H1'
         required_columns = strategy.required_columns
         for symbol in strategy.symbols:
@@ -184,7 +185,8 @@ def copy_rates_from_pos(symbol, timeframe, pos, count):
                 df[col].fillna('', inplace=True)
 
         # Convert df to structured array
-        rates_array = np.array([tuple(row) for row in df.to_numpy()], dtype=extended_dtype)
+        
+        rates_array = df.to_records(index=False)
 
     return rates_array
 

@@ -7,7 +7,7 @@ from MST50.main import main
 
 ################# Profiling #################
 
-#"""
+"""
 import cProfile
 import pstats
 import io
@@ -30,10 +30,10 @@ def profile_backtest():
         ps.print_stats()
         print("documentated the profile in backtest_profile.prof")
         pr.dump_stats('backtest_profile.prof')
-#"""
+"""
 ################# end Profiling #################
 
 if __name__ == "__main__":
-    #main()
+    main()
     #check for performance"
-    profile_backtest()
+    #profile_backtest()
