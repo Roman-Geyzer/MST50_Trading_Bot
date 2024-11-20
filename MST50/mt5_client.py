@@ -227,7 +227,10 @@ def shutdown():
 
 
 def time_current():
-    return datetime.now() + timedelta(hours=server_time_hours_delta)
+    now = datetime.now() + timedelta(hours=server_time_hours_delta)
+    if now.hour >= 24:
+        now = now - timedelta(hours=24)
+    return now
 
 
 # Helper functions

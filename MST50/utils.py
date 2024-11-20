@@ -758,6 +758,7 @@ def catch_i_times_with_s_seconds_delay(i, s , loop_error_msg, final_error_msg, f
 
 space = 150
 hashes = 5
+
 def print_current_time():
     current_time_str = f"current_time is: {time_current().strftime('%Y-%m-%d %H:%M:%S')}"
     spaces = (space - len(current_time_str)) // 2

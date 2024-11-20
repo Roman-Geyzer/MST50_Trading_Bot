@@ -25,7 +25,7 @@ from .utils import (
 from .symbols import Timeframe
 
 # Always import account_info, shutdown, and last_error from mt5_interface
-from .mt5_interface import account_info, shutdown, last_error
+from .mt5_interface import account_info, shutdown, last_error, time_current
 
 def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
     """
@@ -39,7 +39,8 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
         symbols (dict): Dictionary containing symbol instances with their respective timeframes and rates.
         account_info_dict (dict): Account information dictionary.
     """
-    print_hashtaged_msg(1, "on_minute function started...")
+    now = time_current()
+    print(f"on_minute strarted, ", f"Current time: {now}")
 
     # Fetch rates for all symbols and timeframes - the method will only update the rates if a new bar has started
     time_bar.update_tf_bar()
