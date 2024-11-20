@@ -626,6 +626,7 @@ def write_balance_performance_file(account_info_dict, open_trades):
     
     print_with_info(f"Appended data to {performance_file}: {csv_line.strip()}", levels_up=2)
     
+    
 
 
 

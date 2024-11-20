@@ -70,7 +70,7 @@ def calculate_lot_size(symbol: str, trade_risk_percent: float, sl: float) -> flo
 
     # Normalize lot size to 2 decimal places
     lot_size = round(lot_size, 2)
-
+    lot_size = max(0.01, lot_size)  # Minimum lot size is 0.01
     return lot_size
 
 def get_mt5_trade_type(direction):

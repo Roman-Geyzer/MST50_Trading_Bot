@@ -42,7 +42,7 @@ from .candles import CandlePatterns
 from .plotting import plot_bars
 
 from .mt5_interface import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
-                         positions_get, order_send, symbol_info_tick, symbol_info, symbol_select, last_error) 
+                         positions_get, order_send, symbol_info_tick, symbol_info, symbol_select, last_error, history_deals_get) 
 
 min_pips_for_trail_update = 2
 
@@ -167,7 +167,7 @@ class Strategy:
         if not os.path.exists(self.documanted_trades_file):
             with open(self.documanted_trades_file, 'w') as f:
                 # Header of file
-                f.write("ticket,magic,symbol,direction,volume,price,sl,tp,time,open_daytime,close_datetime,trading_costs,profit,open_method,close_method,comment\n")
+                f.write("ticket,magic,symbol,direction,volume,price,sl,tp,open_daytime,close_datetime,trading_costs,profit,close_method,comment\n")
         
         # Define the general documentation file path
         self.documatation_performance_file = os.path.join(self.documentation_dir, f"performance.csv")
@@ -389,10 +389,14 @@ class Strategy:
             trade_info (dict): Information about the trade.
         """
         pass
-        #trade_info = history_deals_get(position=trade_id)
-        #TODO: implement error handling and logging if trade_info is None
-        #TODO: implement logic to document closed trades
-
+        
+        # TODO: comment and uncomment the following lines based on backtest optimization
+        trade_info = history_deals_get(None, None, trade_id)[0]
+        with open(self.documanted_trades_file, 'a') as f:
+            # Write the trade information to the file
+            f.write(f"{trade_info['ticket']},{trade_info['magic']},{trade_info['symbol']},{trade_info['type']},{trade_info['volume']},\
+                    {trade_info['price_open']},{trade_info['sl']},{trade_info['tp']},{trade_info['time']},{datetime.now()} ,\
+                    {trade_info['swap']},{trade_info['profit']},{trade_info['reason']},{trade_info['comment']}\n")
 
     def check_open_trades(self):
         """
@@ -416,7 +420,10 @@ class Strategy:
         Write the strategy's performance to a file.
         This method writes the strategy's performance metrics to a file for tracking and analysis.
         """
-        #TODO: Implement logic to write strategy performance to a file
+        with open(self.documatation_performance_file, 'a') as f:
+            # Write the strategy's performance metrics to the file
+            #TODO: comment or uncomment the following line based on backtest optimization
+            f.write(f"{datetime.now().date()},{datetime.now().time()},{len(self.open_trades)},{account_info_dict['margin']},{account_info_dict['balance']},{account_info_dict['margin_level']},{account_info_dict['equity']},{account_info_dict['profit']}\n")
 
     def check_trading_filters(self, symbol, rates_df):
         """

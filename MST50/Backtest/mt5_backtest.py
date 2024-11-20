@@ -489,7 +489,7 @@ class MT5Backtest:
 		# For simplicity, assume all symbols are always selected
 		return True
 
-	def history_deals_get(self, from_date, to_date):
+	def history_deals_get(self, from_date, to_date, ticket=None):
 		"""
 		Simulate MT5.history_deals_get() function.
 
@@ -500,13 +500,22 @@ class MT5Backtest:
 		Returns:
 			list or None: List of deal dictionaries or None if no deals found.
 		"""
-		deals = []
-		for pos in self.closed_positions:
-			close_time = pos.get('close_datetime')
-			if close_time and from_date <= close_time <= to_date:
-				deals.append(pos)
+
+		if ticket:
+			# Return single deal if found
+			deal = [deal for deal in self.closed_positions if deal.get('ticket') == ticket]
+			if deal:
+				return deal
+			else:
+				return None
+		else:
+			deals = []
+			for pos in self.closed_positions:
+				close_time = pos.get('close_datetime')
+				if close_time and from_date <= close_time <= to_date:
+					deals.append(pos)
 		if deals:
-			deals = [self._convert_numpy_types(deal) for deal in deals]
+			# deals = [self._convert_numpy_types(deal) for deal in deals]
 			return deals
 		else:
 			return None
@@ -946,8 +955,14 @@ class MT5Backtest:
 		# Calculate pip value
 		pip_value = contract_size * pip_size
 
+		# Calculate days in trade
+		days_in_trade = (self.current_time - position['time']).days
+
+		# Calculate swap
+		swap = days_in_trade * pip_value / 10  # Simplified swap calculation
+
 		# Calculate profit
-		profit = pips_profit * pip_value * volume
+		profit = pips_profit * pip_value * volume - swap
 
 		# Update account balance
 		self.account['balance'] += profit
@@ -963,6 +978,7 @@ class MT5Backtest:
 		closed_position['close_price'] = exit_price
 		closed_position['profit'] = profit
 		closed_position['reason'] = reason
+		closed_position['swap'] = swap
 		self.closed_positions.append(closed_position)
 
 		# Log the trade closure
@@ -978,7 +994,8 @@ class MT5Backtest:
 			'comment': position['comment'],
 			'magic': position['magic'],
 			'profit': profit,
-			'action': reason
+			'action': reason,
+			'swap': closed_position['swap']
 		}
 		self.trade_logs.append(trade_log)
 
@@ -1265,18 +1282,19 @@ def symbol_select(symbol, select=True):
 	"""
 	return backtest.symbol_select(symbol, select)
 
-def history_deals_get(from_date, to_date):
+def history_deals_get(from_date, to_date, ticket=None):
 	"""
 	Simulate MT5.history_deals_get() function.
 
 	Parameters:
 		from_date (datetime): Start datetime.
 		to_date (datetime): End datetime.
+		ticket (int, optional): Specific ticket number to retrieve.
 
 	Returns:
 		list or None: List of deal dictionaries or None if no deals found.
 	"""
-	return backtest.history_deals_get(from_date, to_date)
+	return backtest.history_deals_get(from_date, to_date, ticket=ticket)
 
 def log_account_status(account_info_dict, open_trades):
 	"""
