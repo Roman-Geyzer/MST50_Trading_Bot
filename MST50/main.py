@@ -52,7 +52,7 @@ def main():
     Main function to execute trading strategies.
     will run the main_backtest function if BACKTEST_MODE is True, otherwise will run the live trading mode.
     """
-    print_hashtaged_msg(1, "Initializing MST50", "Initializing MST50...")
+    print("Initializing MST50", "Initializing MST50...")
     # Initialize strategies and symbols
     strategies = Strategy.initialize_strategies(run_mode)
     if BACKTEST_MODE:

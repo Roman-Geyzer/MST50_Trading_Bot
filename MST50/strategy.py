@@ -42,7 +42,7 @@ from .candles import CandlePatterns
 from .plotting import plot_bars
 
 from .mt5_interface import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, ORDER_FILLING, TRADE_RETCODES,
-                         positions_get, order_send, symbol_info_tick, symbol_info, symbol_select, last_error, history_deals_get) 
+                         positions_get, order_send, symbol_info_tick, symbol_info, symbol_select, last_error, history_deals_get, time_current) 
 
 min_pips_for_trail_update = 2
 
@@ -74,6 +74,9 @@ class Strategy:
         self.tradeP_long = strategy_config['tradeP_long']
         self.tradeP_short = strategy_config['tradeP_short']
         self.open_trades = self.get_open_trades_from_terminal()   # Dictionary to hold open trades: trade_id -> trade_info
+
+        self.start_hour_trading = strategy_config['tradeP_hour_start']
+        self.end_hour_trading = self.start_hour_trading + strategy_config['tradeP_hour_length']
 
         # Initialize required columns set
         self.required_columns = set(['time', 'open', 'high', 'low', 'close', 'spread'])
@@ -123,6 +126,7 @@ class Strategy:
             self.tp_param = int(self.tp_param)
         #TODO: update the exit params to be part of the class to avoid using get from dict
         self.exit_params = strategy_config.get('exit_params', {})
+        self.daily_candle_exit_hour = self.exit_params.get('exitP_daily_candle_exit_hour', 0)
 
         self.trail_both_directions = strategy_config['trail_params']['trail_both_directions']
 
@@ -150,9 +154,6 @@ class Strategy:
             max_deviation=self.config['filterP_max_rsi_deviation'],
             min_deviation=self.config['filterP_min_rsi_deviation']
         )
-
-
-
 
         
         # Define the documentation directory with strategy number and name
@@ -395,7 +396,7 @@ class Strategy:
         with open(self.documanted_trades_file, 'a') as f:
             # Write the trade information to the file
             f.write(f"{trade_info['ticket']},{trade_info['magic']},{trade_info['symbol']},{trade_info['type']},{trade_info['volume']},\
-                    {trade_info['price_open']},{trade_info['sl']},{trade_info['tp']},{trade_info['time']},{datetime.now()} ,\
+                    {trade_info['price_open']},{trade_info['sl']},{trade_info['tp']},{trade_info['time']},{time_current()} ,\
                     {trade_info['swap']},{trade_info['profit']},{trade_info['reason']},{trade_info['comment']}\n")
 
     def check_open_trades(self):
@@ -423,19 +424,17 @@ class Strategy:
         with open(self.documatation_performance_file, 'a') as f:
             # Write the strategy's performance metrics to the file
             #TODO: comment or uncomment the following line based on backtest optimization
-            f.write(f"{datetime.now().date()},{datetime.now().time()},{len(self.open_trades)},{account_info_dict['margin']},{account_info_dict['balance']},{account_info_dict['margin_level']},{account_info_dict['equity']},{account_info_dict['profit']}\n")
+            f.write(f"{time_current().date()},{time_current().time()},{len(self.open_trades)},{account_info_dict['margin']},{account_info_dict['balance']},{account_info_dict['margin_level']},{account_info_dict['equity']},{account_info_dict['profit']}\n")
 
-    def check_trading_filters(self, symbol, rates_df):
+    def check_trading_filters(self):
         """
         Check the trading filters for a symbol and decide whether to continue checking for entry signals and indicators.
         """ 
         #check traing hours within the trading hours of the strategy
-        current_hour = datetime.now().hour
-        start_hour = self.config['tradeP_hour_start']
-        end_hour = start_hour + self.config['tradeP_hour_length']
-        if current_hour < start_hour or current_hour > end_hour:
+        current_hour = time_current().hour
+        if current_hour <= self.start_hour_trading or current_hour >= self.end_hour_trading:
             return False # Exit the method early if not in trading hours
-        current_day = str(datetime.now().weekday())
+        current_day = str(time_current().weekday())
         
         if current_day not in self.config['tradeP_days']:
             return  False # Exit the method early if not a trading day
@@ -455,16 +454,16 @@ class Strategy:
             rates_dict (dict): A dictionary containing historical rates for the symbol.
             each key is a timeframe and the value is a dataframe of rates for that timeframe
         """
+
+        if not self.check_trading_filters():
+            return  # Exit the method early if trading filters fail
+        
         if symbol.check_symbol_tf_flag(self.timeframe):
             print_hashtaged_msg(1, f"No rates available for {stra_symbol} and timeframe {self.str_timeframe}")
             return  # Exit the method early if fetching fails
 
         rates = symbol.get_tf_rates(self.timeframe)
         tf_obj = symbol.get_tf_obj(self.timeframe)
-
-        if not self.check_trading_filters(symbol, rates):
-            return  # Exit the method early if trading filters fail
-        
 
         # Check candle patterns and make a trade decision
         candle_decision_set = {'both'} # Set to store candle decisions from different timeframes, 'both' is used as a flag to use indicator decision
@@ -781,7 +780,12 @@ class Strategy:
             symbol (str): The trading symbol.
             rates (np.recarray): Rates data.
         """
-        current_time = datetime.now()
+        current_time = time_current()
+
+        # Check for daily strategy - check exit conditions only at a specific hour
+        if self.daily_candle_exit_hour:
+            if self.daily_candle_exit_hour != current_time.hour:
+                return # Exit the method early if not the exit hour (for other tf's than D1 we won't get here)
 
         for trade_id, trade_info in list(self.open_trades.items()):
             if trade_info['symbol'] != symbol:

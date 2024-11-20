@@ -1132,7 +1132,7 @@ class MT5Backtest:
 	
 	def time_current(self):
 		# TODO: implement to simulate current server time - it's the same as the time in the df
-		pass
+		return self.current_time
 
 	def shutdown(self):
 		"""

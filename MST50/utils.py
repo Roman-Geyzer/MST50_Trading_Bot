@@ -49,13 +49,13 @@ Functions:
 
 import pandas as pd
 import inspect
+from datetime import datetime
 
 
 from .constants import (magic_number_base, TIMEFRAME_MAGIC_NUMBER_MAPPING,
                        SYMBOL_MAGIC_NUMBER_MAPPING, TIMEFRAME_MT5_MAPPING, TIMEFRAME_STRING_MAPPING)
-from datetime import datetime
 import time
-from .mt5_interface import TIMEFRAMES, copy_rates_from
+from .mt5_interface import TIMEFRAMES, copy_rates_from, time_current
 import math
 import platform
 import os
@@ -84,31 +84,31 @@ class TradeHour:
         self.current_day = -1
 
     def is_new_hour(self):
-        current_time = datetime.now()
+        current_time = time_current()
         if self.current_hour != current_time.hour or self.current_day != current_time.day:
             self.current_hour = current_time.hour
             self.current_day = current_time.day
             return True
         return False
     def is_new_day(self):
-        current_time = datetime.now()
+        current_time = time_current()
         if self.current_day != current_time.day:
             self.current_day = current_time.day
             return True
         return False
     
     def is_new_week(self):
-        current_time = datetime.now()
+        current_time = time_current()
         if self.current_day != current_time.isocalendar()[1]:
             self.current_day = current_time.isocalendar()[1]
             return True
         return False
     
     def update_current_day(self):
-        self.current_day = datetime.now().day
+        self.current_day = time_current().day
 
     def update_current_hour(self):
-        self.current_hour = datetime.now().hour
+        self.current_hour = time_current().hour
 
 class TimeBar:
     def __init__(self):
@@ -127,7 +127,7 @@ class TimeBar:
         Checks the highest timeframe that has a new bar and updates the respective attributes.
         Returns the timeframe that had the latest update.
         """
-        current_time = datetime.now()  # Get the current time
+        current_time = time_current()  # Get the current time
         current_week = current_time.isocalendar()[1]  # ISO calendar week number
         # Check for a new weekly bar
         if self.W1 != current_week:
@@ -525,14 +525,14 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
                     },
                 },
             },
-            'exit_Params': {
+            'exit_params': {
                 'exitP_daily_profit_close': str_to_bool(row['exitP_daily_profit_close']),
                 'exitP_daily_profit_close_days': safe_int_convert(row['exitP_daily_profit_close_days']),
                 'exitP_daily_close': str_to_bool(row['exitP_daily_close']),
                 'exitP_daily_close_days': safe_int_convert(row['exitP_daily_close_days']),
                 'exitP_daily_close_hour': safe_int_convert(row['exitP_daily_close_hour']),
                 'exitP_bars_close': safe_int_convert(row['exitP_bars_close']),
-
+                'exitP_daily_candle_exit_hour': safe_int_convert(row['exitP_daily_candle_exit_hour']),
             },
             'candle_params': {
                 'current_tf': {
@@ -610,7 +610,7 @@ def write_balance_performance_file(account_info_dict, open_trades):
     profit = account_info_dict.get('profit', 0)
 
     # Get current date and hour
-    now = datetime.now()
+    now = time_current()
     date_str = now.strftime('%Y-%m-%d')
     hour_str = now.strftime('%H:%M:%S')
 
@@ -752,7 +752,7 @@ def catch_i_times_with_s_seconds_delay(i, s , loop_error_msg, final_error_msg, f
 space = 150
 hashes = 5
 def print_current_time():
-    current_time_str = f"current_time is: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    current_time_str = f"current_time is: {time_current().strftime('%Y-%m-%d %H:%M:%S')}"
     spaces = (space - len(current_time_str)) // 2
     print("#"*hashes + " " * spaces + current_time_str + " " * spaces + "#"*hashes)
 
