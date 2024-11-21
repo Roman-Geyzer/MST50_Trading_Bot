@@ -75,10 +75,7 @@ performance_dir = os.path.join(drive, 'documentation', 'account')
 
 performance_file = os.path.join(performance_dir, 'performance.csv')
 
-if platform.system() == 'Windows':
-    file_namd_path = "Z:\Desktop\Fulfillment\Forex - Algo trading\Python API\config.xlsx"
-else:
-    file_namd_path = "/Users/macmini/Desktop/Fulfillment/Forex - Algo trading/Python API/config.xlsx"
+
 
 class TradeHour:
     def __init__(self):
@@ -420,7 +417,7 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     
     
     # Read the specified sheet into a DataFrame and handle missing values
-    df = pd.read_excel(file_namd_path, sheet_name=sheet_name)
+    df = pd.read_excel("config.xlsx", sheet_name="config")
     import numpy as np
     df.replace({np.nan: None}, inplace=True)
 
