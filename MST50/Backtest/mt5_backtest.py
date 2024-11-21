@@ -1348,7 +1348,7 @@ def run_backtest(strategies, symbols):
 			break
 
 		# Call on_minute with current simulation time
-		on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict=None)
+		on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict=None, BACKTEST_MODE=True)
 
 	print("Backtest completed.")
 	print(f"Final balance: {backtest.account['balance']}")

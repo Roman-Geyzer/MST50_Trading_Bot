@@ -10,11 +10,7 @@ Functions:
 """
 import os
 
-# Set BACKTEST_MODE to 'True' for backtesting, 'False' for live trading
-os.environ['BACKTEST_MODE'] = 'True'  # Change to 'True' when ready to backtest
 
-# Determine if we are in backtesting mode
-BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 
 
@@ -27,7 +23,7 @@ from .symbols import Timeframe
 # Always import account_info, shutdown, and last_error from mt5_interface
 from .mt5_interface import account_info, shutdown, last_error, time_current
 
-def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
+def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict,BACKTEST_MODE):
     """
     Main function to execute strategies on every minute.
     Function runs every minute and checks if a new hour has started.
@@ -80,4 +76,4 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict):
         # Rebalance once an hour - Make sure that each run of on_minute is at the start of a new minute
         wait_for_new_minute(time_bar)
         # Run once immediately (at the start of the new hour)
-        on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict)
+        on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict, BACKTEST_MODE)

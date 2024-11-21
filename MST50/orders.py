@@ -40,7 +40,7 @@ trade_dict = {
 
 # Helper functions
 
-def calculate_lot_size(symbol: str, trade_risk_percent: float, sl: float) -> float:
+def calculate_lot_size(symbol: str, trade_risk_percent: float,fixed_order_size: bool, sl: float) -> float:
     """
     Calculate the lot size for a trade based on stop-loss (SL), symbol, and risk percentage.
 
@@ -48,25 +48,28 @@ def calculate_lot_size(symbol: str, trade_risk_percent: float, sl: float) -> flo
         symbol (str): Symbol name.
         trade_risk_percent (float): Risk percentage per trade.
         sl (float): Stop-loss value.
+        fixed_order_size (bool): Whether to use a fixed order size.
 
     Returns:
         float: Calculated lot size.
     """
-    # Get the symbol tick value
-    n_tick_value = symbol_info_tick(symbol)['bid']
-    if sl == 0:
-        sl = 1
-    if n_tick_value == 0:
-        n_tick_value = 0.00001
 
     # Get account balance
     account_balance = account_info()['balance']
+    if fixed_order_size:
+        lot_size = trade_risk_percent * account_balance / 100000
+    else:
+        n_tick_value = symbol_info_tick(symbol)['bid']
+        if sl == 0:
+            sl = 1
+        if n_tick_value == 0:
+            n_tick_value = 0.00001
 
-    # Get point size
-    point_size = symbol_info(symbol)['point']
+        # Get point size
+        point_size = symbol_info(symbol)['point']
 
-    # Calculate lot size
-    lot_size = (account_balance * trade_risk_percent / 100) / (sl / point_size * n_tick_value)
+        # Calculate lot size
+        lot_size = (account_balance * trade_risk_percent / 100) / (sl / point_size * n_tick_value)
 
     # Normalize lot size to 2 decimal places
     lot_size = round(lot_size, 2)

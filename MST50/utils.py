@@ -453,6 +453,7 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
             'symbols': symbols,# list of symbols to trade
             'timeframe': get_mt5_timeframe(row['timeframe']),
             'tradeP_risk': safe_float_convert(row['tradeP_risk']),
+            'tradeP_fixed_order_size': str_to_bool(row['tradeP_fixed_order_size']),
             'tradeP_max_trades': safe_int_convert(row['tradeP_max_trades']),
             'tradeP_hour_start': safe_int_convert(row['tradeP_hour_start']),
             'tradeP_hour_length': safe_int_convert(row['tradeP_hour_length']),

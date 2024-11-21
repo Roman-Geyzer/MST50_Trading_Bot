@@ -22,12 +22,12 @@ Constants:
 import os
 
 # Set BACKTEST_MODE to 'True' for backtesting, 'False' for live trading
-os.environ['BACKTEST_MODE'] = 'False'  # Change to 'True' when ready to backtest
+os.environ['BACKTEST_MODE'] = 'True'  # Change to 'True' when ready to backtest
 
 # Determine if we are in backtesting mode
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
-import schedule
+
 import time
 
 from .strategy import Strategy
@@ -77,29 +77,14 @@ def main():
 
     print(f"Initialized trade hour, hour= {trade_hour.current_hour}, day= {trade_hour.current_day}")
     print(f"Initialized time bar, current_bar (highest new bar) = {time_bar.current_bar}")
-    # Schedule the on_minute function to run every minute
-    print_hashtaged_msg(1, "Scheduling on_minute", "Scheduling on_minute function to run every minute...")
-
-    ############################################
-    #    TODO: uncomment the following line    #
-    ############################################
-    wait_for_new_minute(time_bar)  # Make sure that each run of on_minute is at the start of a new minute
-    on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict)  # Run once immediately
-    schedule.every(1).minutes.do(
-        on_minute,
-        strategies=strategies,
-        trade_hour=trade_hour,
-        time_bar=time_bar,
-        symbols=symbols,
-        account_info_dict=account_info_dict
-    )
 
     print_hashtaged_msg(1, "Initialization Complete", "All initializations completed successfully, waiting for new minute to start executing strategies...")
-    # Run: execute strategies
+
     try:
-        while True:
-            schedule.run_pending()  # Check if any scheduled tasks need to run
-            time.sleep(1)           # Sleep for 1 second before checking again
+        while True:     # Schedule the on_minute function to run every minute
+            wait_for_new_minute(time_bar)  # Make sure that each run of on_minute is at the start of a new minute
+            on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict,BACKTEST_MODE)  # Run 
+            time.sleep(45) # sleep for 45 seconds - no need to run the wait_for_new_minute which uses time.sleep(1)
     except KeyboardInterrupt:
         print_hashtaged_msg(3, "Keyboard Interrupt", "Stopping strategies...")
 

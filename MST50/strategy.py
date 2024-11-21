@@ -73,6 +73,8 @@ class Strategy:
         self.strategy_name = strategy_config['strategy_name']
         self.tradeP_long = strategy_config['tradeP_long']
         self.tradeP_short = strategy_config['tradeP_short']
+        self.trade_risk = strategy_config['tradeP_risk']
+        self.fixed_order_size = strategy_config['tradeP_fixed_order_size']
         self.open_trades = self.get_open_trades_from_terminal()   # Dictionary to hold open trades: trade_id -> trade_info
 
         self.start_hour_trading = strategy_config['tradeP_hour_start']
@@ -432,7 +434,7 @@ class Strategy:
         """ 
         #check traing hours within the trading hours of the strategy
         current_hour = time_current().hour
-        if current_hour <= self.start_hour_trading or current_hour >= self.end_hour_trading:
+        if current_hour < self.start_hour_trading or current_hour > self.end_hour_trading:
             return False # Exit the method early if not in trading hours
         current_day = str(time_current().weekday())
         
@@ -576,7 +578,7 @@ class Strategy:
             magic_num = position['magic']
         else:
             sl, tp = calculate_sl_tp(price, direction,self.config['sl_method'], self.config['sl_param'], self.config['tp_method'], self.config['tp_param'], symbol, rates)
-            volume = calculate_lot_size(symbol, self.config['tradeP_risk'],sl)
+            volume = calculate_lot_size(symbol, self.config['tradeP_risk'], self.fixed_order_size,sl)
             magic_num = get_final_magic_number(symbol, self.magic_num)
 
         request = {
