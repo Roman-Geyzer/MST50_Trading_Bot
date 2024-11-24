@@ -394,12 +394,17 @@ class Strategy:
         pass
         
         # TODO: comment and uncomment the following lines based on backtest optimization
+        # TODO: validate in live trading
         trade_info = history_deals_get(None, None, trade_id)[0]
-        with open(self.documanted_trades_file, 'a') as f:
-            # Write the trade information to the file
-            f.write(f"{trade_info['ticket']},{trade_info['magic']},{trade_info['symbol']},{trade_info['type']},{trade_info['volume']},\
-                    {trade_info['price_open']},{trade_info['sl']},{trade_info['tp']},{trade_info['time']},{time_current()} ,\
-                    {trade_info['swap']},{trade_info['profit']},{trade_info['reason']},{trade_info['comment']}\n")
+        if trade_info is None:
+            print_hashtaged_msg(1, f"Trade {trade_id} no longer exists in MT5.")
+            return
+        else:
+            with open(self.documanted_trades_file, 'a') as f:
+                # Write the trade information to the file
+                f.write(f"{trade_info['ticket']},{trade_info['magic']},{trade_info['symbol']},{trade_info['type']},{trade_info['volume']},\
+                        {trade_info['price_open']},{trade_info['sl']},{trade_info['tp']},{trade_info['time']},{time_current()} ,\
+                        {trade_info['swap']},{trade_info['profit']},{trade_info['reason']},{trade_info['comment']}\n")
 
     def check_open_trades(self):
         """
@@ -578,6 +583,10 @@ class Strategy:
             magic_num = position['magic']
         else:
             sl, tp = calculate_sl_tp(price, direction,self.config['sl_method'], self.config['sl_param'], self.config['tp_method'], self.config['tp_param'], symbol, rates)
+            #pyro can't get np.float64
+            if not BACKTEST_MODE:
+                sl = float(sl)
+                tp = float(tp)
             volume = calculate_lot_size(symbol, self.config['tradeP_risk'], self.fixed_order_size,sl)
             magic_num = get_final_magic_number(symbol, self.magic_num)
 
@@ -607,8 +616,7 @@ class Strategy:
         request = self.fill_request_data(direction, symbol, ticket, comment, rates)
         result =  order_send(request)
         if result['retcode'] == TRADE_ACTIONS['DONE']:
-            pass
-            #TODO: implement logic to store trade info
+            self.open_trades[result['ticket']] = result
             # Order succeeded, store trade info
             #print(f"Opened {direction} trade on {symbol}, ticket: {result['order']}")
         return result
@@ -788,15 +796,18 @@ class Strategy:
         if self.daily_candle_exit_hour:
             if self.daily_candle_exit_hour != current_time.hour:
                 return # Exit the method early if not the exit hour (for other tf's than D1 we won't get here)
-
+        if len(self.open_trades) == 0:
+            return # Exit the method early if no open trades
         for trade_id, trade_info in list(self.open_trades.items()):
             if trade_info['symbol'] != symbol:
                 continue  # Skip trades not related to the current symbol
             
             #TODO: optimize - move this to the relvent place in the code - only calculate bars in trade when needed
             # Calculate how long the trade has been open
-            open_time = trade_info['time']
-            time_diff = current_time - datetime.fromtimestamp(open_time)
+            print(f"type of trade_info['time']: {type(trade_info['time'])}")
+            # Convert numpy.datetime64 to Python datetime
+            trade_open_time = pd.Timestamp(trade_info['time']).to_pydatetime()
+            time_diff = current_time - trade_open_time
             days_in_trade = time_diff.days
             bars_in_trade = self.calculate_bars_in_trade(trade_info, rates)
 

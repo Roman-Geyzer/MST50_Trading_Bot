@@ -546,25 +546,28 @@ class MT5Backtest:
 			if position_ticket is None:
 				# Open new position
 				result = self.execute_market_order(symbol, order_type, volume, price, comment, sl, tp, magic)
+				result['retcode'] = TRADE_ACTIONS['DONE']
 				return result
 			else:
 				# Close existing position
 				result = self.close_position(position_ticket, price, reason='CLOSE')
-				return {
-					'retcode': TRADE_RETCODE_DONE,
-					'order': position_ticket
-				}
+				result['order'] = position_ticket
+				result['retcode'] = TRADE_ACTIONS['DONE']
+				return result
 		elif action == TRADE_ACTION_SLTP:
 			# Modify order
 			result = self.modify_order(request)
+			result['retcode'] = TRADE_ACTIONS['DONE']
 			return result
 		elif action == TRADE_ACTION_CLOSE_BY:
 			# Close by opposite position
 			result = self.close_by_order(request)
+			result['retcode'] = TRADE_ACTIONS['DONE']
 			return result
 		else:
 			self.set_last_error(RES_E_INVALID_PARAMS, f"Unknown action type: {action}")
-			return None
+			request['retcode'] = TRADE_RETCODE_ERROR
+			return request
 
 	def execute_market_order(self, symbol, order_type, volume, price, comment, sl, tp, magic):
 		"""
@@ -625,10 +628,10 @@ class MT5Backtest:
 		self.trade_logs.append(trade_log)
 
 		# Return success
-		return {
-			'retcode': TRADE_RETCODE_DONE,
-			'order': position['ticket']
-		}
+		result = position.copy()
+		result['retcode'] = TRADE_RETCODE_DONE
+		result['order'] = position['ticket']
+		return result
 
 	def modify_order(self, request):
 		"""
