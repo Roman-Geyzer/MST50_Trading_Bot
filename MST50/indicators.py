@@ -239,9 +239,9 @@ class BBIndicator(Indicator):
             print_hashtaged_msg(1, f"Missing Bollinger Bands boolean columns in rates DataFrame: {required_cols}")
             return None, None
 
-        bool_above = rates[bool_above_col].iloc[-1]
-        bool_below = rates[bool_below_col].iloc[-1]
-        current_close = rates['close'].iloc[-1]
+        bool_above = rates[bool_above_col][-1]
+        bool_below = rates[bool_below_col][-1]
+        current_close = rates['close'][-1]
 
         if bool_above:
             return 'sell', {'entry': current_close, 'sl': current_close + 10, 'tp': current_close - 20}
@@ -263,11 +263,11 @@ class BBIndicator(Indicator):
             print_hashtaged_msg(1, f"Missing Bollinger Bands boolean columns in rates DataFrame: {required_cols}")
             return None, None
 
-        bool_above_prev = rates[bool_above_col].iloc[-2]
-        bool_below_prev = rates[bool_below_col].iloc[-2]
-        bool_above_curr = rates[bool_above_col].iloc[-1]
-        bool_below_curr = rates[bool_below_col].iloc[-1]
-        current_close = rates['close'].iloc[-1]
+        bool_above_prev = rates[bool_above_col][-2]
+        bool_below_prev = rates[bool_below_col][-2]
+        bool_above_curr = rates[bool_above_col][-1]
+        bool_below_curr = rates[bool_below_col][-1]
+        current_close = rates['close'][-1]
 
         if bool_below_prev and not bool_below_curr:
             # Price was below lower band and has returned inside
@@ -288,8 +288,8 @@ class BBIndicator(Indicator):
             print_hashtaged_msg(1, f"Missing Bollinger Bands middle band column in rates DataFrame: {middle_band_col}")
             return None, None
 
-        middle_band = rates[middle_band_col].iloc[-1]
-        current_close = rates['close'].iloc[-1]
+        middle_band = rates[middle_band_col][-1]
+        current_close = rates['close'][-1]
 
         if current_close > middle_band:
             return 'buy', {'entry': current_close, 'sl': current_close - 10, 'tp': current_close + 20}
@@ -327,11 +327,11 @@ class MAIndicator(Indicator):
             print_hashtaged_msg(1, f"Missing MA comparison columns in rates DataFrame: {required_cols}")
             return None, None
 
-        fast_ma_comp = rates[fast_ma_comp_col].iloc[-1]
-        slow_ma_comp = rates[slow_ma_comp_col].iloc[-1]
-        long_ma_comp = rates[long_ma_comp_col].iloc[-1]
+        fast_ma_comp = rates[fast_ma_comp_col][-1]
+        slow_ma_comp = rates[slow_ma_comp_col][-1]
+        long_ma_comp = rates[long_ma_comp_col][-1]
 
-        current_close = rates['close'].iloc[-1]
+        current_close = rates['close'][-1]
 
         #TODO: update this method to be for crossover strategy
         #TODO: consider using the following method for MA trade filtering
@@ -379,11 +379,11 @@ class GRIndicator(Indicator):
             print_hashtaged_msg(1, f"Missing GR ratio column in rates DataFrame: {ga_col}")
             return None, None
 
-        gr_ratio = rates[ga_col].iloc[-1]
+        gr_ratio = rates[ga_col][-1]
 
-        current_close = rates['close'].iloc[-1]
-        current_low = rates['low'].iloc[-1]
-        current_high = rates['high'].iloc[-1]
+        current_close = rates['close'][-1]
+        current_low = rates['low'][-1]
+        current_high = rates['high'][-1]
 
         # If GR ratio signals a buy
         if gr_ratio > self.buy_enter_limit:
@@ -534,7 +534,7 @@ class RSIIndicator(Indicator):
             if self.rsi_values[i] < 50 - self.rsi_over_extended:
                 if self.rsi_values[i] < self.rsi_values[idx]:
                     if self.is_local_rsi_min(i):
-                        if rates['close'].iloc[i] > rates['close'].iloc[idx]:
+                        if rates['close'][i] > rates['close'][idx]:
                             return True
         return False
 
@@ -558,7 +558,7 @@ class RSIIndicator(Indicator):
             if self.rsi_values[i] > 50 + self.rsi_over_extended:
                 if self.rsi_values[i] > self.rsi_values[idx]:
                     if self.is_local_rsi_max(i):
-                        if rates['close'].iloc[i] < rates['close'].iloc[idx]:
+                        if rates['close'][i] < rates['close'][idx]:
                             return True
         return False
 
@@ -581,7 +581,7 @@ class RSIIndicator(Indicator):
                     break
                 if self.rsi_values[i] > self.rsi_values[idx]:
                     if self.is_local_rsi_min(i):
-                        if rates['close'].iloc[i] < rates['close'].iloc[idx]:
+                        if rates['close'][i] < rates['close'][idx]:
                             return True
         return False
 
@@ -604,7 +604,7 @@ class RSIIndicator(Indicator):
                     break
                 if self.rsi_values[i] < self.rsi_values[idx]:
                     if self.is_local_rsi_max(i):
-                        if rates['close'].iloc[i] > rates['close'].iloc[idx]:
+                        if rates['close'][i] > rates['close'][idx]:
                             return True
         return False
 
@@ -936,14 +936,14 @@ class KAMAIndicator(Indicator):
 
 
 class RangeIndicator(Indicator):
-    def __init__(self,name, params):
+    def __init__(self, name, params):
         """
         Initialize the Range Indicator with strategy parameters.
 
         Parameters:
             params (dict): Contains specific parameters for SR, Breakout, and Fakeout calculations.
         """
-        super().__init__(name,params)
+        super().__init__(name, params)
         self.period_for_sr = safe_int_extract_from_dict(params, 'a', 100)
         self.touches_for_sr = safe_int_extract_from_dict(params, 'b', 3)
         self.slack_for_sr_atr_div = safe_float_extract_from_dict(params, 'c', 10.0)
@@ -951,21 +951,24 @@ class RangeIndicator(Indicator):
         self.max_distance_from_sr_atr = safe_float_extract_from_dict(params, 'e', 2.0)
         self.min_height_of_sr_distance = safe_float_extract_from_dict(params, 'f', 3.0)
         self.max_height_of_sr_distance = safe_float_extract_from_dict(params, 'g', 200.0)
-        self.bars_from_fakeout = safe_int_extract_from_dict(params, 'h', 2)
-        self.bars_before_fakeout = safe_int_extract_from_dict(params, 'i', 2)
-        self.fakeout_atr_slack = safe_float_extract_from_dict(params, 'j', 0.5)
-        self.slack_for_breakout_atr = safe_float_extract_from_dict(params, 'k', 0.1)
+
+        self.slack_for_breakout_atr = safe_float_extract_from_dict(params, 'h', 0.1)
+        
+        self.bars_from_fakeout = safe_int_extract_from_dict(params, 'i', 2)
+        self.bars_before_fakeout = safe_int_extract_from_dict(params, 'j', 2)
+        self.fakeout_atr_slack = safe_float_extract_from_dict(params, 'k', 0.5)
+
 
         # Initialize SR levels
         self.upper_sr = 0.0
         self.lower_sr = 0.0
         self.prev_upper_sr_level = 0.0
         self.prev_lower_sr_level = 0.0
+        self.upper_limit = 0.0
+        self.lower_limit = 0.0
 
         # Determine the strategy type
         self.strategy_type = self.params.get('type', 'SR')
-
-
 
         # Store the specific trade decision method based on the parameters
         self.trade_decision_method = self.get_trade_decision_method()
@@ -984,7 +987,7 @@ class RangeIndicator(Indicator):
             'Fakeout': self.fakeout_trade_decision
         }
         return decision_methods.get(self.name)
-    
+
     def get_exit_decision_method(self):
         """
         Return the appropriate exit decision method for this indicator based on the parameters.
@@ -1004,26 +1007,104 @@ class RangeIndicator(Indicator):
         Calculate the Support and Resistance (SR) levels for the given rates.
 
         Parameters:
-            rates (np.recarray): Historical price data (OHLC).
+            rates (DataFrame): Historical price data (OHLC).
         """
         if len(rates) < self.period_for_sr:
             return
 
         recent_rates = rates[-self.period_for_sr:]
 
-        highest_high = np.max(recent_rates['high'])
-        lowest_low = np.min(recent_rates['low'])
+        # Initialize uSlackForSR and uRejectionFromSR
+        atr = rates['ATR'][-1]
+        uSlackForSR = atr / self.slack_for_sr_atr_div
+        uRejectionFromSR = atr * self.atr_rejection_multiplier
 
-        # Adjust levels based on slack percentage
-        price_range = highest_high - lowest_low
-        slack = price_range / self.slack_for_sr_atr_div
+        current_open = rates['open'][-1]
 
-        self.upper_sr = highest_high + slack
-        self.lower_sr = lowest_low - slack
+        # Initialize HighSR and LowSR
+        HighSR = current_open + self.min_height_of_sr_distance * uSlackForSR
+        LowSR = current_open - self.min_height_of_sr_distance * uSlackForSR
+
+        # LocalMax and LocalMin
+        LocalMax = np.max(recent_rates['high'])
+        LocalMin = np.min(recent_rates['low'])
+
+        # Initialize LoopCounter
+        LoopCounter = 0
+
+        # Upper SR Level
+        while LoopCounter < self.max_height_of_sr_distance:
+            UpperSR = HighSR
+            num_touches = self.count_touches(UpperSR, recent_rates, uRejectionFromSR, upper=True)
+            if num_touches >= self.touches_for_sr:
+                self.upper_sr = UpperSR
+                break
+            else:
+                HighSR += uSlackForSR
+                LoopCounter += 1
+                if HighSR > LocalMax:
+                    self.upper_sr = 0
+                    self.upper_limit = HighSR
+                    break
+
+        # Reset LoopCounter for LowerSR
+        LoopCounter = 0
+
+        # Lower SR Level
+        while LoopCounter < self.max_height_of_sr_distance:
+            LowerSR = LowSR
+            num_touches = self.count_touches(LowerSR, recent_rates, uRejectionFromSR, upper=False)
+            if num_touches >= self.touches_for_sr:
+                self.lower_sr = LowerSR
+                break
+            else:
+                LowSR -= uSlackForSR
+                LoopCounter += 1
+                if LowSR < LocalMin:
+                    self.lower_sr = 0
+                    self.lower_limit = LowSR
+                    break
 
         # Store previous SR levels for Breakout and Fakeout checks
         self.prev_upper_sr_level = self.upper_sr
         self.prev_lower_sr_level = self.lower_sr
+
+    def count_touches(self, current_hline, recent_rates, uRejectionFromSR, upper=True):
+        """
+        Count the number of touches to the given SR level.
+
+        Parameters:
+            current_hline (float): The SR level to check.
+            recent_rates (DataFrame): The recent rates to check.
+            uRejectionFromSR (float): The rejection slack based on ATR.
+            upper (bool): True if checking for upper SR, False for lower SR.
+
+        Returns:
+            int: Number of touches.
+        """
+        counter = 0
+        for idx in range(len(recent_rates) - 1):
+            open_price = recent_rates['open'][idx]
+            close_price = recent_rates['close'][idx]
+            high_price = recent_rates['high'][idx]
+            low_price = recent_rates['low'][idx]
+            candle_size = abs(high_price - low_price)
+
+            if upper:
+                # Upper SR check
+                if open_price < current_hline and close_price < current_hline:
+                    if high_price > current_hline or (
+                        candle_size > uRejectionFromSR and (current_hline - high_price) < uRejectionFromSR / 2
+                    ):
+                        counter += 1
+            else:
+                # Lower SR check
+                if open_price > current_hline and close_price > current_hline:
+                    if low_price < current_hline or (
+                        candle_size > uRejectionFromSR and (low_price - current_hline) < uRejectionFromSR / 2
+                    ):
+                        counter += 1
+        return counter
 
     def sr_trade_decision(self, rates):
         """
@@ -1037,31 +1118,35 @@ class RangeIndicator(Indicator):
         current_close = rates['close'][-1]
         atr = rates['ATR'][-1]
 
-        distance_from_upper = self.upper_sr - current_open
-        distance_from_lower = current_open - self.lower_sr
-        price_range = current_open
+        # For buy signal
+        if self.lower_sr != 0:
+            sr_level = self.lower_sr
+            if (current_open - sr_level) < self.max_distance_from_sr_atr * atr:
+                # Buy signal
+                return 'buy', {'entry': current_close, 'sl': sr_level - 10, 'tp': self.upper_sr}
 
-        if distance_from_lower < (self.max_distance_from_sr_atr) * atr:
-            # Buy signal
-            return 'buy', {'entry': current_close, 'sl': self.lower_sr - 10, 'tp': self.upper_sr}
-        elif distance_from_upper < (self.max_distance_from_sr_atr / 100) * price_range:
-            # Sell signal
-            return 'sell', {'entry': current_close, 'sl': self.upper_sr + 10, 'tp': self.lower_sr}
+        # For sell signal
+        if self.upper_sr != 0:
+            sr_level = self.upper_sr
+            if (sr_level - current_open) < self.max_distance_from_sr_atr * atr:
+                # Sell signal
+                return 'sell', {'entry': current_close, 'sl': sr_level + 10, 'tp': self.lower_sr}
+
         return None, None
 
     def sr_exit_decision(self, rates, direction):
         """
         Return an exit decision based on SR strategy.
-        returns:
+
+        Returns:
             Bool: True if the trade should be closed, False otherwise.
         """
-        sr_trade = self.sr_trade_decision(rates)
-        if sr_trade is 'buy' and direction is 'sell':
-            return True # close the trade
-        elif sr_trade is 'sell' and direction is 'buy':
-            return True # close the trade
-        return False # do not close the trade
-
+        sr_trade, _ = self.sr_trade_decision(rates)
+        if sr_trade == 'buy' and direction == 'sell':
+            return True  # Close the trade
+        elif sr_trade == 'sell' and direction == 'buy':
+            return True  # Close the trade
+        return False  # Do not close the trade
 
     def breakout_trade_decision(self, rates):
         """
@@ -1073,26 +1158,35 @@ class RangeIndicator(Indicator):
         self.calculate_sr_levels(rates)
         current_close = rates['close'][-1]
         previous_close = rates['close'][-2]
+        atr = rates['ATR'][-1]
 
-        if previous_close > self.prev_upper_sr_level + (self.slack_for_breakout_perc / 100) * previous_close:
-            # Buy signal
-            return 'buy', {'entry': current_close, 'sl': self.prev_lower_sr_level - 10, 'tp': current_close + 20}
-        elif previous_close < self.prev_lower_sr_level - (self.slack_for_breakout_perc / 100) * previous_close:
-            # Sell signal
-            return 'sell', {'entry': current_close, 'sl': self.prev_upper_sr_level + 10, 'tp': current_close - 20}
+        # For buy signal
+        if self.prev_upper_sr_level != 0:
+            sr_level = self.prev_upper_sr_level
+            if previous_close > sr_level + self.slack_for_breakout_atr * atr:
+                # Buy signal
+                return 'buy', {'entry': current_close, 'sl': self.prev_lower_sr_level - 10, 'tp': current_close + 20}
+
+        # For sell signal
+        if self.prev_lower_sr_level != 0:
+            sr_level = self.prev_lower_sr_level
+            if previous_close < sr_level - self.slack_for_breakout_atr * atr:
+                # Sell signal
+                return 'sell', {'entry': current_close, 'sl': self.prev_upper_sr_level + 10, 'tp': current_close - 20}
+
         return None, None
-    
+
     def breakout_exit_decision(self, rates, direction):
         """
-        Make an exit decision based on SR strategy.
+        Make an exit decision based on Breakout strategy.
 
         Returns:
             Bool: True if the trade should be closed, False otherwise.
         """
-        breakout_trade = self.breakout_trade_decision(rates)
-        if breakout_trade is 'buy' and direction is 'sell':
+        breakout_trade, _ = self.breakout_trade_decision(rates)
+        if breakout_trade == 'buy' and direction == 'sell':
             return True
-        elif breakout_trade is 'sell' and direction is 'buy':
+        elif breakout_trade == 'sell' and direction == 'buy':
             return True
         return False
 
@@ -1105,80 +1199,72 @@ class RangeIndicator(Indicator):
         """
         self.calculate_sr_levels(rates)
         atr = rates['ATR'][-1]
+
         total_bars_needed = self.bars_from_fakeout + self.bars_before_fakeout
-        if len(rates) < total_bars_needed:
+        if len(rates) < total_bars_needed + 1:
             return None, None
 
-        recent_rates = rates[-total_bars_needed:]
+        # For buy signal
+        if self.lower_sr != 0:
+            sr_level = self.lower_sr
 
-        lows = recent_rates['low']
-        highs = recent_rates['high']
+            # Get lows for fakeout and previous period
+            fakeout_lows = rates['low'][-self.bars_from_fakeout:]
+            previous_lows = rates['low'][-(total_bars_needed):-self.bars_from_fakeout]
 
-        # Define slicing indices
-        fakeout_start = -self.bars_from_fakeout
-        if fakeout_start == 0:
-            fakeout_lows = lows[:]
-            previous_lows = []
-            fakeout_highs = highs[:]
-            previous_highs = []
-        else:
-            fakeout_lows = lows[fakeout_start:]
-            previous_lows = lows[:fakeout_start]
-            fakeout_highs = highs[fakeout_start:]
-            previous_highs = highs[:fakeout_start]
+            low_in_fakeout = np.min(fakeout_lows)
+            low_before_fakeout = np.min(previous_lows)
 
-        # Check for empty previous_lows or previous_highs
-        if len(previous_lows) == 0 or len(previous_highs) == 0:
-            return None, None
+            if low_in_fakeout <= sr_level - self.fakeout_atr_slack * atr:
+                if low_before_fakeout >= sr_level:
+                    sr_decision, _ = self.sr_trade_decision(rates)
+                    if sr_decision == 'buy':
+                        return 'buy', {'entry': rates['close'][-1], 'sl': sr_level - 10, 'tp': self.upper_sr}
 
-        # Calculate minimum and maximum
-        try:
-            lowest_in_fakeout = np.min(fakeout_lows)
-            previous_lowest = np.min(previous_lows)
+        # For sell signal
+        if self.upper_sr != 0:
+            sr_level = self.upper_sr
 
-            highest_in_fakeout = np.max(fakeout_highs)
-            previous_highest = np.max(previous_highs)
-        except ValueError as e:
-            return None, None
+            fakeout_highs = rates['high'][-self.bars_from_fakeout:]
+            previous_highs = rates['high'][-(total_bars_needed):-self.bars_from_fakeout]
 
-        # Decision logic
-        buy_condition = (lowest_in_fakeout > self.lower_sr - (self.fakeout_atr_slack * atr) * lowest_in_fakeout) and (previous_lowest < self.lower_sr)
-        sell_condition = (highest_in_fakeout < self.upper_sr + (self.fakeout_atr_slack * atr) * highest_in_fakeout) and (previous_highest > self.upper_sr)
+            high_in_fakeout = np.max(fakeout_highs)
+            high_before_fakeout = np.max(previous_highs)
 
-        if buy_condition:
-            # Buy signal
-            return 'buy', {'entry': rates['close'][-1], 'sl': self.lower_sr - 10, 'tp': self.upper_sr}
-        elif sell_condition:
-            # Sell signal
-            return 'sell', {'entry': rates['close'][-1], 'sl': self.upper_sr + 10, 'tp': self.lower_sr}
-        
+            if high_in_fakeout >= sr_level + self.fakeout_atr_slack * atr:
+                if high_before_fakeout <= sr_level:
+                    sr_decision, _ = self.sr_trade_decision(rates)
+                    if sr_decision == 'sell':
+                        return 'sell', {'entry': rates['close'][-1], 'sl': sr_level + 10, 'tp': self.lower_sr}
+
         return None, None
-    
+
     def fakeout_exit_decision(self, rates, direction):
         """
-        Make an exit decision based on SR strategy.
+        Make an exit decision based on Fakeout strategy.
 
         Returns:
-            Tuple: (decision, trade_data)
+            Bool: True if the trade should be closed, False otherwise.
         """
-        fakeout_trade , _ = self.fakeout_trade_decision(rates)
-        if fakeout_trade is 'buy' and direction is 'sell':
-            return True # close the trade
-        elif fakeout_trade is 'sell' and direction is 'buy':
-            return True # close the trade
-        return False # do not close the trade
+        fakeout_trade, _ = self.fakeout_trade_decision(rates)
+        if fakeout_trade == 'buy' and direction == 'sell':
+            return True  # Close the trade
+        elif fakeout_trade == 'sell' and direction == 'buy':
+            return True  # Close the trade
+        return False  # Do not close the trade
 
     def claculuate_and_make_make_trade_decision(self, rates):
         """
         Make a trade decision based on SR, Breakout, or Fakeout conditions.
 
         Parameters:
-            rates (np.recarray): Historical price data (OHLC).
+            rates (DataFrame): Historical price data (OHLC).
 
         Returns:
             Tuple: (decision, trade_data)
         """
         return self.trade_decision_method(rates)
+
 
 class TrendIndicator(Indicator):
     def __init__(self, params):

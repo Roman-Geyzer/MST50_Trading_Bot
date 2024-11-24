@@ -903,7 +903,8 @@ class Strategy:
             sl_price.append(calculate_fast_trail(price, current_sl, self.trail_both_directions, direction, self.fast_trail_minutes_count, 
                                             self.fast_trail_ATR_start_multiplier, self.fast_trail_ATR_trail_multiplier,point, rates))
         if self.use_move_to_breakeven:
-            sl_price.append(calculate_breakeven(price, current_sl, direction,self.trail_both_directions, self.breakeven_ATRs, position['POSITION_PRICE_OPEN'], symbol_str, point, rates))
+            sl_price.append(calculate_breakeven(price, current_sl, direction,self.trail_both_directions, self.breakeven_ATRs,
+                                                 position['price_open'], point, rates))
         if self.trail_method:
             sl_price.append(calculate_trail(
                 price, current_sl, self.trail_both_directions, direction,

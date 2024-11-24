@@ -175,9 +175,9 @@ def UsePerc_SL(price, direction, sl_param, symbol, point,rates):
     Returns:
         float: Calculated SL price.
     """
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         sl = price - sl_param * price / 100
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         sl = price + sl_param * price / 100
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -197,9 +197,9 @@ def UseFixed_SL(price, direction, sl_param, symbol, point,rates):
     Returns:
         float: Calculated SL price.
     """
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         sl = price - sl_param * point
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         sl = price + sl_param * point
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -290,9 +290,9 @@ def UseATR_SL(price, direction, sl_param, symbol, point,rates):
         float: Calculated SL price.
     """
     atr = rates['ATR'][-1]
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         sl = price - sl_param * atr
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         sl = price + sl_param * atr
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -348,9 +348,9 @@ def UsePerc_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     Returns:
         float: Calculated TP price.
     """
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         tp = price + tp_param * price / 100
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         tp = price - tp_param * price / 100
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -370,9 +370,9 @@ def UseFixed_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     Returns:
         float: Calculated TP price.
     """
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         tp = price + tp_param * point
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         tp = price - tp_param * point
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -464,9 +464,9 @@ def UseRR_TP(price, direction, tp_param, symbol, point, rates=None, sl=None):
     """
     risk = abs(price - sl)
     reward = risk * tp_param
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         tp = price + reward
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         tp = price - reward
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -488,9 +488,9 @@ def UseATR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     """
     # This function needs implementation based on your ATR data
     atr = rates['ATR'][-1]
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         tp = price + tp_param * atr
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         tp = price - tp_param * atr
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -529,11 +529,11 @@ def check_trail_conditions(price, direction, trail_price, current_sl, both_sides
     trail_price = round(trail_price, decimal_places)
     if both_sides_trail:
         return trail_price
-    if direction == 0: # Buy
+    if direction == 0 or direction == TRADE_DIRECTION.BUY: # Buy
         if trail_price > current_sl:
             return trail_price
         return None  # No change to SL
-    elif direction == 1: # Sell
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL: # Sell
         if trail_price < current_sl:
             return trail_price
         return None
@@ -583,9 +583,9 @@ def UsePerc_Trail(price, current_sl, both_sides_trail, direction, trail_param, s
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         trail_price = price - trail_param * price / 100
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         trail_price = price + trail_param * price / 100
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -608,9 +608,9 @@ def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_param, 
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         trail_price = price - trail_param * point
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         trail_price = price + trail_param * point
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -633,10 +633,10 @@ def UseCandles_Trail_Close(price, current_sl, both_sides_trail, direction, trail
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    if direction == 0: # Buy
+    if direction == 0 or direction == TRADE_DIRECTION.BUY: # Buy
         trail_prices = rates_df['close'][-trail_param:-1]
         trail_price = min(trail_prices)
-    elif direction == 1: # Sell
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL: # Sell
         trail_prices = rates_df['close'][-trail_param:-1]
         trail_price = max(trail_prices)
     else:
@@ -660,10 +660,10 @@ def UseCandles_Trail_Extreme(price, current_sl, both_sides_trail, direction, tra
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         trail_prices = rates_df['low'][-trail_param:-1]
         trail_price = min(trail_prices)
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         trail_prices = rates_df['high'][-trail_param:-1]
         trail_price = max(trail_prices)
     else:
@@ -749,9 +749,9 @@ def UseATR_Trail(price, current_sl, both_sides_trail, direction, trail_param, sy
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
     atr = rates_df['ATR'][-1]
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         trail_price = price - trail_param * atr
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         trail_price = price + trail_param * atr
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
@@ -793,14 +793,14 @@ def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minut
 
     atr = rates['ATR'][-1]
 
-    if direction == 0:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         # Get the minimum low in the last N minutes (excluding the current minute)
         MinutesMin = rates['low'][-(n_minutes+1):-1].min()
         UpMove = price - MinutesMin
         if UpMove > start_multi * atr:
             trail_price = price - trail_multi * atr
             return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
-    elif direction == 1:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         # Get the maximum high in the last N minutes (excluding the current minute)
         MinutesMax = rates['high'][-(n_minutes+1):-1].max()
         DownMove = MinutesMax - price
@@ -831,15 +831,15 @@ def calculate_breakeven(price, current_sl, direction,  both_sides_trail, BE_ATRs
     if open_price is None:
         raise ValueError("open_price is required for UseMoveToBreakeven method")
 
-    atr = rates_df['ATR'].iloc[-1]
+    atr = rates_df['ATR'][-1]
 
     pip_value = point  # Assuming 1 pip = point size
-    if direction == TRADE_DIRECTION.BUY:
+    if direction == 0 or direction == TRADE_DIRECTION.BUY:
         trail_price = open_price + pip_value
         if trail_price > current_sl:
             if price > open_price + BE_ATRs * atr and price > trail_price:
                 return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
-    elif direction == TRADE_DIRECTION.SELL:
+    elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         trail_price = open_price - pip_value
         if trail_price < current_sl:
             if price < open_price - BE_ATRs * atr and price < trail_price:

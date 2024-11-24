@@ -24,6 +24,12 @@ import os
 # Set BACKTEST_MODE to 'True' for backtesting, 'False' for live trading
 os.environ['BACKTEST_MODE'] = 'True'  # Change to 'True' when ready to backtest
 
+run_mode = ['dev']
+# back_test, demo, live, on_hold, dev, optimize, transfer
+
+
+
+
 # Determine if we are in backtesting mode
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
@@ -41,8 +47,7 @@ from .utils import TradeHour, TimeBar, print_hashtaged_msg, initialize_balance_p
 from .mt5_interface import account_info, shutdown, last_error
 from .run_bot import on_minute
 
-run_mode = ['transfer']
-# back_test, demo, live, on_hold, dev, optimize, transfer
+
 
 
 
