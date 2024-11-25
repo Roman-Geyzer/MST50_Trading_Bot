@@ -347,7 +347,7 @@ class Strategy:
     def handle_new_bar(self, symbols):
         """
         Handle the arrival of a new bar.
-        This method is called when a new bar arrives in the strategy's timeframe.
+        This method is called when a new bar arrives in the strategy's timeframe or when a new hour starts.
         It is used update indicators, check for trading signals, etc.
         """
         #print(f"Handling new bar for strategy no. {self.strategy_num}, strategy name: {self.strategy_name}, strategy timeframe: {self.str_timeframe}")

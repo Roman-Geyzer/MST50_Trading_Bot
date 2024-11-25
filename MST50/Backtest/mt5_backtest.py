@@ -633,11 +633,12 @@ class MT5Backtest:
 
 		# Log the trade
 		trade_log = position.copy()
-		trade_log['action'] = 'OPEN'
+		result['action'] = TRADE_ACTION_DEAL
 		self.trade_logs.append(trade_log)
 
 		# Return success
 		result = position.copy()
+		result['action'] = TRADE_ACTION_DEAL
 		result['retcode'] = TRADE_RETCODE_DONE
 		result['order'] = position['ticket']
 		return result
