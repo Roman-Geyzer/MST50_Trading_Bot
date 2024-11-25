@@ -1113,25 +1113,59 @@ class RangeIndicator(Indicator):
         Returns:
             Tuple: (decision, trade_data)
         """
-        self.calculate_sr_levels(rates)
+        
         current_open = rates['open'][-1]
         current_close = rates['close'][-1]
         atr = rates['ATR'][-1]
 
         # For buy signal
+        buy_signal, _ = self.sr_check_is_buy(current_open, current_close, atr)
+        if buy_signal is not None:
+            return buy_signal, _
+
+        # For sell signal
+        sell_signal, _ = self.sr_check_is_sell(current_open, current_close, atr)
+        if sell_signal is not None:
+            return sell_signal, _
+
+        return None, None
+    
+    def sr_check_is_buy(self, current_open, current_close, atr):
+        """
+        Check if the SR indicator signals a buy.
+
+        Parameters:
+            current_open (float): Current open price.
+            current_close (float): Current close price.
+            atr (float): Current ATR value.
+
+        Returns:
+            Tuple: ('buy'/'sell'/None, trade_data) - Where trade_data contains entry, SL, TP.
+        """
         if self.lower_sr != 0:
             sr_level = self.lower_sr
             if (current_open - sr_level) < self.max_distance_from_sr_atr * atr:
                 # Buy signal
                 return 'buy', {'entry': current_close, 'sl': sr_level - 10, 'tp': self.upper_sr}
+        return None, None
+    
+    def sr_check_is_sell(self, current_open, current_close, atr):
+        """
+        Check if the SR indicator signals a sell.
 
-        # For sell signal
+        Parameters:
+            current_open (float): Current open price.
+            current_close (float): Current close price.
+            atr (float): Current ATR value.
+
+        Returns:
+            Tuple: ('buy'/'sell'/None, trade_data) - Where trade_data contains entry, SL, TP.
+        """
         if self.upper_sr != 0:
             sr_level = self.upper_sr
             if (sr_level - current_open) < self.max_distance_from_sr_atr * atr:
                 # Sell signal
                 return 'sell', {'entry': current_close, 'sl': sr_level + 10, 'tp': self.lower_sr}
-
         return None, None
 
     def sr_exit_decision(self, rates, direction):
@@ -1155,26 +1189,62 @@ class RangeIndicator(Indicator):
         Returns:
             Tuple: (decision, trade_data)
         """
-        self.calculate_sr_levels(rates)
+        
         current_close = rates['close'][-1]
         previous_close = rates['close'][-2]
         atr = rates['ATR'][-1]
 
         # For buy signal
+        buy_signal, _ = self.breakout_check_is_buy(previous_close, current_close, atr)
+        if buy_signal is not None:
+            return buy_signal, _
+
+        # For sell signal
+        sell_signal, _ = self.breakout_check_is_sell(previous_close, current_close, atr)
+        if sell_signal is not None:
+            return sell_signal, _
+
+        return None, None
+    
+    def breakout_check_is_buy(self, previous_close, current_close, atr):
+        """
+        Check if the Breakout indicator signals a buy.
+
+        Parameters:
+            previous_close (float): Previous close price.
+            current_close (float): Current close price.
+            atr (float): Current ATR value.
+
+        Returns:
+            Tuple: ('buy'/'sell'/None, trade_data) - Where trade_data contains entry, SL, TP.
+        """
         if self.prev_upper_sr_level != 0:
             sr_level = self.prev_upper_sr_level
             if previous_close > sr_level + self.slack_for_breakout_atr * atr:
                 # Buy signal
                 return 'buy', {'entry': current_close, 'sl': self.prev_lower_sr_level - 10, 'tp': current_close + 20}
+            
+        return None, None
+    
+    def breakout_check_is_sell(self, previous_close, current_close, atr):
+        """
+        Check if the Breakout indicator signals a sell.
 
-        # For sell signal
+        Parameters:
+            previous_close (float): Previous close price.
+            current_close (float): Current close price.
+            atr (float): Current ATR value.
+
+        Returns:
+            Tuple: ('buy'/'sell'/None, trade_data) - Where trade_data contains entry, SL, TP.
+        """
         if self.prev_lower_sr_level != 0:
             sr_level = self.prev_lower_sr_level
             if previous_close < sr_level - self.slack_for_breakout_atr * atr:
                 # Sell signal
                 return 'sell', {'entry': current_close, 'sl': self.prev_upper_sr_level + 10, 'tp': current_close - 20}
-
         return None, None
+
 
     def breakout_exit_decision(self, rates, direction):
         """
@@ -1197,14 +1267,41 @@ class RangeIndicator(Indicator):
         Returns:
             Tuple: (decision, trade_data)
         """
-        self.calculate_sr_levels(rates)
+        
         atr = rates['ATR'][-1]
 
         total_bars_needed = self.bars_from_fakeout + self.bars_before_fakeout
         if len(rates) < total_bars_needed + 1:
             return None, None
 
+        #TODO: Run tests and check if sometimes both trade directions are true.....
+        
         # For buy signal
+        buy_signal, _ = self.fakeout_check_is_buy(rates, atr, total_bars_needed)
+        if buy_signal is not None:
+            return buy_signal, _
+
+        # For sell signal
+        sell_signal, _ = self.fakeout_check_is_sell(rates, atr, total_bars_needed)
+        if sell_signal is not None:
+            return sell_signal, _
+
+        return None, None
+    
+    def fakeout_check_is_buy(self,rates, atr, total_bars_needed ):
+        """
+        Check if the Fakeout indicator signals a buy.
+
+        Parameters:
+            rates (DataFrame): Historical price data (OHLC).
+            atr (float): Current ATR value.
+            total_bars_needed (int): Total bars needed for calculation.
+
+        Returns:
+            Tuple: ('buy'/'sell'/None, trade_data) - Where trade_data contains entry, SL, TP.
+        """
+
+
         if self.lower_sr != 0:
             sr_level = self.lower_sr
 
@@ -1217,14 +1314,28 @@ class RangeIndicator(Indicator):
 
             if low_in_fakeout <= sr_level - self.fakeout_atr_slack * atr:
                 if low_before_fakeout >= sr_level:
-                    sr_decision, _ = self.sr_trade_decision(rates)
+                    sr_decision, _ = self.sr_check_is_buy(rates['open'][-1], rates['close'][-1], atr)
                     if sr_decision == 'buy':
                         return 'buy', {'entry': rates['close'][-1], 'sl': sr_level - 10, 'tp': self.upper_sr}
+        
+        return None, None
+    
+    def fakeout_check_is_sell(self, rates, atr, total_bars_needed):
+        """
+        Check if the Fakeout indicator signals a sell.
 
-        # For sell signal
+        Parameters:
+            rates (DataFrame): Historical price data (OHLC).
+            atr (float): Current ATR value.
+            total_bars_needed (int): Total bars needed for calculation.
+
+        Returns:
+            Tuple: ('buy'/'sell'/None, trade_data) - Where trade_data contains entry, SL, TP.
+        """
         if self.upper_sr != 0:
             sr_level = self.upper_sr
 
+            # Get highs for fakeout and previous period
             fakeout_highs = rates['high'][-self.bars_from_fakeout:]
             previous_highs = rates['high'][-(total_bars_needed):-self.bars_from_fakeout]
 
@@ -1233,7 +1344,7 @@ class RangeIndicator(Indicator):
 
             if high_in_fakeout >= sr_level + self.fakeout_atr_slack * atr:
                 if high_before_fakeout <= sr_level:
-                    sr_decision, _ = self.sr_trade_decision(rates)
+                    sr_decision, _ = self.sr_check_is_sell(rates['open'][-1], rates['close'][-1], atr)
                     if sr_decision == 'sell':
                         return 'sell', {'entry': rates['close'][-1], 'sl': sr_level + 10, 'tp': self.lower_sr}
 
@@ -1256,6 +1367,7 @@ class RangeIndicator(Indicator):
     def claculuate_and_make_make_trade_decision(self, rates):
         """
         Make a trade decision based on SR, Breakout, or Fakeout conditions.
+        calculate sr level (do it one time)
 
         Parameters:
             rates (DataFrame): Historical price data (OHLC).
@@ -1263,6 +1375,7 @@ class RangeIndicator(Indicator):
         Returns:
             Tuple: (decision, trade_data)
         """
+        self.calculate_sr_levels(rates)
         return self.trade_decision_method(rates)
 
 

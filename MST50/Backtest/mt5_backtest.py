@@ -47,6 +47,7 @@ import time
 
 # days set to end backtest - x days ago from today
 backtest_end_relative_to_today = 180
+leverage = 100  # Assuming leverage of 1:100
 
 
 constants = get_constants()
@@ -592,15 +593,23 @@ class MT5Backtest:
 		point = symbol_info['point']
 
 		# Calculate required margin (simplified)
-		required_margin = (contract_size * volume) / 100  # Assuming leverage of 1:100
+		required_margin = (contract_size * volume ) / leverage
 
 		if required_margin > self.account['free_margin']:
 			self.set_last_error(RES_E_FAIL, "Not enough free margin to open position.")
-			return None
+			print("Not enough free margin to open position.")
+			print(f"Required margin: {required_margin}, Free margin: {self.account['free_margin']}")
+			print(f"current open positions: {self.open_positions}")
+			result = {}
+			result['retcode'] = TRADE_RETCODE_ERROR
+			return result
 
 		# Update account margin
 		self.account['margin'] += required_margin
 		self.account['free_margin'] = self.account['equity'] - self.account['margin']
+		print(f"Free margin after opening position: {self.account['free_margin']}")
+		print(f"Margin after opening position: {self.account['margin']}")
+
 
 		# Create position
 		position = {
@@ -927,6 +936,7 @@ class MT5Backtest:
 		"""
 		if ticket not in self.open_positions:
 			self.set_last_error(RES_E_NOT_FOUND, f"Position ticket {ticket} not found.")
+			print(f"Position ticket {ticket} not found.")
 			return
 
 		position = self.open_positions[ticket]
@@ -1003,7 +1013,10 @@ class MT5Backtest:
 		self.trade_logs.append(trade_log)
 
 		# Remove from open_positions
-		del self.open_positions[ticket]
+		result =  self.open_positions.pop(ticket)
+		result['retcode'] = TRADE_RETCODE_DONE
+		return result
+
 
 	def step_simulation(self):
 		"""
@@ -1086,8 +1099,15 @@ class MT5Backtest:
 			name='Equity'
 		))
 
+		fig.add_trace(go.Scatter(
+			x=account_df['datetime'],
+			y=account_df['margin_level'],
+			mode='lines',
+			name='margin_level'
+		))
+
 		fig.update_layout(
-			title='Account Balance and Equity Over Time',
+			title='Account Balance, Equity and margin_level Over Time',
 			xaxis_title='Time',
 			yaxis_title='Amount ($)',
 			xaxis=dict(rangeslider_visible=True),
@@ -1343,20 +1363,23 @@ def run_backtest(strategies, symbols):
 	time_bar = TimeBar(backtest)
 
 	print(f"Starting backtest from {backtest.current_time} to {backtest.end_time}")
-	while backtest.current_time < backtest.end_time:
-		# Advance time by time_step
-		proceed = backtest.step_simulation()
-		if not proceed:
-			print(f"Backtest stopped due to error: {backtest.last_error_description}")
-			break
+	try:
+		while backtest.current_time < backtest.end_time:
+			# Advance time by time_step
+			proceed = backtest.step_simulation()
+			if not proceed:
+				print(f"Backtest stopped due to error: {backtest.last_error_description}")
+				break
 
-		# Call on_minute with current simulation time
-		on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict=None, BACKTEST_MODE=True)
+			# Call on_minute with current simulation time
+			on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict=None, BACKTEST_MODE=True)
+	except Exception as e:
+		print(f"Backtest stopped due to error: {e}")
+	finally:
+		print("Backtest completed.")
+		print(f"Final balance: {backtest.account['balance']}")
+		print(f"Final equity: {backtest.account['equity']}")
+		print(f"Total profit: {backtest.account['profit']}")
 
-	print("Backtest completed.")
-	print(f"Final balance: {backtest.account['balance']}")
-	print(f"Final equity: {backtest.account['equity']}")
-	print(f"Total profit: {backtest.account['profit']}")
-
-	# Export logs
-	backtest.export_logs()
+		# Export logs
+		backtest.export_logs()

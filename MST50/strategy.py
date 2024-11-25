@@ -33,7 +33,7 @@ BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 # Import utility functions and constants
 from .utils import (load_config,  get_final_magic_number, get_timeframe_string,
-                    print_hashtaged_msg, attempt_with_stages_and_delay)
+                    print_hashtaged_msg, attempt_with_stages_and_delay,print_with_info)
 from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_type, get_trade_direction, calculate_fast_trail, calculate_breakeven
 from .indicators import Indicators
 from .constants import DEVIATION, TRADE_DIRECTION
@@ -804,7 +804,7 @@ class Strategy:
             
             #TODO: optimize - move this to the relvent place in the code - only calculate bars in trade when needed
             # Calculate how long the trade has been open
-            print(f"type of trade_info['time']: {type(trade_info['time'])}")
+
             # Convert numpy.datetime64 to Python datetime
             trade_open_time = pd.Timestamp(trade_info['time']).to_pydatetime()
             time_diff = current_time - trade_open_time
