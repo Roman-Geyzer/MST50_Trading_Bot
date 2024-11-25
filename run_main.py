@@ -34,6 +34,6 @@ def profile_backtest():
 ################# end Profiling #################
 
 if __name__ == "__main__":
-    #main()
+    main()
     #check for performance"
-    profile_backtest()
+    #profile_backtest()
