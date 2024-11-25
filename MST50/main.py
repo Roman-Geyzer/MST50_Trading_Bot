@@ -21,17 +21,7 @@ Constants:
 
 import os
 
-# Set BACKTEST_MODE to 'True' for backtesting, 'False' for live trading
-os.environ['BACKTEST_MODE'] = 'False'  # Change to 'True' when ready to backtest
 
-run_mode = ['transfer']
-# back_test, demo, live, on_hold, dev, optimize, transfer
-
-
-
-
-# Determine if we are in backtesting mode
-BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 
 import time
@@ -52,7 +42,7 @@ from .run_bot import on_minute
 
 
 #TODO: create full seperation of the main function for live trading and backtesting
-def main():
+def main(run_mode=['live'], BACKTEST_MODE=False):
     """
     Main function to execute trading strategies.
     will run the main_backtest function if BACKTEST_MODE is True, otherwise will run the live trading mode.

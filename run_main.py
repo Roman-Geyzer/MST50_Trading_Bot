@@ -2,6 +2,14 @@
 
 from MST50.main import main
 
+
+run_mode = ['transfer']
+# back_test, demo, live, on_hold, dev, optimize, transfer
+
+
+# Determine if we are in backtesting mode
+BACKTEST_MODE = True
+
 #To see profile results, run the following command in the terminal:
 # snakeviz backtest_profile.prof
 
@@ -16,7 +24,7 @@ def profile_backtest():
     pr = cProfile.Profile()
     pr.enable()
     try:
-        main()
+        main(run_mode,BACKTEST_MODE)
     except KeyboardInterrupt:
         print("Backtest interrupted by user.")
     except Exception as e:
@@ -34,6 +42,7 @@ def profile_backtest():
 ################# end Profiling #################
 
 if __name__ == "__main__":
-    main()
-    #check for performance"
-    #profile_backtest()
+    if BACKTEST_MODE :
+        main(run_mode,BACKTEST_MODE)
+    else:
+        profile_backtest()

@@ -616,7 +616,7 @@ class Strategy:
         request = self.fill_request_data(direction, symbol, ticket, comment, rates)
         result =  order_send(request)
         if result['retcode'] == TRADE_ACTIONS['DONE']:
-            self.open_trades[result['ticket']] = result
+            self.open_trades[result['order']] = result
             # Order succeeded, store trade info
             #print(f"Opened {direction} trade on {symbol}, ticket: {result['order']}")
         return result

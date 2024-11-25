@@ -36,7 +36,8 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict,BACKT
         account_info_dict (dict): Account information dictionary.
     """
     now = time_current()
-    print(f"on_minute strarted, ", f"Current time: {now}")
+    if not BACKTEST_MODE:
+        print(f"on_minute strarted, ", f"Current time: {now}")
 
     # Fetch rates for all symbols and timeframes - the method will only update the rates if a new bar has started
     time_bar.update_tf_bar()

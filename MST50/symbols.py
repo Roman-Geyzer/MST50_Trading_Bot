@@ -272,8 +272,7 @@ class Timeframe:
         """
         latest_time = self.rates['time'][-1] if len(self.rates) > 0 else None
         new_rates = self.fetch_rates(self.symbol_str)
-
-        if len(new_rates) > 0:
+        if new_rates is not None and len(new_rates) > 0:
             new_latest_time = new_rates['time'][-1]
             if latest_time != new_latest_time:
                 # New bar detected, update rates

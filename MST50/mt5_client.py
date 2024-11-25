@@ -59,20 +59,37 @@ REQUIRED_COLUMNS = {}  # e.g., {'EURUSD': {'H1': set([...]), ...}, ...}
 def initialize_required_indicator_columns(strategies):
     """
     Initialize the global REQUIRED_COLUMNS variable based on the required columns in the strategies.
+
     Parameters:
         strategies: A list of strategy instances that contain required_columns.
     """
     global REQUIRED_COLUMNS
-    for i in strategies:
-        strategy = strategies[i]
-        timeframe = strategy.str_timeframe  # String representation of timeframe, e.g., 'H1'
-        required_columns = strategy.required_columns
+    base_columns = ['open', 'high', 'low', 'close', 'ATR']
+    
+    for strategy in strategies.values():
+        timeframes_with_required_columns = {strategy.str_timeframe: strategy.required_columns}
+        timeframes_with_base_columns = {
+            timeframe_to_string(strategy.higher_timeframe): base_columns,
+            timeframe_to_string(strategy.lower_timeframe): base_columns,
+            "M1": base_columns  # Add "M1" explicitly as a timeframe with base_columns
+        }
+
         for symbol in strategy.symbols:
             if symbol not in REQUIRED_COLUMNS:
                 REQUIRED_COLUMNS[symbol] = {}
+                
+            # Add required_columns for str_timeframe
+            timeframe = strategy.str_timeframe
             if timeframe not in REQUIRED_COLUMNS[symbol]:
                 REQUIRED_COLUMNS[symbol][timeframe] = set()
-            REQUIRED_COLUMNS[symbol][timeframe].update(required_columns)
+            REQUIRED_COLUMNS[symbol][timeframe].update(strategy.required_columns)
+
+            # Add base_columns for other timeframes, including "M1"
+            for timeframe, columns in timeframes_with_base_columns.items():
+                if timeframe not in REQUIRED_COLUMNS[symbol]:
+                    REQUIRED_COLUMNS[symbol][timeframe] = set()
+                REQUIRED_COLUMNS[symbol][timeframe].update(columns)
+
 
 
 
