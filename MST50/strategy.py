@@ -160,6 +160,8 @@ class Strategy:
         
         # Define the documentation directory with strategy number and name
         self.documentation_dir = os.path.join(drive, 'documentation', f"strategy_{self.strategy_num}_{self.strategy_name}")
+        if BACKTEST_MODE:
+            self.documentation_dir = os.path.join(self.documentation_dir, 'backtest')
 
         # Create the documentation directory if it doesn't exist
         if not os.path.exists(self.documentation_dir):

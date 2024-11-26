@@ -480,6 +480,7 @@ class MT5Backtest:
 			'description': symbol,
 			'digits': digits,
 			'point': 10 ** -digits,
+			'pip': 10 ** -(digits - 1),
 			'spread': 2,
 			'trade_mode': 0,
 			'volume_min': 0.01,
@@ -891,48 +892,7 @@ class MT5Backtest:
 		else:
 			total_profit = 0.0
 			for position in self.open_positions.values():
-				symbol = position['symbol']
-				order_type = position['type']
-				volume = position['volume']
-				entry_price = position['price_open']
-				contract_size = position['contract_size']
-				point = position['point']
-
-				# Get current price
-				current_price = self.get_current_price(symbol, order_type)
-				if current_price is None:
-					continue  # Skip if price not available
-
-				# Calculate profit
-				if order_type == ORDER_TYPE_BUY or order_type == 0:
-					profit = (current_price - entry_price) * volume * contract_size
-				elif order_type == ORDER_TYPE_SELL or order_type == 1:
-					profit = (entry_price - current_price) * volume * contract_size
-				else:
-					profit = 0.0
-
-				# Adjust profit: convert to USD profit if needed
-				quote_currency = symbol[-3:]
-				if quote_currency != 'USD':
-					# Initialize conversion rate
-					conversion_rate = None
-
-					# If USD is not the quote currency, adjust using the conversion rate
-					usd_base_currencies = ['EUR', 'GBP', 'AUD', 'NZD', 'USD']
-					usd_quote_currencies = ['JPY', 'CHF', 'CAD']
-					if quote_currency in usd_base_currencies:
-						# Convert to USD using the conversion rate
-						conversion_rate = self.get_current_price(symbol=f"{quote_currency}USD", order_type=ORDER_TYPE_BUY) # get reverse rate for base currency
-					elif quote_currency in usd_quote_currencies:
-						# Convert to USD using the conversion rate
-						conversion_rate = 1/self.get_current_price(symbol=f"USD{quote_currency}", order_type=ORDER_TYPE_BUY)
-					# Apply conversion rate if valid
-					if conversion_rate and conversion_rate > 0:
-						profit *= conversion_rate
-					else:
-						#TODO: add to logging
-						print(f"Warning: Could not retrieve conversion rate for {symbol[-3:]}USD. Profit may be inaccurate.")
-				
+				profit, _ = self.calculate_profit(position)  # Calculate profit in USD
 				position['profit'] = profit
 				total_profit += profit
 
@@ -972,6 +932,103 @@ class MT5Backtest:
 		current_bar = df.iloc[current_index]
 		bar = current_bar.to_dict()
 		return bar
+	
+	def get_swap_rate(self, symbol, order_type):
+		"""
+		Retrieve the swap rate for a given symbol and order type.
+		simplified swap calculation
+
+		Parameters:
+			symbol (str): The trading symbol.
+			order_type (int): The order type (buy or sell).
+
+		Returns:
+			float: The swap rate.
+		"""
+		symbol_rates = swap_rates.get(symbol, None)
+		if order_type == ORDER_TYPE_BUY or order_type == 0:
+			return symbol_rates.get('long', 0.0)  # Default to 0.0 if not defined
+		elif order_type == ORDER_TYPE_SELL or order_type == 1:
+			return symbol_rates.get('short', 0.0)
+		else:
+			return 0.0
+	
+	def calculate_profit(self, position):
+		"""
+		Calculate profit based on pips profit, pip value, volume, and swap.
+
+		Parameters:
+			position (dict): The position information.
+
+		Returns:
+			tuple: The calculated profit and the swap cost.
+		"""
+		symbol = position['symbol']
+		order_type = position['type']
+		volume = position['volume']
+		entry_price = position['price_open']
+		contract_size = position['contract_size']
+
+		# Get current price
+		current_price = self.get_current_price(symbol, order_type)
+		if current_price is None:
+			# TODO: Add to logging
+			print(f"Warning: No price data available for {symbol}.")
+			return 0, 0  # Skip if price not available
+
+		# Determine pip value
+		pip = self.symbol_info(symbol)['pip']
+		pip_value = contract_size * pip * volume
+
+		# Calculate profit in pips
+		if order_type == ORDER_TYPE_BUY or order_type == 0:
+			pips_profit = (current_price - entry_price) / pip
+		elif order_type == ORDER_TYPE_SELL or order_type == 1:
+			pips_profit = (entry_price - current_price) / pip
+		else:
+			pips_profit = 0
+
+		# Calculate profit in base currency
+		profit = pips_profit * pip_value
+
+		# Adjust profit: convert to USD profit if needed
+		quote_currency = symbol[-3:]
+		if quote_currency != 'USD':
+			# Initialize conversion rate
+			conversion_rate = None
+
+			# If USD is not the quote currency, adjust using the conversion rate
+			usd_base_currencies = ['EUR', 'GBP', 'AUD', 'NZD', 'USD']
+			usd_quote_currencies = ['JPY', 'CHF', 'CAD']
+			if quote_currency in usd_base_currencies:
+				# Convert to USD using the conversion rate
+				conversion_rate = self.get_current_price(symbol=f"{quote_currency}USD", order_type=ORDER_TYPE_BUY)
+			elif quote_currency in usd_quote_currencies:
+				# Convert to USD using the reverse conversion rate
+				conversion_rate = 1 / self.get_current_price(symbol=f"USD{quote_currency}", order_type=ORDER_TYPE_BUY)
+
+			# Apply conversion rate if valid
+			if conversion_rate and conversion_rate > 0:
+				profit *= conversion_rate
+			else:
+				# TODO: Add to logging
+				print(f"Warning: Could not retrieve conversion rate for {quote_currency}USD. Profit may be inaccurate.")
+
+		# Calculate swap cost in pips
+		swap_rate_pips = self.get_swap_rate(symbol, order_type)  # Retrieve swap rate in pips
+		days_in_trade = (self.current_time - position['time']).days
+		num_wednesdays = sum(1 for i in range(days_in_trade)
+							if (position['time'] + timedelta(days=i)).weekday() == 2)
+
+		total_swap_pips = (days_in_trade + num_wednesdays * 2) * swap_rate_pips
+
+		# Convert swap cost from pips to base currency
+		swap_cost = total_swap_pips * pip_value
+
+		# Subtract swap cost from profit
+		profit -= swap_cost
+
+		return profit, swap_cost
 
 	def close_position(self, ticket, exit_price=None, reason='CLOSE'):
 		"""
@@ -988,42 +1045,9 @@ class MT5Backtest:
 			return
 
 		position = self.open_positions[ticket]
-		order_type = position['type']
-		volume = position['volume']
-		entry_price = position['price_open']
-		symbol = position['symbol']
-		contract_size = position['contract_size']
-
-		# Get current prices if exit_price not provided
-		if not exit_price:
-			current_price = self.get_current_price(symbol, order_type)
-			if current_price is None:
-				self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol}.")
-				return
-			exit_price = current_price
-
-		# Define pip size based on currency pair
-		pip_size = symbol_info(symbol)['point'] * 10
-
-		# Calculate pips profit
-		if order_type == 0:
-			pips_profit = (exit_price - entry_price) / pip_size
-		elif order_type == 1:
-			pips_profit = (entry_price - exit_price) / pip_size
-		else:
-			pips_profit = 0.0
-
-		# Calculate pip value
-		pip_value = contract_size * pip_size
-
-		# Calculate days in trade
-		days_in_trade = (self.current_time - position['time']).days
-
-		# Calculate swap
-		swap = days_in_trade * pip_value / 10  # Simplified swap calculation
 
 		# Calculate profit
-		profit = pips_profit * pip_value * volume - swap
+		profit , swap_cost = self.calculate_profit(position)
 
 		# Update account balance
 		self.account['balance'] += profit
@@ -1039,15 +1063,15 @@ class MT5Backtest:
 		closed_position['close_price'] = exit_price
 		closed_position['profit'] = profit
 		closed_position['reason'] = reason
-		closed_position['swap'] = swap
+		closed_position['swap'] = swap_cost
 		self.closed_positions.append(closed_position)
 
 		# Log the trade closure
 		trade_log = {
 			'ticket': ticket,
-			'symbol': symbol,
-			'type': order_type,
-			'volume': volume,
+			'symbol': position['symbol'],
+			'type': position['type'],
+			'volume': position['volume'],
 			'price': exit_price,
 			'sl': position['sl'],
 			'tp': position['tp'],
@@ -1063,6 +1087,7 @@ class MT5Backtest:
 		# Remove from open_positions
 		result =  self.open_positions.pop(ticket)
 		result['retcode'] = TRADE_RETCODE_DONE
+		result['order'] = ticket
 		return result
 
 
