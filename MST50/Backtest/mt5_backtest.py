@@ -63,6 +63,32 @@ TRADE_RETCODES = constants['TRADE_RETCODES']
 
 
 
+def collect_usd_currency_pairs_and_non_usd_bases(symbols):
+	"""
+	Collect currency pairs involving USD and ensure non-USD base currencies are paired with USD.
+
+	Parameters:
+		symbols (list): A list of symbols.
+
+	Returns:
+		set: A set of currency pairs involving USD (direct or derived).
+	"""
+	currency_set = set()  # Use a set to store unique currency pairs
+	major_pairs = {"EURUSD", "USDJPY", "GBPUSD", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD"}
+
+	for symbol in symbols:
+		quote_currency = symbol[-3:]  # Last three characters
+	
+		# If the quote currency is not USD, ensure USDquote_currency is added
+		if quote_currency != "USD":
+			pair_with_usd = f"USD{quote_currency}"
+			currency_set.add(pair_with_usd)
+			pair_with_usd = f"{quote_currency}USD"
+			currency_set.add(pair_with_usd)
+
+	# Keep only valid major pairs
+	filtered_currency_set = currency_set.intersection(major_pairs)
+	return filtered_currency_set
 
 # ----------------------------
 # MT5Backtest Class Definition
@@ -169,6 +195,8 @@ class MT5Backtest:
 
 		for strategy in self.strategies.values():
 			symbols_set.update(strategy.symbols)
+			symbols_set.update(collect_usd_currency_pairs_and_non_usd_bases(strategy.symbols))
+			
 			# Add the strategy's main timeframe
 			timeframes_set.add(strategy.str_timeframe)
 			timeframes_set.add(get_mt5_tf_str(strategy.backtest_tf))
@@ -213,8 +241,6 @@ class MT5Backtest:
 
 		# Map the timeframe string to a timedelta
 		self.time_step = timeframe_to_timedelta(backtest_timeframe_str)
-
-		
 
 	def load_data(self):
 		"""
@@ -633,7 +659,6 @@ class MT5Backtest:
 
 		# Log the trade
 		trade_log = position.copy()
-		result['action'] = TRADE_ACTION_DEAL
 		self.trade_logs.append(trade_log)
 
 		# Return success
@@ -879,13 +904,35 @@ class MT5Backtest:
 					continue  # Skip if price not available
 
 				# Calculate profit
-				if order_type == ORDER_TYPE_BUY:
+				if order_type == ORDER_TYPE_BUY or order_type == 0:
 					profit = (current_price - entry_price) * volume * contract_size
-				elif order_type == ORDER_TYPE_SELL:
+				elif order_type == ORDER_TYPE_SELL or order_type == 1:
 					profit = (entry_price - current_price) * volume * contract_size
 				else:
 					profit = 0.0
 
+				# Adjust profit: convert to USD profit if needed
+				quote_currency = symbol[-3:]
+				if quote_currency != 'USD':
+					# Initialize conversion rate
+					conversion_rate = None
+
+					# If USD is not the quote currency, adjust using the conversion rate
+					usd_base_currencies = ['EUR', 'GBP', 'AUD', 'NZD', 'USD']
+					usd_quote_currencies = ['JPY', 'CHF', 'CAD']
+					if quote_currency in usd_base_currencies:
+						# Convert to USD using the conversion rate
+						conversion_rate = self.get_current_price(symbol=f"{quote_currency}USD", order_type=ORDER_TYPE_BUY) # get reverse rate for base currency
+					elif quote_currency in usd_quote_currencies:
+						# Convert to USD using the conversion rate
+						conversion_rate = 1/self.get_current_price(symbol=f"USD{quote_currency}", order_type=ORDER_TYPE_BUY)
+					# Apply conversion rate if valid
+					if conversion_rate and conversion_rate > 0:
+						profit *= conversion_rate
+					else:
+						#TODO: add to logging
+						print(f"Warning: Could not retrieve conversion rate for {symbol[-3:]}USD. Profit may be inaccurate.")
+				
 				position['profit'] = profit
 				total_profit += profit
 
@@ -1376,6 +1423,7 @@ def run_backtest(strategies, symbols):
 			on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict=None, BACKTEST_MODE=True)
 	except Exception as e:
 		print(f"Backtest stopped due to error: {e}")
+		raise e
 	finally:
 		print("Backtest completed.")
 		print(f"Final balance: {backtest.account['balance']}")

@@ -1,14 +1,17 @@
 #run_main.py
 
-from MST50.main import main
 
+import os
 
 run_mode = ['transfer']
 # back_test, demo, live, on_hold, dev, optimize, transfer
 
 
 # Determine if we are in backtesting mode
-BACKTEST_MODE = True
+os.environ['BACKTEST_MODE'] = 'True'  # Change to 'True' when ready to backtest
+BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
+
+from MST50.main import main
 
 #To see profile results, run the following command in the terminal:
 # snakeviz backtest_profile.prof
@@ -42,7 +45,9 @@ def profile_backtest():
 ################# end Profiling #################
 
 if __name__ == "__main__":
-    if BACKTEST_MODE :
-        main(run_mode,BACKTEST_MODE)
+
+
+    if not BACKTEST_MODE :
+        main(run_mode=run_mode,BACKTEST_MODE=BACKTEST_MODE)
     else:
         profile_backtest()
