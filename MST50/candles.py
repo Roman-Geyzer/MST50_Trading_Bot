@@ -107,7 +107,7 @@ class CandlePatterns:
             return candle_class()
         return None  # Invalid candle name
 
-    def make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def make_trade_decision(self, rates: np.recarray) -> str:
         """
         Make a trade decision based on the configured candle patterns.
 
@@ -119,7 +119,7 @@ class CandlePatterns:
         """
         decisions = []
         if self.candle_pattern_instance:
-            decision = self.candle_pattern_instance.calculate_and_make_trade_decision(rates, tf_obj)
+            decision = self.candle_pattern_instance.calculate_and_make_trade_decision(rates)
             if not decision:
                 return None  # No valid decisions from the pattern, exit early
             decisions.append(decision)
@@ -133,7 +133,7 @@ class CandlePatterns:
             ] if candle is not None and candle.__class__ != NoCandle
         ]
         for candle in candles:
-            decision = candle.calculate_and_make_trade_decision(rates, tf_obj)
+            decision = candle.calculate_and_make_trade_decision(rates)
             if not decision:
                 return None  # No valid decisions from the candle, exit early
             decisions.append(decision)
@@ -170,7 +170,7 @@ class Pattern:
         self.pattern_candles_count = pattern_candles_count
         self.trade_decision_method = None  # Will be set by the child classes
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Placeholder method for calculating the pattern based on the provided rates.
         Should be overridden by child classes.
@@ -180,7 +180,7 @@ class Pattern:
         """
         raise NotImplementedError("Pattern calculation method not implemented")
 
-    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray) -> str:
         """
         Calculate the pattern and make a trade decision based on the pattern.
 
@@ -381,10 +381,10 @@ class NoPattern(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.no_trade_decision
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         return False
 
-    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray) -> str:
         return None
 
     def no_trade_decision(self, rates: np.recarray) -> str:
@@ -400,7 +400,7 @@ class Engulf(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.engulf
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Engulfing pattern.
 
@@ -457,7 +457,7 @@ class Marubozu(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.marubozu
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Marubozu pattern.
 
@@ -509,7 +509,7 @@ class Out(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.out_pattern
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Outside Bar pattern.
 
@@ -554,7 +554,7 @@ class InPattern(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.in_pattern
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Inside Bar pattern.
 
@@ -597,7 +597,7 @@ class Hammer(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.hammer
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Hammer pattern.
 
@@ -642,7 +642,7 @@ class InvertedHammer(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.inverted_hammer
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Inverted Hammer pattern.
 
@@ -687,7 +687,7 @@ class KangarooTailFull(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.kangaroo_tail_full
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Kangaroo Tail Full pattern.
 
@@ -731,7 +731,7 @@ class KangarooTailPartial(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.kangaroo_tail_partial
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Kangaroo Tail Partial pattern.
 
@@ -775,7 +775,7 @@ class Fakeout(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.fakeout
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Fakeout pattern.
 
@@ -819,7 +819,7 @@ class SameCandleCount(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.same_candle_count_pattern
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Same Candle Count pattern.
 
@@ -857,7 +857,7 @@ class InsideBreakout(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.inside_breakout
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         """
         Check for Inside Breakout pattern.
 
@@ -869,7 +869,7 @@ class InsideBreakout(Pattern):
         """
         try:
             in_bar_pattern = InPattern(self.pattern_candles_count)
-            if not in_bar_pattern.calculate_pattern(rates, tf_obj):
+            if not in_bar_pattern.calculate_pattern(rates):
                 return False
             if rates[-2]['close'] > rates[-4]['high']:
                 return True
@@ -903,7 +903,7 @@ class HHHCLLLC(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.hhhclllc
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         # Not required for this pattern
         pass
 
@@ -933,7 +933,7 @@ class InvHHHCLLLC(Pattern):
         super().__init__(pattern_candles_count)
         self.trade_decision_method = self.inv_hhhclllc
 
-    def calculate_pattern(self, rates: np.recarray, tf_obj) -> bool:
+    def calculate_pattern(self, rates: np.recarray) -> bool:
         # Not required for this pattern
         pass
 
@@ -962,7 +962,7 @@ class Candle:
     def __init__(self):
         pass
 
-    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray) -> str:
         """
         A placeholder method for calculating the candle pattern and making a trade decision.
 
@@ -1001,7 +1001,7 @@ class NoCandle(Candle):
     def __init__(self):
         super().__init__()
 
-    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray) -> str:
         return None
 
 
@@ -1013,7 +1013,7 @@ class SameDirectionCandle(Candle):
     def __init__(self):
         super().__init__()
 
-    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray) -> str:
         """
         Check for Same Direction Candle pattern.
 
@@ -1039,7 +1039,7 @@ class OppositeDirectionCandle(Candle):
     def __init__(self):
         super().__init__()
 
-    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray) -> str:
         """
         Check for Opposite Direction Candle pattern.
 
@@ -1065,7 +1065,7 @@ class DojiCandle(Candle):
     def __init__(self):
         super().__init__()
 
-    def calculate_and_make_trade_decision(self, rates: np.recarray, tf_obj) -> str:
+    def calculate_and_make_trade_decision(self, rates: np.recarray) -> str:
         """
         Check for Doji Candle pattern.
 

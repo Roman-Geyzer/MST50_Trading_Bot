@@ -72,8 +72,11 @@ def main(run_mode=['live'], BACKTEST_MODE=False):
 
     print(f"Initialized trade hour, hour= {trade_hour.current_hour}, day= {trade_hour.current_day}")
     print(f"Initialized time bar, current_bar (highest new bar) = {time_bar.current_bar}")
+    print(f"run on_minute once immediately after initialization")
+    on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict,BACKTEST_MODE)  # Run once immediately after initialization 
 
     print_hashtaged_msg(1, "Initialization Complete", "All initializations completed successfully, waiting for new minute to start executing strategies...")
+
 
     try:
         while True:     # Schedule the on_minute function to run every minute

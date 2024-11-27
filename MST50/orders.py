@@ -773,7 +773,7 @@ trail_methods = {
 
 
 
-def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minutes,start_multi, trail_multi,point, rates):
+def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minutes,start_multi, trail_multi,point, rates, atr):
     """
     Calculate trailing stop based on fast price movement on the last N minutes candles.
 
@@ -787,11 +787,9 @@ def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minut
         trail_multi (float): Multiplier for the trailing stop.
         symbol (str): Symbol name.
         point (float): Point value.
-        rates (numpy.ndarray): Historical price data.
+        rates (numpy.ndarray): Historical price data of m1 timeframe for the symbol.
+        atr (float): ATR value for the strategy tf and symbol.
     """
-
-
-    atr = rates['ATR'][-1]
 
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
         # Get the minimum low in the last N minutes (excluding the current minute)

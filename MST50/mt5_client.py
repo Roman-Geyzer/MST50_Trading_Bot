@@ -134,8 +134,8 @@ def symbol_info(symbol):
         return None
     return info  # Dictionary with native types
 
-def history_deals_get(from_date, to_date):
-    deals_list = mt5_server.history_deals_get(from_date, to_date)
+def history_deals_get(from_date, to_date, ticket=None):
+    deals_list = mt5_server.history_deals_get(from_date, to_date, ticket)
     if deals_list is None:
         return None
     return deals_list  # List of dictionaries with native types

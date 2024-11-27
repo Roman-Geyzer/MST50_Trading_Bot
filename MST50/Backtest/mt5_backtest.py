@@ -61,6 +61,19 @@ TRADE_RETCODES = constants['TRADE_RETCODES']
 
 
 
+# Helper function to convert NumPy scalars to native Python types
+def _convert_numpy_types(self, obj):
+	if isinstance(obj, dict):
+		return {k: self._convert_numpy_types(v) for k, v in obj.items()}
+	elif isinstance(obj, list):
+		return [self._convert_numpy_types(v) for v in obj]
+	elif isinstance(obj, tuple):
+		return tuple(self._convert_numpy_types(v) for v in obj)
+	elif isinstance(obj, np.generic):
+		return obj.item()
+	else:
+		return obj
+
 
 
 def collect_usd_currency_pairs_and_non_usd_bases(symbols):
@@ -517,13 +530,14 @@ class MT5Backtest:
 		# For simplicity, assume all symbols are always selected
 		return True
 
-	def history_deals_get(self, from_date, to_date, ticket=None):
+	def history_deals_get(self,from_date, to_date, ticket=None):
 		"""
 		Simulate MT5.history_deals_get() function.
 
 		Parameters:
 			from_date (datetime): Start datetime.
 			to_date (datetime): End datetime.
+			ticket (int, optional): Specific ticket number to retrieve.
 
 		Returns:
 			list or None: List of deal dictionaries or None if no deals found.
@@ -541,9 +555,10 @@ class MT5Backtest:
 			for pos in self.closed_positions:
 				close_time = pos.get('close_datetime')
 				if close_time and from_date <= close_time <= to_date:
-					deals.append(pos)
+					deals.append(pos)			
+
 		if deals:
-			# deals = [self._convert_numpy_types(deal) for deal in deals]
+			deals = [self._convert_numpy_types(deal) for deal in deals]
 			return deals
 		else:
 			return None
