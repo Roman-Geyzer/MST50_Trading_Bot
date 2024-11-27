@@ -311,7 +311,7 @@ class Strategy:
 
 
     @staticmethod            
-    def initialize_strategies(strategies_run_mode = ['live']):
+    def initialize_strategies(strategies_run_modes = ['live']):
         """
         Initialize all strategy instances based on the provided configuration.
         Args:
@@ -320,7 +320,7 @@ class Strategy:
             dict: Dictionary containing initialized strategy instances.
         """
         # Load the configuration based on the provided run mode
-        strategies_config = load_config(strategies_run_mode=strategies_run_mode)
+        strategies_config = load_config(strategies_run_modes=strategies_run_modes)
         # Print selected strategies and their settings
         for strategy_num , settings in strategies_config.items():print(f"""Executing strategy no. {strategy_num}
                                                                         strategy name: {settings['strategy_name']},

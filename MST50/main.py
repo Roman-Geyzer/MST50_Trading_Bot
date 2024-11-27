@@ -14,7 +14,7 @@ Modules:
     utils: Utility functions for logging and printing messages.
     run_bot: Module for running the on_minute function.
 Constants:
-    run_mode (list): Specifies the modes in which the trading strategies can run, either 'live' or 'demo'.
+    run_modes (list): Specifies the modes in which the trading strategies can run, either 'live' or 'demo'.
     cores (int): Number of cores to use for parallel processing.
     pytest_count (int): Number of times the pytest module has been run.
 """
@@ -42,14 +42,14 @@ from .run_bot import on_minute
 
 
 #TODO: create full seperation of the main function for live trading and backtesting
-def main(run_mode=['live'], BACKTEST_MODE=False):
+def main(run_modes=['live'], BACKTEST_MODE=False):
     """
     Main function to execute trading strategies.
     will run the main_backtest function if BACKTEST_MODE is True, otherwise will run the live trading mode.
     """
     print("Initializing MST50", "Initializing MST50...")
     # Initialize strategies and symbols
-    strategies = Strategy.initialize_strategies(run_mode)
+    strategies = Strategy.initialize_strategies(run_modes)
     if BACKTEST_MODE:
         main_backtest(strategies)
 
@@ -77,7 +77,7 @@ def main(run_mode=['live'], BACKTEST_MODE=False):
 
     print_hashtaged_msg(1, "Initialization Complete", "All initializations completed successfully, waiting for new minute to start executing strategies...")
 
-
+    # TODO: change logic to send email (or other method) when an error occurs, also add one hour wait and try again (decide on the number of retries)
     try:
         while True:     # Schedule the on_minute function to run every minute
             wait_for_new_minute(time_bar)  # Make sure that each run of on_minute is at the start of a new minute

@@ -400,7 +400,7 @@ def safe_str_extract_from_dict(dict, key, default=''):
         return default
 
 
-def load_config(sheet_name='config', strategies_run_mode=['live']):
+def load_config(sheet_name='config', strategies_run_modes=['live']):
     """
     Load configuration from an Excel file into a structured dictionary.
     This loader reads the specified sheet and processes each row into a dictionary.
@@ -408,7 +408,7 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     Parameters:
         filename (str): The name of the Excel file to read.
         sheet_name (str): The name of the sheet in the Excel file to read.
-        strategies_run_mode (list): List of strategy statuses to load (e.g., ['live', 'demo']).
+        strategies_run_modes (list): List of strategy statuses to load (e.g., ['live', 'demo']).
 
     Returns:
         dict: A dictionary containing strategy configurations.
@@ -429,7 +429,7 @@ def load_config(sheet_name='config', strategies_run_mode=['live']):
     for _, row in df.iterrows():
 
         # Filter strategies based on the run mode
-        if row['strategy_status'] not in strategies_run_mode:
+        if row['strategy_status'] not in strategies_run_modes:
             continue
         
         # Extract strategy num and symbols
