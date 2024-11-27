@@ -893,7 +893,6 @@ class MT5Backtest:
 			total_profit = 0.0
 			for position in self.open_positions.values():
 				profit, _ = self.calculate_profit(position)  # Calculate profit in USD
-				position['profit'] = profit
 				total_profit += profit
 
 			# Update account
@@ -945,6 +944,9 @@ class MT5Backtest:
 		Returns:
 			float: The swap rate.
 		"""
+		return -5  # Simplified swap rate calculation
+
+		#TODO: need to get swap rates from a file or a database
 		symbol_rates = swap_rates.get(symbol, None)
 		if order_type == ORDER_TYPE_BUY or order_type == 0:
 			return symbol_rates.get('long', 0.0)  # Default to 0.0 if not defined
@@ -1014,19 +1016,13 @@ class MT5Backtest:
 				# TODO: Add to logging
 				print(f"Warning: Could not retrieve conversion rate for {quote_currency}USD. Profit may be inaccurate.")
 
-		# Calculate swap cost in pips
-		swap_rate_pips = self.get_swap_rate(symbol, order_type)  # Retrieve swap rate in pips
+		# Simplified swap calculation:
+		swap_rate = self.get_swap_rate(symbol, order_type)  # Retrieve swap rate for full lot
 		days_in_trade = (self.current_time - position['time']).days
 		num_wednesdays = sum(1 for i in range(days_in_trade)
 							if (position['time'] + timedelta(days=i)).weekday() == 2)
 
-		total_swap_pips = (days_in_trade + num_wednesdays * 2) * swap_rate_pips
-
-		# Convert swap cost from pips to base currency
-		swap_cost = total_swap_pips * pip_value
-
-		# Subtract swap cost from profit
-		profit -= swap_cost
+		swap_cost = (days_in_trade + num_wednesdays * 2) * swap_rate * volume
 
 		return profit, swap_cost
 
@@ -1049,13 +1045,17 @@ class MT5Backtest:
 		# Calculate profit
 		profit , swap_cost = self.calculate_profit(position)
 
+		total_profit = profit + swap_cost
+
 		# Update account balance
-		self.account['balance'] += profit
-		self.account['profit'] -= position['profit']  # Remove unrealized profit
+		self.account['balance'] += total_profit
 		self.account['equity'] = self.account['balance'] + self.account['profit']
 		self.account['margin'] -= position['margin']
 		self.account['free_margin'] = self.account['equity'] - self.account['margin']
 		self.account['margin_level'] = (self.account['equity'] / self.account['margin']) * 100 if self.account['margin'] > 0 else 0.0
+
+		# we don't need to update profit since we are closing the position - this will be updated in the update_account_metrics method
+		# self.account['profit'] -= position['profit']  # Remove unrealized profit
 
 		# Move position to closed_positions
 		closed_position = position.copy()
@@ -1174,13 +1174,13 @@ class MT5Backtest:
 
 		fig.add_trace(go.Scatter(
 			x=account_df['datetime'],
-			y=account_df['margin_level'],
+			y=account_df['margin'],
 			mode='lines',
-			name='margin_level'
+			name='margin'
 		))
 
 		fig.update_layout(
-			title='Account Balance, Equity and margin_level Over Time',
+			title='Account Balance, Equity and margin Over Time',
 			xaxis_title='Time',
 			yaxis_title='Amount ($)',
 			xaxis=dict(rangeslider_visible=True),
@@ -1450,6 +1450,9 @@ def run_backtest(strategies, symbols):
 		print(f"Backtest stopped due to error: {e}")
 		raise e
 	finally:
+		# Close all open positions at the end of backtest
+		backtest.close_all_positions()
+		# Log the final account status
 		print("Backtest completed.")
 		print(f"Final balance: {backtest.account['balance']}")
 		print(f"Final equity: {backtest.account['equity']}")

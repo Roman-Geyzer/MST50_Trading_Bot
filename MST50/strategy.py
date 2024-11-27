@@ -801,6 +801,7 @@ class Strategy:
         if len(self.open_trades) == 0:
             return # Exit the method early if no open trades
         for trade_id, trade_info in list(self.open_trades.items()):
+            #TODO: optimize - this check is wasteful - method should recive all rates for all symbols
             if trade_info['symbol'] != symbol:
                 continue  # Skip trades not related to the current symbol
             
