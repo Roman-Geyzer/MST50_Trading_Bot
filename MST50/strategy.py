@@ -919,6 +919,7 @@ class Strategy:
         #TODO: this is wrong - need to sent ATR of original time frame and not the current one (m1)
         rates = symbol.get_tf_rates(self.timeframe)
         atr = rates['ATR'][-1]
+        #TODO: no M1 rates so...... this will always return None - and raise an error
         m1_rates = symbol.get_tf_rates(get_mt5_timeframe('M1'))
         if self.use_fast_trail:
             sl_price.append(calculate_fast_trail(price, current_sl, self.trail_both_directions, direction, self.fast_trail_minutes_count, 
