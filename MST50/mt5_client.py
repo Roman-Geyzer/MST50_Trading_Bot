@@ -195,11 +195,11 @@ def copy_rates_from_pos(symbol, timeframe, pos, count):
         # Fill NaN values with appropriate defaults
         for col, dt in zip(df.columns, extended_dtype):
             if dt[1] == 'float64':
-                df[col].fillna(np.nan, inplace=True)
+                df[col] = df[col].fillna(np.nan)  # Assign the filled column back
             elif dt[1] == '?':
-                df[col].fillna(False, inplace=True)
+                df[col] = df[col].fillna(False)
             elif dt[1].startswith('U'):
-                df[col].fillna('', inplace=True)
+                df[col] = df[col].fillna('')
 
         # Convert df to structured array
         

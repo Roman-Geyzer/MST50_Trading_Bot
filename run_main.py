@@ -8,7 +8,7 @@ run_mode = ['transfer']
 
 
 # Determine if we are in backtesting mode
-os.environ['BACKTEST_MODE'] = 'True'  # Change to 'True' when ready to backtest
+os.environ['BACKTEST_MODE'] = 'False'  # Change to 'True' when ready to backtest
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
 from MST50.main import main

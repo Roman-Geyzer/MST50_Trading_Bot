@@ -646,8 +646,8 @@ def wait_for_new_minute(time_bar):
         time.sleep(1) # sleep for 1 second to wait for new bar to start
         pass
     else:
-        print("New minute started.")
-
+        pass
+        #print("New minute started.")
 
 
 
