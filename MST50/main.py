@@ -42,7 +42,7 @@ from .run_bot import on_minute
 
 
 #TODO: create full seperation of the main function for live trading and backtesting
-def main(run_modes=['live'], BACKTEST_MODE=False):
+def main(run_modes: list = ['live'], BACKTEST_MODE: bool = False):
     """
     Main function to execute trading strategies.
     will run the main_backtest function if BACKTEST_MODE is True, otherwise will run the live trading mode.

@@ -148,7 +148,12 @@ class Strategy:
 
         self.backtest_params = strategy_config['backtest_params']
         self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
-        self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
+        # If using fast trail, set the backtest timeframe to M1 (for minute data)
+        if self.use_fast_trail:
+            self.backtest_tf = get_mt5_timeframe('M1')
+        else:
+            self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
+            
         # self.backtest_str_tf = get_timeframe_string(self.backtest_tf)
 
         self.rsi_signal = RSISignal(
@@ -918,10 +923,10 @@ class Strategy:
         sl_price = [position['sl']]
         #TODO: this is wrong - need to sent ATR of original time frame and not the current one (m1)
         rates = symbol.get_tf_rates(self.timeframe)
-        atr = rates['ATR'][-1]
-        #TODO: no M1 rates so...... this will always return None - and raise an error
-        m1_rates = symbol.get_tf_rates(get_mt5_timeframe('M1'))
+
         if self.use_fast_trail:
+            atr = rates['ATR'][-1]
+            m1_rates = symbol.get_tf_rates(get_mt5_timeframe('M1')) # get M1 rates for fast trail
             sl_price.append(calculate_fast_trail(price, current_sl, self.trail_both_directions, direction, self.fast_trail_minutes_count, 
                                             self.fast_trail_ATR_start_multiplier, self.fast_trail_ATR_trail_multiplier,point, m1_rates, atr))
         if self.use_move_to_breakeven:

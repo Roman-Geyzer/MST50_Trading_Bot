@@ -23,7 +23,7 @@ from .symbols import Timeframe
 # Always import account_info, shutdown, and last_error from mt5_interface
 from .mt5_interface import account_info, shutdown, last_error, time_current
 
-def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict,BACKTEST_MODE):
+def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict, BACKTEST_MODE):
     """
     Main function to execute strategies on every minute.
     Function runs every minute and checks if a new hour has started.

@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: run_backtest.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_backtest.py",
+            "console": "integratedTerminal"
+        }
+        {
             "name": "Python Debugger: run_main.py",
             "type": "debugpy",
             "request": "launch",

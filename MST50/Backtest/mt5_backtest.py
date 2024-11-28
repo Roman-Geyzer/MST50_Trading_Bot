@@ -649,8 +649,7 @@ class MT5Backtest:
 		# Update account margin
 		self.account['margin'] += required_margin
 		self.account['free_margin'] = self.account['equity'] - self.account['margin']
-		print(f"Free margin after opening position: {self.account['free_margin']}")
-		print(f"Margin after opening position: {self.account['margin']}")
+
 
 
 		# Create position
