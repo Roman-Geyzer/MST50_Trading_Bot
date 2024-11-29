@@ -161,7 +161,7 @@ class MT5Backtest:
 
 		# Initialize positions
 		self.open_positions = {}   # {ticket: position_info}
-		self.closed_positions = [] # List of closed position_info
+		self.closed_positions = {}  # {ticket: position_info}
 
 		# Error simulation
 		self.last_error_code = RES_S_OK
@@ -203,6 +203,7 @@ class MT5Backtest:
 		symbols_set = set()
 		timeframes_set = set()
 		backtest_start_dates = []
+		backtest_buffered_start_dates = []
 		backtest_time_steps = []
 		required_columns_set = set()
 
@@ -222,6 +223,13 @@ class MT5Backtest:
 				timeframes_set.add(lower_tf_str)
 			# Collect backtest start date and time step
 			backtest_start_dates.append(strategy.backtest_start_date)
+			orig_start_date = strategy.backtest_start_date
+			if strategy.str_timeframe == 'D1':
+				# set the first bar to load (time) - to be history length before the start time
+				backtest_buffered_start_dates.append(orig_start_date - timedelta(days=205)) # Load 205 days of data - more than enough for D1
+			else:
+				# set the first bar to load (time) - to be history length before the start time
+				backtest_buffered_start_dates.append(orig_start_date - timedelta(days=30)) #  Load 30 days of data - more than enough for any other timeframe
 			backtest_time_steps.append(strategy.backtest_tf)
 
 			# Collect required columns from the strategy
@@ -233,20 +241,15 @@ class MT5Backtest:
 
 		# Use the earliest start date among strategies
 		self.start_time = min(backtest_start_dates)
+		self.data_start_time = min(backtest_buffered_start_dates)  # Use the buffered start date for data loading
 
-		if strategy.str_timeframe == 'D1':
-			# set the first bar to load (time) - to be history length before the start time
-			self.data_start_time = self.start_time - timedelta(days=205)  # Load 205 days of data - more than enough for D1
-		else:
-			# set the first bar to load (time) - to be history length before the start time
-			self.data_start_time = self.start_time - timedelta(days=30) #  Load 30 days of data - more than enough for any other timeframe
 
 		# Set end date as X days before today
 		self.end_time = datetime.now() - timedelta(days=backtest_end_relative_to_today)
 
 		# Use the backtest time step (candle advance) from the strategies
 		# Assuming all strategies have the same backtest time frame
-		backtest_timeframe = backtest_time_steps[0]  # Assuming all are the same
+		backtest_timeframe = min(backtest_time_steps)
 
 		# Convert the timeframe constant to its string representation
 		backtest_timeframe_str = get_mt5_tf_str(backtest_timeframe)
@@ -1063,7 +1066,7 @@ class MT5Backtest:
 		closed_position['profit'] = profit
 		closed_position['reason'] = reason
 		closed_position['swap'] = swap_cost
-		self.closed_positions.append(closed_position)
+		self.closed_positions[ticket] = closed_position
 
 		# Log the trade closure
 		trade_log = {

@@ -402,7 +402,7 @@ class Strategy:
         
         # TODO: comment and uncomment the following lines based on backtest optimization
         # TODO: validate in live trading
-        trade_info = history_deals_get(None, None, trade_id)[0]
+        trade_info = history_deals_get(trade_id)
         if trade_info is None:
             print_hashtaged_msg(1, f"Trade {trade_id} no longer exists in MT5.")
             return
