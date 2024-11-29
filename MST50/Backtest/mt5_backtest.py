@@ -530,7 +530,7 @@ class MT5Backtest:
 		# For simplicity, assume all symbols are always selected
 		return True
 
-	def history_deals_get(self,from_date, to_date, ticket=None):
+	def history_deals_get(self, ticket):
 		"""
 		Simulate MT5.history_deals_get() function.
 
@@ -540,28 +540,13 @@ class MT5Backtest:
 			ticket (int, optional): Specific ticket number to retrieve.
 
 		Returns:
-			list or None: List of deal dictionaries or None if no deals found.
+			deal or None: Single deal or None if not found.	
 		"""
 
 		if ticket:
 			# Return single deal if found
-			deal = [deal for deal in self.closed_positions if deal.get('ticket') == ticket]
-			if deal:
-				return deal
-			else:
-				return None
-		else:
-			deals = []
-			for pos in self.closed_positions:
-				close_time = pos.get('close_datetime')
-				if close_time and from_date <= close_time <= to_date:
-					deals.append(pos)			
-
-		if deals:
-			deals = [self._convert_numpy_types(deal) for deal in deals]
-			return deals
-		else:
-			return None
+			return self.closed_positions.get(ticket) 
+		return None
 
 	def order_send(self, request):
 		"""
@@ -1392,19 +1377,17 @@ def symbol_select(symbol, select=True):
 	"""
 	return backtest.symbol_select(symbol, select)
 
-def history_deals_get(from_date, to_date, ticket=None):
+def history_deals_get(ticket=None):
 	"""
 	Simulate MT5.history_deals_get() function.
 
 	Parameters:
-		from_date (datetime): Start datetime.
-		to_date (datetime): End datetime.
 		ticket (int, optional): Specific ticket number to retrieve.
 
 	Returns:
-		list or None: List of deal dictionaries or None if no deals found.
+		deal or None: Deal dictionary or None if not found.
 	"""
-	return backtest.history_deals_get(from_date, to_date, ticket=ticket)
+	return backtest.history_deals_get( ticket=ticket)
 
 def log_account_status(account_info_dict, open_trades):
 	"""
