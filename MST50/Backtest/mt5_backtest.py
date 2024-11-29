@@ -168,7 +168,7 @@ class MT5Backtest:
 		self.last_error_description = "No error"
 
 		# Ticket counter
-		self.next_ticket = 1000  # Starting ticket number
+		self.next_ticket = 1  # Starting ticket number
 
 		# Output directory setup
 		self.output_dir = os.path.join(drive, output_dir)
@@ -180,7 +180,7 @@ class MT5Backtest:
 		self.trade_logs = []      # List to store trade dictionaries
 		self.account_docs = []    # List to store account documentation dictionaries
 
-		# Initialize current tick indices for each symbol and timeframe
+				# Initialize current tick indices for each symbol and timeframe
 		self.current_tick_index = {}
 		for symbol, tfs in self.symbols_data.items():
 			self.current_tick_index[symbol] = {}
@@ -188,12 +188,8 @@ class MT5Backtest:
 				# find the first index where 'time' >= self.start_time
 				first_valid_index = self.symbols_data[symbol][tf_name].index[self.symbols_data[symbol][tf_name]['time'] >= self.start_time].tolist()[0]
 				self.current_tick_index[symbol][tf_name] = first_valid_index
-
-
-
-				#self.current_tick_index[symbol][tf_name] = 0  # Start at the first bar
-
-		self.current_tick_data = {}  # Store current tick data for each symbol
+		
+		self.load_timeseries_data()
 
 
 	def extract_backtest_parameters(self):
@@ -234,6 +230,7 @@ class MT5Backtest:
 
 			# Collect required columns from the strategy
 			required_columns_set.update(strategy.required_columns)
+			required_columns_set.update('bid', 'ask')
 
 		self.symbols = list(symbols_set)
 		self.timeframes = list(timeframes_set)
@@ -309,8 +306,8 @@ class MT5Backtest:
 				print(f"Warning: Some 'time' entries could not be parsed in {filename}. They will be dropped.")
 				df = df.dropna(subset=['time'])
 
-			# Sort by 'time' ascending
-			df.sort_values('time', inplace=True)
+			# Sort by 'time' descending
+			df.sort_values('time', inplace=True, ascending=False)
 
 			# Filter data to include only rows where 'time' >= self.data_start_time
 			if self.start_time:
@@ -334,28 +331,56 @@ class MT5Backtest:
 
 			print(f"    Loaded data for {symbol} on timeframe {tf_name} with {len(df)} bars.")
 
-		# Initialize current_tick_index after loading all data
-		self.initialize_current_tick_indices()
+	def load_timeseries_data(self):
+		"""
+		Load the timeseries data from EURUSD CSV file of backtest tf - self.advance_timeframe
+		"""
+		# Load the timeseries data for EURUSD
+		filename = f"EURUSD_{self.advance_timeframe}.csv"
+		filepath = os.path.join(self.data_dir, filename)
 
-	def initialize_current_tick_indices(self):
-		"""
-		Initialize current_tick_index for each symbol and timeframe based on self.start_time.
-		Sets the current_tick_index to the first bar at or after self.start_time.
-		"""
-		self.current_tick_index = {}
-		for symbol, tfs in self.symbols_data.items():
-			self.current_tick_index[symbol] = {}
-			for tf_name, df in tfs.items():
-				# Find the first index where 'time' >= self.start_time
-				idx_list = df.index[df['time'] >= self.start_time].tolist()
-				if idx_list:
-					first_valid_index = idx_list[0]
-					self.current_tick_index[symbol][tf_name] = first_valid_index
-					print(f"    Initialized current_tick_index for {symbol} on {tf_name}: {first_valid_index}")
-				else:
-					# If no data after self.start_time, set index to len(df) to indicate no data
-					self.current_tick_index[symbol][tf_name] = len(df)
-					print(f"    No data after start_time for {symbol} on {tf_name}. Setting current_tick_index to {len(df)}")
+		# Read the CSV file
+		try:
+			df = pd.read_csv(
+				filepath,
+				usecols=['time'],
+			)
+		except ValueError as e:
+			print(f"Error reading {filename}: {e}.")
+			return
+
+		try:
+			df['time'] = pd.to_datetime(df['time'], errors='raise')
+		except Exception as e:
+			print(f"Error parsing 'time' column in {filename}: {e}.")
+			return
+
+		# Remove rows with any NaT in 'time'
+		if df['time'].isnull().any():
+			print(f"Warning: Some 'time' entries could not be parsed in {filename}. They will be dropped.")
+			df = df.dropna(subset=['time'])
+
+		# Sort by 'time' descending
+		df.sort_values('time', inplace=True, ascending=False)
+
+		# Filter data to include only rows where 'time' >= self.data_start_time
+		if self.start_time:
+			initial_row_count = len(df)
+			df = df[df['time'] >= self.data_start_time]
+			filtered_row_count = len(df)
+			print(f"    Filtered data for EURUSD on timeframe {self.advance_timeframe}: {filtered_row_count} out of {initial_row_count} bars retained (from {self.data_start_time} for strategy testing starting at: {self.start_time}).")
+		else:
+			print(f"    No start_time specified. Loading all data for EURUSD on timeframe {self.advance_timeframe}.")
+
+		# Set 'time' as index for faster access
+		df.set_index('time', inplace=True)
+		df.drop_duplicates(inplace=True)
+		df.reset_index(inplace=True)
+
+		self.time_df = df
+		self.time_index = 0
+		self.end_time_index = df[self.end_time:].index[0]
+
 
 	def get_timeframe_name(self, timeframe):
 		"""
@@ -393,14 +418,13 @@ class MT5Backtest:
 		tf_name = self.get_timeframe_name(timeframe)
 		current_index = self.current_tick_index[symbol][tf_name]
 		# Get data up to current_index
-		start = current_index - count
+		start = current_index - count - 1 #  1 extra bar to match live trading logic (in backtest the current bar is always avaialbe so the +1 is obsolete, but still wish to match live trading )
+		end = current_index  # In backtest we don't see the current bar
 
 		# main logic
-		# TODO: check is can and needed optimization - pre reverse the data?
-		rates = self.symbols_data[symbol][tf_name].iloc[start:current_index] # use only needed bars and reverse the DataFrame to have newest bar first
-											 								# no need for the last bar since it's the "current bar"
-																			# this simluates live trading since we don't see the current bar
+		rates = self.symbols_data[symbol][tf_name].iloc[start:end] # use only needed bars from the dataframe, end is not included
 
+		#TODO: check if this is efficient - maybe preconvert to numpy array in the load_data function
 		# Convert to NumPy recarray
 		data_array = rates.to_records(index=False)
 		return data_array
@@ -460,20 +484,17 @@ class MT5Backtest:
 			self.set_last_error(RES_E_NOT_FOUND, f"No tick data available for {symbol}.")
 			return None
 
-		bid = tick_data['close']
-		spread = tick_data['spread']
-		ask = bid + (spread * self.symbol_info(symbol)['point'])
-		last = bid
 		tick_time = tick_data['time']
 
 		tick = {
+			#TODO: check if time conversion is needed - maybe can be optimized during data loading
 			'time': int(pd.Timestamp(tick_time).timestamp()),
-			'bid': bid,
-			'ask': ask,
-			'last': last
+			'bid': tick_data['bid'],
+			'ask': tick_data['ask'],
 		}
 		return tick
 
+	#TODO: check how many times this function is called - maybe can be optimized by preloading the data in the load_data function
 	def symbol_info(self, symbol):
 		"""
 		Simulate MT5.symbol_info() function.
@@ -488,8 +509,8 @@ class MT5Backtest:
 			digits = 3
 		else:
 			digits = 5
-
 		# Simplified symbol information
+
 		info = {
 			'name': symbol,
 			'path': symbol,
@@ -740,73 +761,34 @@ class MT5Backtest:
 			float or None: Current price or None if error.
 		"""
 		tf_name = self.advance_timeframe  # Use the advance timeframe
-		if symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-			self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
-			return None
+		current_index = self.current_tick_index[symbol][tf_name] # get the current index for the symbol and timeframe
+		current_bar = self.symbols_data[symbol][tf_name].iloc[current_index]
 
-		df = self.symbols_data[symbol][tf_name]
-		current_index = self.current_tick_index[symbol][tf_name]
-
-		if current_index >= len(df):
-			self.set_last_error(RES_E_NOT_FOUND, f"No price data available for {symbol} at current time.")
-			return None
-
-		current_bar = df.iloc[current_index]
 
 		if order_type == ORDER_TYPE_BUY:
-			price = current_bar['ask'] if 'ask' in current_bar else current_bar['close']
+			price =  current_bar['ask']
 		elif order_type == ORDER_TYPE_SELL:
-			price = current_bar['bid'] if 'bid' in current_bar else current_bar['close']
-		else:
-			price = current_bar['close']
+			price =  current_bar['bid'] 
 
 		return price
 
-	def advance_time_step(self):
+	def advance_time_step(self, currrent_time_index):
 		"""
 		Advance the simulation time to the next data point.
-		Returns:
-			bool: True if simulation continues, False otherwise.
 		"""
-		# Determine the next timestamp across all symbols and timeframes
-		next_times = []
-		for symbol, tfs in self.symbols_data.items():
-			for tf_name, df in tfs.items():
-				current_index = self.current_tick_index[symbol][tf_name]
-				if current_index + 1 < len(df):
-					next_bar_time = df.iloc[current_index + 1]['time']
-					if next_bar_time > self.current_time:
-						next_times.append(next_bar_time)
-			
-
-		if not next_times:
-			# No more data to process
-			self.current_time = self.end_time
-			return False
-
-		next_time = min(next_times)
-		if next_time <= self.current_time:
-			# Prevent infinite loop
-			self.set_last_error(RES_E_INTERNAL_FAIL, "Next time step is not ahead of current time.")
-			return False
+		self.time_index = currrent_time_index
 
 		# Advance time
-		self.current_time = next_time
+		self.current_time = self.time_df.iloc[self.time_index]
 
 		# Update current_tick_index for each symbol and timeframe
 		for symbol, tfs in self.symbols_data.items():
 			for tf_name, df in tfs.items():
 				current_index = self.current_tick_index[symbol][tf_name]
-				if current_index + 1 < len(df):
-					next_bar_time = df.iloc[current_index + 1]['time']
-					if next_bar_time <= self.current_time:
-						self.current_tick_index[symbol][tf_name] += 1
-						current_index = self.current_tick_index[symbol][tf_name]
-						# Update current_tick_data with the new current index
-						if tf_name == self.advance_timeframe:
-							self.current_tick_data[symbol] = df.iloc[current_index]
+				next_bar_time = df.iloc[current_index + 1]['time']
+				if next_bar_time <= self.current_time:
+					self.current_tick_index[symbol][tf_name] += 1
 
-		return True
 
 	def execute_trade_logic(self):
 		"""
@@ -912,7 +894,7 @@ class MT5Backtest:
 
 	def get_current_bar_data(self, symbol):
 		"""
-		Get the current bar data for the symbol at current_time.
+		Get the current bar data for the symbol at current_time in backtest tf.
 
 		Parameters:
 			symbol (str): The trading symbol.
@@ -921,16 +903,10 @@ class MT5Backtest:
 			dict or None: Bar data or None if not found.
 		"""
 		tf_name = self.advance_timeframe  # Use the advance timeframe
-		if symbol not in self.symbols_data or tf_name not in self.symbols_data[symbol]:
-			self.set_last_error(RES_E_NOT_FOUND, f"Symbol or timeframe not found: {symbol}, {tf_name}")
-			return None
 
 		current_index = self.current_tick_index[symbol][tf_name]
-		df = self.symbols_data[symbol][tf_name]
-		if current_index >= len(df):
-			return None
 
-		current_bar = df.iloc[current_index]
+		current_bar = self.symbols_data[symbol][tf_name].iloc[current_index]
 		bar = current_bar.to_dict()
 		return bar
 	
@@ -1093,15 +1069,11 @@ class MT5Backtest:
 		return result
 
 
-	def step_simulation(self):
+	def step_simulation(self, current_time_index):
 		"""
 		Advance the simulation time to the next data point.
-		Returns:
-			bool: True if simulation continues, False otherwise.
 		"""
-		proceed = self.advance_time_step()
-		if not proceed:
-			return False  # End of backtest or error
+		self.advance_time_step(current_time_index)
 
 		# Execute trade logic (Check if hit SL or TP, update account)
 		self.execute_trade_logic()
@@ -1111,7 +1083,6 @@ class MT5Backtest:
 			self.log_account_status()
 			self.previous_hour = self.current_time.hour
 
-		return True
 
 	def log_account_status(self):
 		"""
@@ -1437,12 +1408,11 @@ def run_backtest(strategies, symbols):
 
 	print(f"Starting backtest from {backtest.current_time} to {backtest.end_time}")
 	try:
-		while backtest.current_time < backtest.end_time:
-			# Advance time by time_step
-			proceed = backtest.step_simulation()
-			if not proceed:
-				print(f"Backtest stopped due to error: {backtest.last_error_description}")
-				break
+		# TODO: optimize to use number comparison? - use index of backtest.end_time ?
+		# OPTIMIZE - after loading eurusd times I can use a for loop (maybe even numpy vectorization) to iterate over the times
+		for i in range(backtest.time_index, backtest.end_time_index):
+			# Advance time by time_step and simulate trade logic (i.e. real life - check SL/TP, update account)
+			backtest.step_simulation(i)
 
 			# Call on_minute with current simulation time
 			on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict=None, BACKTEST_MODE=True)
