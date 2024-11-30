@@ -116,7 +116,7 @@ class MT5Backtest:
         self.strategies = strategies  # Store the strategies
         self.data_dir = os.path.join(drive, data_dir)
         self.symbols_data = {}  # {symbol: {timeframe: {column: numpy array}}}
-        self.current_tick_index = {}  # {symbol: {timeframe: current_index}}	
+        self.current_tick_index = {}  # {symbol: {timeframe: current_index}}    
 
         # Extract symbols, timeframes, and backtest parameters from strategies
         if strategies:
@@ -236,11 +236,10 @@ class MT5Backtest:
         Load historical data from Parquet files into symbols_data.
         Only loads data for specified symbols and timeframes, starting from self.data_start_time.
         """
-        if not self.symbols or not self.timeframes:
+        if not self.symbols or not self.timeframes:  
             print("No symbols or timeframes specified for data loading.")
             return
 
-        # Convert required columns to a set of strings
         required_columns = self.required_columns
 
         for filename in os.listdir(self.data_dir):
@@ -277,10 +276,7 @@ class MT5Backtest:
 
             # Filter data to include only rows where 'time' >= self.data_start_time
             if self.start_time:
-                initial_row_count = len(df)
                 df = df[df['time'] >= self.data_start_time]
-                filtered_row_count = len(df)
-                print(f"    Filtered data for {symbol} on timeframe {tf_name}: {filtered_row_count} out of {initial_row_count} bars retained (from {self.data_start_time} for strategy testing starting at: {self.start_time}).")
             else:
                 print(f"    No start_time specified. Loading all data for {symbol} on timeframe {tf_name}.")
 
@@ -289,31 +285,35 @@ class MT5Backtest:
             df.drop_duplicates(inplace=True)
             df.reset_index(drop=True, inplace=True)
 
-            # Convert DataFrame to dictionary of NumPy arrays
-            data_array = {}
+            # Create structured array
+            arrays = []
+            dtypes = []
             for col in df.columns:
                 if col == 'time':
-                    # Keep 'time' as Python datetime objects
-                    data_array['time'] = df['time'].to_numpy(dtype='object')
+                    arrays.append(df[col].to_numpy(dtype='object'))
+                    dtypes.append((col, 'O'))
                 else:
-                    # Use appropriate data types
-                    data_array[col] = df[col].to_numpy()
+                    arrays.append(df[col].to_numpy())
+                    dtypes.append((col, df[col].dtype))
+            structured_array = np.rec.fromarrays(arrays, dtype=dtypes)
 
-            # Assign the data_array to the specific timeframe
+            # Assign the structured array to the specific timeframe
             if symbol not in self.symbols_data:
                 self.symbols_data[symbol] = {}
 
-            self.symbols_data[symbol][tf_name] = data_array
+            self.symbols_data[symbol][tf_name] = structured_array
 
             # Initialize current_tick_index for each symbol and timeframe
             if symbol not in self.current_tick_index:
                 self.current_tick_index[symbol] = {}
             # Find the first index where 'time' >= self.start_time
-            times = data_array['time']
+            times = structured_array['time']
             first_valid_index = np.searchsorted(times, self.start_time)
             self.current_tick_index[symbol][tf_name] = first_valid_index
 
             print(f"    Loaded data for {symbol} on timeframe {tf_name} with {len(df)} bars.")
+
+
 
     def load_timeseries_data(self):
         """
@@ -390,28 +390,11 @@ class MT5Backtest:
         """
         tf_name = self.get_timeframe_name(timeframe)
         current_index = self.current_tick_index[symbol][tf_name]
-        # Adjust indices because pos=0 refers to the newest bar in MT5
-        start = current_index - count
-        end = current_index
 
-        # Slice the data arrays directly
-        data_arrays = self.symbols_data[symbol][tf_name]
-        rates = {}
-        for key in data_arrays:
-            rates[key] = data_arrays[key][start:end]
+        start = current_index - count - 1 #  1 extra bar to match live trading logic (in backtest the current bar is always avaialbe so the +1 is obsolete, but still wish to match live trading )
+        end = current_index  # In backtest we don't see the current bar
 
-        # Return the rates as a structured NumPy array
-        dtype = []
-        for key in rates.keys():
-            if key == 'time':
-                dtype.append((key, 'O'))  # Object type for datetime.datetime
-            else:
-                dtype.append((key, rates[key].dtype))
-        structured_array = np.zeros(len(rates['time']), dtype=dtype)
-        for key in rates.keys():
-            structured_array[key] = rates[key]
-
-        return structured_array
+        return self.symbols_data[symbol][tf_name][start:end] # Return the data array - data array = sybmol_data[symbol][tf_name] , start:end = the range of bars to return
 
     def account_info(self):
         """
@@ -736,15 +719,15 @@ class MT5Backtest:
         tf_name = self.advance_timeframe  # Use the advance timeframe
         current_index = self.current_tick_index[symbol][tf_name]
 
-        data_arrays = self.symbols_data[symbol][tf_name]
+        data_array = self.symbols_data[symbol][tf_name]
 
-        if current_index >= len(data_arrays['time']):
+        if current_index >= len(data_array):
             return None  # No more data
 
         if order_type == ORDER_TYPE_BUY:
-            price = data_arrays['ask'][current_index]
+            price = data_array['ask'][current_index]
         elif order_type == ORDER_TYPE_SELL:
-            price = data_arrays['bid'][current_index]
+            price = data_array['bid'][current_index]
         else:
             price = None
 
@@ -857,18 +840,13 @@ class MT5Backtest:
             symbol (str): The trading symbol.
 
         Returns:
-            dict or None: Bar data or None if not found.
+            np.recarray or None: Bar data or None if not found.
         """
         tf_name = self.advance_timeframe  # Use the advance timeframe
         current_index = self.current_tick_index[symbol][tf_name]
 
-        data_arrays = self.symbols_data[symbol][tf_name]
+        return self.symbols_data[symbol][tf_name][current_index]
 
-        if current_index >= len(data_arrays['time']):
-            return None  # No more data
-
-        bar = {key: data_arrays[key][current_index] for key in data_arrays}
-        return bar
 
     def get_swap_rate(self, symbol, order_type):
         """
@@ -1390,3 +1368,4 @@ def run_backtest(strategies, symbols):
 
         # Export logs
         backtest.export_logs()
+
