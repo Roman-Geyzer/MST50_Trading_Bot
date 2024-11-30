@@ -230,7 +230,7 @@ class MT5Backtest:
 
 			# Collect required columns from the strategy
 			required_columns_set.update(strategy.required_columns)
-			required_columns_set.update('bid', 'ask')
+			required_columns_set.update(['bid', 'ask'])
 
 		self.symbols = list(symbols_set)
 		self.timeframes = list(timeframes_set)
@@ -306,8 +306,8 @@ class MT5Backtest:
 				print(f"Warning: Some 'time' entries could not be parsed in {filename}. They will be dropped.")
 				df = df.dropna(subset=['time'])
 
-			# Sort by 'time' descending
-			df.sort_values('time', inplace=True, ascending=False)
+			# Sort by 'time' ascending (oldest to newest)
+			df.sort_values('time', inplace=True, ascending=True)
 
 			# Filter data to include only rows where 'time' >= self.data_start_time
 			if self.start_time:
@@ -340,33 +340,21 @@ class MT5Backtest:
 		filepath = os.path.join(self.data_dir, filename)
 
 		# Read the CSV file
-		try:
-			df = pd.read_csv(
-				filepath,
-				usecols=['time'],
-			)
-		except ValueError as e:
-			print(f"Error reading {filename}: {e}.")
-			return
-
-		try:
-			df['time'] = pd.to_datetime(df['time'], errors='raise')
-		except Exception as e:
-			print(f"Error parsing 'time' column in {filename}: {e}.")
-			return
+		df = pd.read_csv(filepath, usecols=['time'])
+		df['time'] = pd.to_datetime(df['time'], errors='raise')
 
 		# Remove rows with any NaT in 'time'
 		if df['time'].isnull().any():
 			print(f"Warning: Some 'time' entries could not be parsed in {filename}. They will be dropped.")
 			df = df.dropna(subset=['time'])
 
-		# Sort by 'time' descending
-		df.sort_values('time', inplace=True, ascending=False)
+		# Sort by 'time' ascending (oldest to newest)
+		df.sort_values('time', inplace=True, ascending=True)
 
-		# Filter data to include only rows where 'time' >= self.data_start_time
+		# Filter data to include only rows where 'time' >= self.start_time
 		if self.start_time:
 			initial_row_count = len(df)
-			df = df[df['time'] >= self.data_start_time]
+			df = df[df['time'] >= self.start_time]
 			filtered_row_count = len(df)
 			print(f"    Filtered data for EURUSD on timeframe {self.advance_timeframe}: {filtered_row_count} out of {initial_row_count} bars retained (from {self.data_start_time} for strategy testing starting at: {self.start_time}).")
 		else:
@@ -377,9 +365,20 @@ class MT5Backtest:
 		df.drop_duplicates(inplace=True)
 		df.reset_index(inplace=True)
 
-		self.time_df = df
+		# Convert 'time' column to a list of Python datetime objects
+		self.time_array = df['time'].dt.to_pydatetime().tolist()
 		self.time_index = 0
-		self.end_time_index = df[self.end_time:].index[0]
+
+		# Find Integer Index for self.end_time 
+		mask = df['time'] >= self.end_time
+		matching_indices = df.index[mask]
+
+		if not matching_indices.empty:
+			self.end_time_index = matching_indices[0]
+			print(f"    Found end_time_index at position {self.end_time_index} for end_time {self.end_time}.")
+		else:
+			print(f"    No data available after {self.end_time}. Setting end_time_index to the last available index.")
+			raise ValueError(f"No data available after {self.end_time}. Setting end_time_index to the last available index.")
 
 
 	def get_timeframe_name(self, timeframe):
@@ -779,7 +778,7 @@ class MT5Backtest:
 		self.time_index = currrent_time_index
 
 		# Advance time
-		self.current_time = self.time_df.iloc[self.time_index]
+		self.current_time = self.time_array[self.time_index]
 
 		# Update current_tick_index for each symbol and timeframe
 		for symbol, tfs in self.symbols_data.items():
@@ -1235,7 +1234,14 @@ def initialize_backtest(strategies):
 	"""
 	global backtest
 	backtest = MT5Backtest(strategies=strategies)
-	print(f"Backtest initialized with parameters: {backtest.__dict__}")
+	main_params = {
+		'start_time': backtest.current_time,
+		'end_time': backtest.end_time,
+		'time_step': backtest.time_step,
+		'strategies': strategies,
+		'symbols': backtest.symbols,
+	}
+	print(f"Backtest initialized with parameters: {main_params}")
 
 def account_info():
 	"""
