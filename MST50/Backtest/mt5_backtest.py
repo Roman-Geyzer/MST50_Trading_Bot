@@ -87,7 +87,7 @@ def collect_usd_currency_pairs_and_non_usd_bases(symbols):
     for symbol in symbols:
         quote_currency = symbol[-3:]  # Last three characters
 
-        # If the quote currency is not USD, ensure USDquote_currency is added
+        # If the quote currency is not USD, ensure USD quote_currency is added
         if quote_currency != "USD":
             pair_with_usd = f"USD{quote_currency}"
             currency_set.add(pair_with_usd)
@@ -391,11 +391,8 @@ class MT5Backtest:
         tf_name = self.get_timeframe_name(timeframe)
         current_index = self.current_tick_index[symbol][tf_name]
         # Adjust indices because pos=0 refers to the newest bar in MT5
-        start = current_index - pos - count
-        end = current_index - pos
-
-        if start < 0:
-            start = 0
+        start = current_index - count
+        end = current_index
 
         # Slice the data arrays directly
         data_arrays = self.symbols_data[symbol][tf_name]
@@ -928,20 +925,25 @@ class MT5Backtest:
         # Adjust profit: convert to USD profit if needed
         quote_currency = symbol[-3:]
         if quote_currency != 'USD':
-            conversion_symbol = f"{quote_currency}USD"
-            conversion_order_type = ORDER_TYPE_BUY
-            conversion_rate = self.get_current_price(symbol=conversion_symbol, order_type=conversion_order_type)
+            # Initialize conversion rate
+            conversion_rate = None
+
+            # If USD is not the quote currency, adjust using the conversion rate
+            usd_base_currencies = ['EUR', 'GBP', 'AUD', 'NZD', 'USD']
+            usd_quote_currencies = ['JPY', 'CHF', 'CAD']
+            if quote_currency in usd_base_currencies:
+                # Convert to USD using the conversion rate
+                conversion_rate = self.get_current_price(symbol=f"{quote_currency}USD", order_type=ORDER_TYPE_BUY)
+            elif quote_currency in usd_quote_currencies:
+                # Convert to USD using the reverse conversion rate
+                conversion_rate = 1 / self.get_current_price(symbol=f"USD{quote_currency}", order_type=ORDER_TYPE_BUY)
+
+            # Apply conversion rate if valid
             if conversion_rate and conversion_rate > 0:
                 profit *= conversion_rate
             else:
-                # Try the inverse
-                conversion_symbol = f"USD{quote_currency}"
-                conversion_rate = self.get_current_price(symbol=conversion_symbol, order_type=conversion_order_type)
-                if conversion_rate and conversion_rate > 0:
-                    profit /= conversion_rate
-                else:
-                    # TODO: Add to logging
-                    print(f"Warning: Could not retrieve conversion rate for {quote_currency}USD. Profit may be inaccurate.")
+                # TODO: Add to logging
+                print(f"Warning: Could not retrieve conversion rate for {quote_currency}USD. Profit may be inaccurate.")
 
         # Simplified swap calculation:
         swap_rate = self.get_swap_rate(symbol, order_type)  # Retrieve swap rate for full lot
