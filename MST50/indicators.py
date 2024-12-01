@@ -944,19 +944,19 @@ class RangeIndicator(Indicator):
             params (dict): Contains specific parameters for SR, Breakout, and Fakeout calculations.
         """
         super().__init__(name, params)
-        self.period_for_sr = safe_int_extract_from_dict(params, 'a', 100)
-        self.touches_for_sr = safe_int_extract_from_dict(params, 'b', 3)
-        self.slack_for_sr_atr_div = safe_float_extract_from_dict(params, 'c', 10.0)
-        self.atr_rejection_multiplier = safe_float_extract_from_dict(params, 'd', 1.0)
-        self.max_distance_from_sr_atr = safe_float_extract_from_dict(params, 'e', 2.0)
-        self.min_height_of_sr_distance = safe_float_extract_from_dict(params, 'f', 3.0)
-        self.max_height_of_sr_distance = safe_float_extract_from_dict(params, 'g', 200.0)
+        self.period_for_sr = safe_int_extract_from_dict(params, 'a', 100) # Lookback period for SR levels
+        self.touches_for_sr = safe_int_extract_from_dict(params, 'b', 3) # Number of touches for SR levels
+        self.slack_for_sr_atr_div = safe_float_extract_from_dict(params, 'c', 10.0) # Slack for SR levels based on ATR
+        self.atr_rejection_multiplier = safe_float_extract_from_dict(params, 'd', 1.0) # ATR rejection multiplier for SR levels
+        self.max_distance_from_sr_atr = safe_float_extract_from_dict(params, 'e', 2.0) # Used in trading decisions
+        self.min_height_of_sr_distance = safe_float_extract_from_dict(params, 'f', 3.0) # Min height of SR distance - used in calculating SR levels
+        self.max_height_of_sr_distance = safe_float_extract_from_dict(params, 'g', 200.0) # Max height of SR distance - used in calculating SR levels
 
-        self.slack_for_breakout_atr = safe_float_extract_from_dict(params, 'h', 0.1)
+        self.slack_for_breakout_atr = safe_float_extract_from_dict(params, 'h', 0.1) # Slack for breakout based on ATR
         
-        self.bars_from_fakeout = safe_int_extract_from_dict(params, 'i', 2)
-        self.bars_before_fakeout = safe_int_extract_from_dict(params, 'j', 2)
-        self.fakeout_atr_slack = safe_float_extract_from_dict(params, 'k', 0.5)
+        self.bars_from_fakeout = safe_int_extract_from_dict(params, 'i', 2) # Bars from fakeout
+        self.bars_before_fakeout = safe_int_extract_from_dict(params, 'j', 2) # Bars before fakeout
+        self.fakeout_atr_slack = safe_float_extract_from_dict(params, 'k', 0.5) # Fakeout ATR slack
 
 
         # Initialize SR levels
@@ -1004,107 +1004,15 @@ class RangeIndicator(Indicator):
 
     def calculate_sr_levels(self, rates):
         """
-        Calculate the Support and Resistance (SR) levels for the given rates.
+        Populate the upper and lower SR levels based on the given levels in the rates DataFrame.
 
         Parameters:
             rates (DataFrame): Historical price data (OHLC).
         """
-        if len(rates) < self.period_for_sr:
-            return
-
-        recent_rates = rates[-self.period_for_sr:]
-
-        # Initialize uSlackForSR and uRejectionFromSR
-        atr = rates['ATR'][-1]
-        uSlackForSR = atr / self.slack_for_sr_atr_div
-        uRejectionFromSR = atr * self.atr_rejection_multiplier
-
-        current_open = rates['open'][-1]
-
-        # Initialize HighSR and LowSR
-        HighSR = current_open + self.min_height_of_sr_distance * uSlackForSR
-        LowSR = current_open - self.min_height_of_sr_distance * uSlackForSR
-
-        # LocalMax and LocalMin
-        LocalMax = np.max(recent_rates['high'])
-        LocalMin = np.min(recent_rates['low'])
-
-        # Initialize LoopCounter
-        LoopCounter = 0
-
-        # Upper SR Level
-        while LoopCounter < self.max_height_of_sr_distance:
-            UpperSR = HighSR
-            num_touches = self.count_touches(UpperSR, recent_rates, uRejectionFromSR, upper=True)
-            if num_touches >= self.touches_for_sr:
-                self.upper_sr = UpperSR
-                break
-            else:
-                HighSR += uSlackForSR
-                LoopCounter += 1
-                if HighSR > LocalMax:
-                    self.upper_sr = 0
-                    self.upper_limit = HighSR
-                    break
-
-        # Reset LoopCounter for LowerSR
-        LoopCounter = 0
-
-        # Lower SR Level
-        while LoopCounter < self.max_height_of_sr_distance:
-            LowerSR = LowSR
-            num_touches = self.count_touches(LowerSR, recent_rates, uRejectionFromSR, upper=False)
-            if num_touches >= self.touches_for_sr:
-                self.lower_sr = LowerSR
-                break
-            else:
-                LowSR -= uSlackForSR
-                LoopCounter += 1
-                if LowSR < LocalMin:
-                    self.lower_sr = 0
-                    self.lower_limit = LowSR
-                    break
-
-        # Store previous SR levels for Breakout and Fakeout checks
-        self.prev_upper_sr_level = self.upper_sr
-        self.prev_lower_sr_level = self.lower_sr
-
-    def count_touches(self, current_hline, recent_rates, uRejectionFromSR, upper=True):
-        """
-        Count the number of touches to the given SR level.
-
-        Parameters:
-            current_hline (float): The SR level to check.
-            recent_rates (DataFrame): The recent rates to check.
-            uRejectionFromSR (float): The rejection slack based on ATR.
-            upper (bool): True if checking for upper SR, False for lower SR.
-
-        Returns:
-            int: Number of touches.
-        """
-        counter = 0
-        for idx in range(len(recent_rates) - 1):
-            open_price = recent_rates['open'][idx]
-            close_price = recent_rates['close'][idx]
-            high_price = recent_rates['high'][idx]
-            low_price = recent_rates['low'][idx]
-            candle_size = abs(high_price - low_price)
-
-            if upper:
-                # Upper SR check
-                if open_price < current_hline and close_price < current_hline:
-                    if high_price > current_hline or (
-                        candle_size > uRejectionFromSR and (current_hline - high_price) < uRejectionFromSR / 2
-                    ):
-                        counter += 1
-            else:
-                # Lower SR check
-                if open_price > current_hline and close_price > current_hline:
-                    if low_price < current_hline or (
-                        candle_size > uRejectionFromSR and (low_price - current_hline) < uRejectionFromSR / 2
-                    ):
-                        counter += 1
-        return counter
+        self.upper_sr = rates['upper_sr'][-1]
+        self.lower_sr = rates['lower_sr'][-1]
+        self.prev_upper_sr_level = rates['upper_sr'][-2]
+        self.prev_lower_sr_level = rates['lower_sr'][-2]
 
     def sr_trade_decision(self, rates):
         """

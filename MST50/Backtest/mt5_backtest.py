@@ -1004,6 +1004,7 @@ class MT5Backtest:
         if self.current_time.hour != self.previous_hour:
             self.log_account_status()
             self.previous_hour = self.current_time.hour
+            
 
     def log_account_status(self):
         """
@@ -1018,6 +1019,7 @@ class MT5Backtest:
             'margin_level': self.account['margin_level']
         }
         self.account_docs.append(account_doc)
+        
 
     def export_logs(self):
         """
@@ -1037,6 +1039,7 @@ class MT5Backtest:
 
         # Generate and save graph
         self.generate_account_graph()
+        
 
     def generate_account_graph(self):
         """
@@ -1097,6 +1100,7 @@ class MT5Backtest:
 
         # Show the graph
         fig.show()
+        
 
     def last_error(self):
         """
@@ -1107,6 +1111,7 @@ class MT5Backtest:
         """
         error = (self.last_error_code, self.last_error_description)
         return error
+    
 
     def set_last_error(self, code, description):
         """

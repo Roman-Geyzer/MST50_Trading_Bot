@@ -290,6 +290,9 @@ class Strategy:
         elif indicator_name == 'GA':
             # For Guppy Averages, load all GA columns
             self.required_columns.update({'GA_50', 'GA_100', 'GA_200', 'GA_500'})
+        elif indicator_name == 'SR' or indicator_name == 'Breakout' or indicator_name == "Fakeout":
+            # For Support/Resistance, Breakout, and Fakeout, load the SR column
+            self.required_columns.update({'upper_sr', 'lower_sr'})
         else:
             pass
             # place holder for other indicators

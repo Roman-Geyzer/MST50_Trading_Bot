@@ -247,6 +247,152 @@ def time_current():
     return now
 
 
+# SR calculation functions
+def calculate_sr_levels(df, sr_params):
+    """
+    Calculate Support and Resistance (SR) levels and add them as new columns to the DataFrame.
+
+    Parameters:
+    - df: pandas DataFrame sorted by 'time' in ascending order with necessary price data and ATR
+    - sr_params: dict containing SR calculation parameters
+
+    Returns:
+    - df: pandas DataFrame with SR indicator columns added
+    """
+
+    # Initialize SR columns with default values
+    df['upper_sr'] = 0.0
+    df['lower_sr'] = 0.0
+    df['prev_upper_sr_level'] = 0.0
+    df['prev_lower_sr_level'] = 0.0
+
+    # Extract SR parameters
+    period_for_sr = sr_params['period_for_sr']
+    touches_for_sr = sr_params['touches_for_sr']
+    slack_for_sr_atr_div = sr_params['slack_for_sr_atr_div']
+    atr_rejection_multiplier = sr_params['atr_rejection_multiplier']
+    min_height_of_sr_distance = sr_params['min_height_of_sr_distance']
+    max_height_of_sr_distance = sr_params['max_height_of_sr_distance']
+
+    # Iterate over the DataFrame to calculate SR levels
+    for i in range(len(df)):
+        if i < period_for_sr:
+            # Not enough data to calculate SR levels
+            continue
+
+        # Define the window for SR calculation
+        window_start = i - period_for_sr
+        window_end = i  # Exclusive
+
+        recent_rates = df.iloc[window_start:window_end]
+
+        atr = df.at[i, 'ATR']
+        if pd.isna(atr) or atr == 0:
+            # Skip if ATR is not available
+            continue
+
+        uSlackForSR = atr / slack_for_sr_atr_div
+        uRejectionFromSR = atr * atr_rejection_multiplier
+
+        current_open = df.at[i, 'open']
+
+        # Initialize HighSR and LowSR
+        HighSR = current_open + min_height_of_sr_distance * uSlackForSR
+        LowSR = current_open - min_height_of_sr_distance * uSlackForSR
+
+        # LocalMax and LocalMin
+        LocalMax = recent_rates['high'].max()
+        LocalMin = recent_rates['low'].min()
+
+        # Initialize LoopCounter
+        LoopCounter = 0
+
+        # Upper SR Level
+        upper_sr_level = 0.0
+        while LoopCounter < max_height_of_sr_distance:
+            UpperSR = HighSR
+            if count_touches(UpperSR, recent_rates, uRejectionFromSR,touches_for_sr, upper=True):
+                upper_sr_level = UpperSR
+                break
+            else:
+                HighSR += uSlackForSR
+                LoopCounter += 1
+                if HighSR > LocalMax:
+                    upper_sr_level = 0
+                    break
+
+        # Reset LoopCounter for LowerSR
+        LoopCounter = 0
+
+        # Lower SR Level
+        lower_sr_level = 0.0
+        while LoopCounter < max_height_of_sr_distance:
+            LowerSR = LowSR
+            if count_touches(LowerSR, recent_rates, uRejectionFromSR,touches_for_sr, upper=False):
+                lower_sr_level = LowerSR
+                break
+            else:
+                LowSR -= uSlackForSR
+                LoopCounter += 1
+                if LowSR < LocalMin:
+                    lower_sr_level = 0
+                    break
+
+        # Store SR levels in the DataFrame
+        df.at[i, 'upper_sr'] = upper_sr_level
+        df.at[i, 'lower_sr'] = lower_sr_level
+
+        # Store previous SR levels
+        if i > 0:
+            df.at[i, 'prev_upper_sr_level'] = df.at[i-1, 'upper_sr']
+            df.at[i, 'prev_lower_sr_level'] = df.at[i-1, 'lower_sr']
+        else:
+            df.at[i, 'prev_upper_sr_level'] = 0.0
+            df.at[i, 'prev_lower_sr_level'] = 0.0
+
+    return df
+
+def count_touches(current_hline, recent_rates, uRejectionFromSR,touches_for_sr , upper=True):
+    """
+    Count the number of touches to the given SR level.
+
+    Parameters:
+        current_hline (float): The SR level to check.
+        recent_rates (DataFrame): The recent rates to check.
+        uRejectionFromSR (float): The rejection slack based on ATR.
+        upper (bool): True if checking for upper SR, False for lower SR.
+
+    Returns:
+        bool - True if the number of touches is equal to the required number of touches for SR. (actual touches >= required touches - stop early)
+    """
+    counter = 0
+    for idx in range(len(recent_rates) - 1):
+        open_price = recent_rates['open'].iloc[idx]
+        close_price = recent_rates['close'].iloc[idx]
+        high_price = recent_rates['high'].iloc[idx]
+        low_price = recent_rates['low'].iloc[idx]
+        candle_size = abs(high_price - low_price)
+
+        if upper:
+            # Upper SR check
+            if open_price < current_hline and close_price < current_hline:
+                if high_price > current_hline or (
+                    candle_size > uRejectionFromSR and (current_hline - high_price) < uRejectionFromSR / 2
+                ):
+                    if counter == touches_for_sr:
+                        return True
+        else:
+            # Lower SR check
+            if open_price > current_hline and close_price > current_hline:
+                if low_price < current_hline or (
+                    candle_size > uRejectionFromSR and (low_price - current_hline) < uRejectionFromSR / 2
+                ):
+                    if counter == touches_for_sr:
+                        return True
+    return False
+
+
+
 # Helper functions
 def calculate_indicators(df, required_columns):
     """
@@ -289,6 +435,9 @@ def calculate_indicators(df, required_columns):
     ga_windows = [int(col.split('_')[1]) for col in required_columns if col.startswith('GA_') and col.split('_')[1].isdigit()]
     if ga_windows:
         indicators_to_calculate.add('GA')
+
+    if 'SR' in required_columns or 'Breakout' in required_columns or 'Fakeout' in required_columns:
+        indicators_to_calculate.add('SR')
 
     # Now calculate the required indicators
     if 'RSI' in indicators_to_calculate:
@@ -334,6 +483,20 @@ def calculate_indicators(df, required_columns):
             df[ga_label] = df['Is_Green'].rolling(window=window).sum() / window
         df.drop(['Is_Green'], axis=1, inplace=True)
 
+    if 'SR' in indicators_to_calculate:
+        #TODO: change from hardcoded to parameter
+        # SR Parameters     
+        SR_PARAMS = {
+            'period_for_sr': 100,                # Lookback period for SR levels
+            'touches_for_sr': 3,                 # Number of touches for SR levels
+            'slack_for_sr_atr_div': 10.0,        # Slack for SR levels based on ATR
+            'atr_rejection_multiplier': 1.0,     # ATR rejection multiplier for SR levels
+            'max_distance_from_sr_atr': 2.0,     # Used in trading decisions
+            'min_height_of_sr_distance': 3.0,    # Min height of SR distance - used in calculating SR levels
+            'max_height_of_sr_distance': 200.0,  # Max height of SR distance - used in calculating SR levels
+        }
+        # populate SR levels in the DataFrame using calculate_sr_levels function
+        df = calculate_sr_levels(df, SR_PARAMS)
     return df
 
 def timeframe_to_string(timeframe):
