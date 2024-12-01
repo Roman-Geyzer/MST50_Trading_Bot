@@ -366,6 +366,7 @@ def count_touches(current_hline, recent_rates, uRejectionFromSR,touches_for_sr ,
         bool - True if the number of touches is equal to the required number of touches for SR. (actual touches >= required touches - stop early)
     """
     counter = 0
+    half_rejection = uRejectionFromSR / 2.0
     for idx in range(len(recent_rates) - 1):
         open_price = recent_rates['open'].iloc[idx]
         close_price = recent_rates['close'].iloc[idx]
@@ -373,20 +374,23 @@ def count_touches(current_hline, recent_rates, uRejectionFromSR,touches_for_sr ,
         low_price = recent_rates['low'].iloc[idx]
         candle_size = abs(high_price - low_price)
 
+
         if upper:
             # Upper SR check
             if open_price < current_hline and close_price < current_hline:
                 if high_price > current_hline or (
-                    candle_size > uRejectionFromSR and (current_hline - high_price) < uRejectionFromSR / 2
+                    candle_size > uRejectionFromSR and (current_hline - high_price) < half_rejection
                 ):
+                    counter += 1
                     if counter == touches_for_sr:
                         return True
         else:
             # Lower SR check
             if open_price > current_hline and close_price > current_hline:
                 if low_price < current_hline or (
-                    candle_size > uRejectionFromSR and (low_price - current_hline) < uRejectionFromSR / 2
+                    candle_size > uRejectionFromSR and (low_price - current_hline) < half_rejection
                 ):
+                    counter += 1
                     if counter == touches_for_sr:
                         return True
     return False
