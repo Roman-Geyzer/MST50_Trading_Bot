@@ -10,10 +10,6 @@ Functions:
 """
 import os
 
-
-
-
-
 from .utils import (
     write_balance_performance_file, is_new_bar, wait_for_new_minute,
     print_hashtaged_msg, print_with_info
