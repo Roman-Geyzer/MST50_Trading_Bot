@@ -23,6 +23,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import ta
 
+#TODO: re initialize the server after failure or once an hour / day ?
 
 # Initialize the Pyro5 proxy
 mt5_server = Pyro5.api.Proxy("PYRO:trading.platform.MT5Server@localhost:9090")
