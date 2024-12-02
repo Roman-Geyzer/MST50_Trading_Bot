@@ -384,10 +384,6 @@ class MT5Backtest:
 
 		data_dict = self.symbols_data[symbol][tf_name]
 
-		# Check for valid indices
-		if start < 0:
-			start = 0
-
 		# Create slices for each field
 		sliced_data = {field: data_dict[field][start:end] for field in data_dict}
 
@@ -724,8 +720,6 @@ class MT5Backtest:
 
 		data_dict = self.symbols_data[symbol][tf_name]
 
-		if current_index >= len(data_dict['time']):
-			return None  # No more data
 
 		if order_type == ORDER_TYPE_BUY:
 			price = data_dict['ask'][current_index]
@@ -854,8 +848,6 @@ class MT5Backtest:
 
 		data_dict = self.symbols_data[symbol][tf_name]
 
-		if current_index >= len(data_dict['time']):
-			return None
 
 		# Extract current bar data as a dictionary
 		bar_data = {field: data_dict[field][current_index] for field in data_dict}
