@@ -114,6 +114,7 @@ class MT5Backtest:
 		# Extract symbols, timeframes, and backtest parameters from strategies
 		if strategies:
 			self.extract_backtest_parameters()
+			self.dtypes = None  # Will hold the predefined data types for the numpy arrays
 			self.load_data()
 
 			# Initialize simulation parameters
@@ -286,21 +287,27 @@ class MT5Backtest:
 				else:
 					data_dict[col] = df[col].to_numpy()
 
-			# Assign the data dict to the specific timeframe
+			# Create structured array and store it
+			arrays = [data_dict[field] for field in data_dict]
+			dtypes = [(field, data_dict[field].dtype) for field in data_dict]
+			structured_array = np.core.records.fromarrays(arrays, dtype=dtypes)
+
+			# Assign the structured array to the specific timeframe
 			if symbol not in self.symbols_data:
 				self.symbols_data[symbol] = {}
 
-			self.symbols_data[symbol][tf_name] = data_dict
+			self.symbols_data[symbol][tf_name] = structured_array
 
 			# Initialize current_tick_index for each symbol and timeframe
 			if symbol not in self.current_tick_index:
 				self.current_tick_index[symbol] = {}
 			# Find the first index where 'time' >= self.start_time
-			times = data_dict['time']
+			times = structured_array['time']
 			first_valid_index = np.searchsorted(times, self.start_time)
 			self.current_tick_index[symbol][tf_name] = first_valid_index
 
 			print(f"    Loaded data for {symbol} on timeframe {tf_name} with {len(df)} bars.")
+
 
 	def load_timeseries_data(self):
 		"""
@@ -382,18 +389,13 @@ class MT5Backtest:
 		start = current_index - count - 1  # 1 extra bar to match live trading logic
 		end = current_index  # In backtest we don't see the current bar
 
-		data_dict = self.symbols_data[symbol][tf_name]
-
-		# Create slices for each field
-		sliced_data = {field: data_dict[field][start:end] for field in data_dict}
-
-		# Create structured array
-		arrays = [sliced_data[field] for field in data_dict]
-		dtypes = [(field, data_dict[field].dtype) for field in data_dict]
-
-		structured_array = np.core.records.fromarrays(arrays, dtype=dtypes)
-
-		return structured_array
+		# Return the rates from the specified position 
+		"""
+		structured_array = self.symbols_data[symbol][tf_name]
+    	sliced_array = structured_array[start:end]
+		return sliced_array		
+		"""
+		return self.symbols_data[symbol][tf_name][start:end]
 
 	def account_info(self):
 		"""
@@ -436,9 +438,6 @@ class MT5Backtest:
 			dict or None: Tick information or None if error.
 		"""
 		bar_data = self.get_current_bar_data(symbol)
-		if not bar_data:
-			self.set_last_error(RES_E_NOT_FOUND, f"No tick data available for {symbol}.")
-			return None
 
 		tick_time = bar_data['time']
 
@@ -730,7 +729,6 @@ class MT5Backtest:
 
 		return price
 
-
 	def advance_time_step(self, current_time_index):
 		"""
 		Advance the simulation time to the next data point.
@@ -742,13 +740,12 @@ class MT5Backtest:
 
 		# Update current_tick_index for each symbol and timeframe
 		for symbol, tfs in self.symbols_data.items():
-			for tf_name, data_dict in tfs.items():
+			for tf_name, structured_array in tfs.items():
 				current_index = self.current_tick_index[symbol][tf_name]
-				times = data_dict['time']
+				times = structured_array['time']
 
 				# Advance current_tick_index if next bar time <= current_time
-				while (current_index + 1 < len(times) and
-					times[current_index + 1] <= self.current_time):
+				while current_index + 1 < len(times) and times[current_index + 1] <= self.current_time:
 					current_index += 1
 				self.current_tick_index[symbol][tf_name] = current_index
 
@@ -841,17 +838,14 @@ class MT5Backtest:
 			symbol (str): The trading symbol.
 
 		Returns:
-			dict or None: Bar data or None if not found.
+			np.recarray or None: Bar data or None if not found.
 		"""
 		tf_name = self.advance_timeframe  # Use the advance timeframe
 		current_index = self.current_tick_index[symbol][tf_name]
 
-		data_dict = self.symbols_data[symbol][tf_name]
+		# Extract current bar data as a record
 
-
-		# Extract current bar data as a dictionary
-		bar_data = {field: data_dict[field][current_index] for field in data_dict}
-		return bar_data
+		return self.symbols_data[symbol][tf_name][current_index]
 
 	def get_swap_rate(self, symbol, order_type):
 		"""
