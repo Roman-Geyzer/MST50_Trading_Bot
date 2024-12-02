@@ -1038,6 +1038,9 @@ class MT5Backtest:
         """
         Generate and save a graph of account balance and equity over time using Plotly.
         """
+        #TODO: update to show profit and open trades
+        #TODO: create 2 graphs - one for balance and equity, and one for profit, open trades and margin level
+        #TODO: show grapfhs together? - need to correlate the time axis
         if not self.account_docs:
             print("No account documentation available to generate graph.")
             return
