@@ -164,6 +164,16 @@ class Strategy:
 
         
         # Define the documentation directory with strategy number and name
+
+        # check if drive is accesale - if not then assign drive to c:
+        if not os.path.exists(drive):
+            print(f"Drive {drive} is not accessible. Reassigning to 'c:'.")
+            drive = "c:"  # Reassign to 'c:' if the drive is not accessible
+
+        # Debug print to confirm the drive being used
+        print(f"Using drive: {drive}")        
+        
+
         self.documentation_dir = os.path.join(drive, 'documentation', f"strategy_{self.strategy_num}_{self.strategy_name}")
         if BACKTEST_MODE:
             self.documentation_dir = os.path.join(self.documentation_dir, 'backtest')
