@@ -165,13 +165,7 @@ class Strategy:
         
         # Define the documentation directory with strategy number and name
 
-        # check if drive is accesale - if not then assign drive to c:
-        if not os.path.exists(drive):
-            print(f"Drive {drive} is not accessible. Reassigning to 'c:'.")
-            drive = "c:"  # Reassign to 'c:' if the drive is not accessible
-
-        # Debug print to confirm the drive being used
-        print(f"Using drive: {drive}")        
+       
         
 
         self.documentation_dir = os.path.join(drive, 'documentation', f"strategy_{self.strategy_num}_{self.strategy_name}")
@@ -337,6 +331,14 @@ class Strategy:
         Returns:
             dict: Dictionary containing initialized strategy instances.
         """
+        # check if drive is accesale - if not then assign drive to c:
+        if not os.path.exists(drive):
+            print(f"Drive {drive} is not accessible. Reassigning to 'c:'.")
+            drive = "c:"  # Reassign to 'c:' if the drive is not accessible
+
+        # Debug print to confirm the drive being used
+        print(f"Using drive: {drive}") 
+
         # Load the configuration based on the provided run mode
         strategies_config = load_config(strategies_run_modes=strategies_run_modes)
         # Print selected strategies and their settings
