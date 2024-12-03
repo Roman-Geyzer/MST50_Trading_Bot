@@ -28,12 +28,8 @@ from datetime import datetime
 import time
 import os
 
-drive = "x:" if os.name == 'nt' else "/Volumes/TM"
-# check if drive is accesale - if not then assign drive to c:
-if not os.path.exists(drive):
-    print(f"Drive {drive} is not accessible. Reassigning to 'c:'.")
-    drive = "c:"  # Reassign to 'c:' if the drive is not accessible
-    
+
+
 # Determine if we are in backtesting mode
 BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 
@@ -53,6 +49,10 @@ from .mt5_interface import (ORDER_TYPES, TRADE_ACTIONS, TIMEFRAMES, ORDER_TIME, 
 min_pips_for_trail_update = 2
 
 drive = "x:" if os.name == 'nt' else "/Volumes/TM"
+# check if drive is accesale - if not then assign drive to c:
+if not os.path.exists(drive):
+    print(f"Drive {drive} is not accessible. Reassigning to 'c:'.")
+    drive = "c:"  # Reassign to 'c:' if the drive is not accessible
 
 class Strategy:
     """
