@@ -415,13 +415,7 @@ def calculate_indicators(df, required_columns):
     df = df.sort_values(by='time').reset_index(drop=True)
 
     # Map required_columns to indicators to calculate
-    indicators_to_calculate = set()
-
-    if 'RSI' in required_columns:
-        indicators_to_calculate.add('RSI')
-
-    if 'ATR' in required_columns:
-        indicators_to_calculate.add('ATR')
+    indicators_to_calculate = set(['RSI','ATR'])
 
     ma_periods = [int(col.split('_')[1]) for col in required_columns if col.startswith('MA_') and col.split('_')[1].isdigit()]
     if ma_periods:
@@ -441,17 +435,15 @@ def calculate_indicators(df, required_columns):
     if ga_windows:
         indicators_to_calculate.add('GA')
 
-    if 'SR' in required_columns or 'Breakout' in required_columns or 'Fakeout' in required_columns:
+    if 'upper_sr' in required_columns:
         indicators_to_calculate.add('SR')
 
     # Now calculate the required indicators
-    if 'RSI' in indicators_to_calculate:
-        rsi_indicator = ta.momentum.RSIIndicator(close=df['close'], window=14)
-        df['RSI'] = rsi_indicator.rsi()
+    rsi_indicator = ta.momentum.RSIIndicator(close=df['close'], window=14)
+    df['RSI'] = rsi_indicator.rsi()
 
-    if 'ATR' in indicators_to_calculate:
-        atr_indicator = ta.volatility.AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14)
-        df['ATR'] = atr_indicator.average_true_range()
+    atr_indicator = ta.volatility.AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14)
+    df['ATR'] = atr_indicator.average_true_range()
 
     if 'MA' in indicators_to_calculate:
         for period in ma_periods:

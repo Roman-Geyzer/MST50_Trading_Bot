@@ -844,7 +844,7 @@ class Strategy:
                 if days_in_trade >= required_days and profit > 0:
                     if self.exit_params.get('exitP_daily_close_hour', 22) == current_time.hour:
                         print(f"Closing trade {trade_id} due to daily profit close condition.")
-                        self.close_trade(position)
+                        self.close_trade_loop(position)
                         continue  # Move to the next trade
 
             # Check daily close condition
@@ -853,31 +853,31 @@ class Strategy:
                 if days_in_trade >= required_days:
                     if self.exit_params.get('exitP_daily_close_hour', 22) == current_time.hour:
                         print(f"Closing trade {trade_id} due to daily close condition.")
-                        self.close_trade(position)
+                        self.close_trade_loop(position)
                         continue  # Move to the next trade
 
             # Check bars close condition
             bars_close = self.exit_params.get('exitP_bars_close', 0)
             if bars_close > 0 and bars_in_trade >= bars_close:
                 print(f"Closing trade {trade_id} due to bars close condition.")
-                self.close_trade(position)
+                self.close_trade_loop(position)
                 continue  # Move to the next trade
 
             # check strategy close condition
             if self.first_indicator_exit:
                 if self.first_indicator.check_exit_condition(rates, position['type']):
                     print(f"Closing trade {trade_id} due to first indicator: {self.first_indicator} exit condition.")
-                    self.close_trade(position)
+                    self.close_trade_loop(position)
                     continue # Move to the next trade
             if self.second_indicator_exit:
                 if self.second_indicator.check_exit_condition(rates, position['type']):
                     print(f"Closing trade {trade_id} due to second indicator: {self.second_indicator,} exit condition.")
-                    self.close_trade(position)
+                    self.close_trade_loop(position)
                     continue
             if self.third_indicator_exit:
                 if self.third_indicator.check_exit_condition(rates, position['type']):
                     print(f"Closing trade {trade_id} due to third indicator: {self.third_indicator} exit condition.")
-                    self.close_trade(position)
+                    self.close_trade_loop(position)
                     continue
 
 

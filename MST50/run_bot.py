@@ -68,9 +68,4 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict, BACK
 
     [execute_strategy(strategy, symbols, time_bar, new_hour, account_info_dict) for strategy in strategies.values()]
 
-    if not BACKTEST_MODE and time_bar.check_last_minute_of_hour(): # Last minute of the hour - only relvelant for live trading
-        print_hashtaged_msg(5, "on_minute", "Last minute of the hour, waiting for new hour to start...")
-        # Rebalance once an hour - Make sure that each run of on_minute is at the start of a new minute
-        wait_for_new_minute(time_bar)
-        # Run once immediately (at the start of the new hour)
-        on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict, BACKTEST_MODE)
+
