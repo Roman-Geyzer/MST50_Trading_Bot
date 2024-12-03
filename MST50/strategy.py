@@ -163,10 +163,7 @@ class Strategy:
         )
 
         
-        # Define the documentation directory with strategy number and name
-
-       
-        
+        # Define the documentation directory with strategy number and name 
 
         self.documentation_dir = os.path.join(drive, 'documentation', f"strategy_{self.strategy_num}_{self.strategy_name}")
         if BACKTEST_MODE:
@@ -331,6 +328,7 @@ class Strategy:
         Returns:
             dict: Dictionary containing initialized strategy instances.
         """
+        drive = "x:" if os.name == 'nt' else "/Volumes/TM"
         # check if drive is accesale - if not then assign drive to c:
         if not os.path.exists(drive):
             print(f"Drive {drive} is not accessible. Reassigning to 'c:'.")
