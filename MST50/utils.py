@@ -70,6 +70,11 @@ if platform.system() == 'Windows':
 else:
     drive = "/Volumes/TM"
 
+# check if drive is accesale - if not then assign drive to c:
+if not os.path.exists(drive):
+    print(f"Drive {drive} is not accessible. Reassigning to 'c:'.")
+    drive = "c:\\"  # Reassign to 'c:' if the drive is not accessible
+
 performance_dir = os.path.join(drive, 'documentation', 'account')
 
 
