@@ -31,7 +31,7 @@ mt5_server = Pyro5.api.Proxy("PYRO:trading.platform.MT5Server@localhost:9090")
 # Retrieve constants from the server
 constants = mt5_server.get_constants()
 
-server_time_hours_delta = 2
+server_time_hours_delta = mt5_server.get_time_delta()
 
 # Expose constants
 TIMEFRAMES = constants['TIMEFRAMES']
