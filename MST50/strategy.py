@@ -712,7 +712,7 @@ class Strategy:
             # Position closed successfully, remove from open trades
             self.open_trades.pop(position['ticket'])
             self.document_closed_trade(position['ticket'])
-            print(f"Closed {direction} trade on {symbol}, ticket: {position['ticket']}")
+            
 
     def get_price(self, symbol, direction):
         """

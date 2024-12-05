@@ -925,6 +925,8 @@ class MT5Backtest:
 		result =  self.open_positions.pop(ticket)
 		result['retcode'] = TRADE_RETCODE_DONE
 		result['order'] = ticket
+		result['profit'] = total_profit
+		print(f"Closed {position['type']}, no. {ticket} with profit: {total_profit}")
 		return result
 
 	def step_simulation(self, current_time_index):
@@ -959,6 +961,8 @@ class MT5Backtest:
 			'free_margin': self.account['free_margin']
 		}
 		self.account_docs.append(account_doc)
+		#TODO: delete once tested
+		print(f"Account status logged at {self.current_time}: Balance: {self.account['balance']}, Equity: {self.account['equity']}, Open trades: {len(self.open_positions)}, profit: {self.account['profit']}")
 		
 
 	def export_logs(self):
