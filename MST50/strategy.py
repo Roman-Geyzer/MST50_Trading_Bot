@@ -670,45 +670,17 @@ class Strategy:
         order_time = ORDER_TIME['GTC']
         order_filling = ORDER_FILLING['FOK']
 
-        if (sl != 0) and (tp == 0): 
-            modify_order_request = {
-
-                'action': action,
-                'symbol':  sym,
-                'position': trade_id ,
-                'type': type_order,
-                'sl': sl,
-                'type_time': order_time,
-                'type_filling': order_filling
-                                    }
-            return order_send(modify_order_request)
-
-        elif (sl == 0) and (tp != 0): 
-            modify_order_request = {
-
+        modify_order_request = {
             'action': action,
             'symbol':  sym,
             'position': trade_id ,
             'type': type_order,
-            'tp': tp,
-            'type_time': order_time,
-            'type_filling': order_filling
-                                    }
-            return order_send(modify_order_request)
-        
-        else:
-            modify_order_request = {
-
-            'action': action,
-            'symbol':  sym,
-            'position': trade_id ,
-            'type': type_order,
-            'tp': tp,
             'sl': sl,
+            'tp': tp,
             'type_time': order_time,
             'type_filling': order_filling
-                                    }
-            return order_send(modify_order_request)
+                                }
+        return order_send(modify_order_request)
     
     def close_trade_loop(self, position):
         """

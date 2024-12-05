@@ -717,9 +717,9 @@ class MT5Backtest:
 
 
 		if order_type == ORDER_TYPE_BUY:
-			price = data_dict['bid'][current_index]
-		elif order_type == ORDER_TYPE_SELL:
 			price = data_dict['ask'][current_index]
+		elif order_type == ORDER_TYPE_SELL:
+			price = data_dict['bid'][current_index]
 		else:
 			price = None
 
@@ -742,9 +742,9 @@ class MT5Backtest:
 
 				# Advance current_tick_index if next bar time <= current_time
 				#TODO: think about optimization - "smart" search or advance....
-				while current_index + 1 < len(times) and times[current_index + 1] <= self.current_time:
+				while times[current_index + 1] <= self.current_time:
 					current_index += 1
-				self.current_tick_index[symbol][tf_name] = current_index
+					self.current_tick_index[symbol][tf_name] = current_index # only update if there was a change
 
 	def execute_trade_logic(self):
 		"""
@@ -761,7 +761,6 @@ class MT5Backtest:
 		Check if any open positions have hit their SL or TP and close them accordingly.
 		"""
 		# TODO: optimize this function - njit?
-		#TODO: check if I need the list
 		tickets_to_check = list(self.open_positions.keys())  # Create a list to avoid runtime errors
 		for ticket in tickets_to_check:
 			position = self.open_positions[ticket]
@@ -820,8 +819,6 @@ class MT5Backtest:
 			# Update account
 			self.account['profit'] = total_profit
 			self.account['equity'] = self.account['balance'] + self.account['profit']
-			self.account['free_margin'] = self.account['equity'] - self.account['margin']
-			self.account['margin_level'] = (self.account['equity'] / self.account['margin']) * 100 if self.account['margin'] > 0 else 0.0
 
 	def close_all_positions(self):
 		"""
