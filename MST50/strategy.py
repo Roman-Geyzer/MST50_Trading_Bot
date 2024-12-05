@@ -964,7 +964,7 @@ class Strategy:
             print(f"new SL is:" , new_sl)
             print(f"position data: ", position)
         else:
-            pass
+
             print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
 
     def get_total_open_trades(self, symbol):

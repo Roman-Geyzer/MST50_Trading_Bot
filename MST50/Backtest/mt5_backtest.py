@@ -27,7 +27,7 @@ Functions:
 	close_by_order: Close a position by an opposite one.
 	get_current_price: Optimized function to get the current price for a symbol.
 	advance_time_step: Advance the simulation time by one timestep.
-	execute_trade_logic: Check if SL or TP were hit and update account metrics.
+	simulate_target_hit_close: Check if SL or TP were hit and update account metrics.
 	update_account_metrics: Update account metrics based on open positions.
 	close_all_positions: Close all open positions.
 	close_position: Close a single position.
@@ -144,10 +144,6 @@ class MT5Backtest:
 		# Initialize positions
 		self.open_positions = {}   # {ticket: position_info}
 		self.closed_positions = {}  # {ticket: position_info}
-
-		# Error simulation
-		self.last_error_code = RES_S_OK
-		self.last_error_description = "No error"
 
 		# Ticket counter
 		self.next_ticket = 1  # Starting ticket number
@@ -562,16 +558,10 @@ class MT5Backtest:
 			result = self.modify_order(request)
 			result['retcode'] = TRADE_ACTIONS['DONE']
 			return result
-		elif action == TRADE_ACTION_CLOSE_BY:
-			# Close by opposite position
-			# TODO: is in use?
-			result = self.close_by_order(request)
-			result['retcode'] = TRADE_ACTIONS['DONE']
-			return result
-		else:
-			self.set_last_error(RES_E_INVALID_PARAMS, f"Unknown action type: {action}")
-			request['retcode'] = TRADE_RETCODE_ERROR
-			return request
+
+		# We should not be here!
+		request['retcode'] = TRADE_RETCODE_ERROR
+		return request
 
 	def execute_market_order(self, symbol, order_type, volume, price, comment, sl, tp, magic):
 		"""
@@ -607,7 +597,7 @@ class MT5Backtest:
 			return result
 
 		# Update account margin
-		self.account['margin'] += required_margin
+		self.account['margin'] += required_margin  # margin is update for open / close position only
 		self.account['free_margin'] = self.account['equity'] - self.account['margin']
 
 		# Create position
@@ -652,16 +642,10 @@ class MT5Backtest:
 			dict or None: Modification result or None if error.
 		"""
 		position_ticket = request.get('position')
-		#TODO: do I need to check if the position is found?
-		if position_ticket not in self.open_positions:
-			self.set_last_error(RES_E_NOT_FOUND, f"Position ticket {position_ticket} not found.")
-			return None
 
 		position = self.open_positions[position_ticket]
-		if 'sl' in request and request['sl'] > 0.0:
-			position['sl'] = request['sl']
-		if 'tp' in request and request['tp'] > 0.0:
-			position['tp'] = request['tp']
+		position['sl'] = request['sl']
+		position['tp'] = request['tp']
 
 		self.open_positions[position_ticket] = position
 
@@ -685,19 +669,6 @@ class MT5Backtest:
 			'retcode': TRADE_RETCODE_DONE
 		}
 
-	def close_by_order(self, request):
-		"""
-		Close a position by an opposite one.
-
-		Parameters:
-			request (dict): Close by order containing 'position'.
-
-		Returns:
-			dict or None: Close by result or None if error.
-		"""
-		# For simplicity, we'll treat this the same as closing a position
-		position_ticket = request.get('position')
-		return self.close_position(position_ticket, reason='CLOSE_BY')
 
 	def get_current_price(self, symbol, order_type):
 		"""
@@ -746,15 +717,6 @@ class MT5Backtest:
 					current_index += 1
 					self.current_tick_index[symbol][tf_name] = current_index # only update if there was a change
 
-	def execute_trade_logic(self):
-		"""
-		Check if SL or TP were hit and update account metrics.
-		"""
-		# Simulate SL/TP hits before updating account metrics
-		self.simulate_target_hit_close()
-
-		self.update_account_metrics()
-
 
 	def simulate_target_hit_close(self):
 		"""
@@ -801,24 +763,28 @@ class MT5Backtest:
 				reason = 'SL' if sl_hit else 'TP'
 				self.close_position(ticket, exit_price, reason=reason)
 
-
-
-	def update_account_metrics(self):
+	def calculate_open_positions_profit(self):
 		"""
-		Update account metrics based on open positions.
+		Calculate the profit for all open positions.
+		Returns:
+			float: The total profit for all open positions.
 		"""
-		#TODO: test throughly 
-		if not self.open_positions:
-			self.account['profit'] = 0.0
-		else:
-			total_profit = 0.0
-			for position in self.open_positions.values():
-				profit, _ = self.calculate_profit(position)  # Calculate profit in USD
-				total_profit += profit
+		total_profit = 0.0
+		for position in self.open_positions.values():
+			profit, _ = self.calculate_profit(position)
+			total_profit += profit
+		return total_profit
 
-			# Update account
-			self.account['profit'] = total_profit
-			self.account['equity'] = self.account['balance'] + self.account['profit']
+
+	def update_account_metrics(self, total_profit):
+		"""
+		Update account metrics based on profit.
+		"""
+		# no change in balance - only changes when closing positions
+		# no change in margin and free_margin - only changes when opening / closing positions
+		self.account['profit'] = total_profit
+		self.account['equity'] = self.account['balance'] + self.account['profit']
+		self.account['free_margin'] = self.account['equity'] - self.account['margin']
 
 	def close_all_positions(self):
 		"""
@@ -930,12 +896,6 @@ class MT5Backtest:
 			exit_price (float): The price at which the position is closed.
 			reason (str): The reason for closing ('CLOSE', 'SL', 'TP').
 		"""
-		#TODO: do I need to check if the position is already closed?
-		if ticket not in self.open_positions:
-			self.set_last_error(RES_E_NOT_FOUND, f"Position ticket {ticket} not found.")
-			print(f"Position ticket {ticket} not found.")
-			return
-
 		position = self.open_positions[ticket]
 
 		# Calculate profit
@@ -944,12 +904,10 @@ class MT5Backtest:
 		total_profit = profit + swap_cost
 
 		# Update account balance
-		#TODO: test throughly
 		self.account['balance'] += total_profit
-		self.account['equity'] = self.account['balance'] + self.account['profit']
-		self.account['margin'] -= position['margin']
+		self.account['margin'] -= position['margin'] # margin is update for open / close position only
 		self.account['free_margin'] = self.account['equity'] - self.account['margin']
-		self.account['margin_level'] = (self.account['equity'] / self.account['margin']) * 100 if self.account['margin'] > 0 else 0.0
+
 
 		# Move position to closed_positions
 		closed_position = position.copy()
@@ -991,10 +949,12 @@ class MT5Backtest:
 		self.advance_time_step(current_time_index)
 
 		# Execute trade logic (Check if hit SL or TP, update account)
-		self.execute_trade_logic()
+		self.simulate_target_hit_close()
 
 		# Log account status if a new hour has started
 		if self.current_time.hour != self.previous_hour:
+			total_profit = self.calculate_open_positions_profit()
+			self.update_account_metrics(total_profit)
 			self.log_account_status()
 			self.previous_hour = self.current_time.hour
 			
@@ -1009,8 +969,9 @@ class MT5Backtest:
 			'open_trades': len(self.open_positions),
 			'balance': self.account['balance'],
 			'equity': self.account['equity'],
+			'profit': self.account['profit'],
 			'margin': self.account['margin'],
-			'margin_level': self.account['margin_level']
+			'free_margin': self.account['free_margin']
 		}
 		self.account_docs.append(account_doc)
 		
@@ -1100,27 +1061,7 @@ class MT5Backtest:
 		fig.show()
 		
 
-	def last_error(self):
-		"""
-		Simulate MT5.last_error() function.
 
-		Returns:
-			tuple: (error_code, error_description)
-		"""
-		error = (self.last_error_code, self.last_error_description)
-		return error
-	
-
-	def set_last_error(self, code, description):
-		"""
-		Set the last error.
-
-		Parameters:
-			code (int): Error code.
-			description (str): Error description.
-		"""
-		self.last_error_code = code
-		self.last_error_description = description
 
 	def time_current(self):
 		"""
@@ -1142,10 +1083,10 @@ class MT5Backtest:
 		self.account = {
 			'balance': initial_balance,
 			'equity': initial_balance,
-			'margin': 0.0,
-			'free_margin': initial_balance,
+			'margin': 0.0, 
+			'free_margin': initial_balance, # used only in backtest
 			'profit': 0.0,
-			'margin_level': 0.0
+			'margin_level': 0.0 # used only in live trading - here for consistency
 		}
 		self.set_last_error(RES_S_OK, "Shutdown complete.")
 

@@ -560,8 +560,6 @@ def calculate_trail(price, current_sl, both_sides_trail, direction, trail_method
     """
     # Look up the trail method function based on the method name
     trail_method_func = trail_methods.get(trail_method_name)
-    if trail_method_func is None:
-        raise ValueError(f"Invalid trail method: {trail_method_name}")
 
     # Call the trail method function with the provided parameters
     return trail_method_func(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df)
