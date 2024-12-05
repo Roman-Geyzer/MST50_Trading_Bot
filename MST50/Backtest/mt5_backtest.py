@@ -50,6 +50,8 @@ import time
 # Constants
 backtest_end_relative_to_today = 180
 leverage = 100  # Assuming leverage of 1:100
+contract_size = 100000  # For Forex standard lots
+leverage_contract_ratio = contract_size/leverage
 
 constants = get_constants()
 # Expose constants
@@ -390,11 +392,6 @@ class MT5Backtest:
 		end = current_index  # In backtest we don't see the current bar
 
 		# Return the rates from the specified position 
-		"""
-		structured_array = self.symbols_data[symbol][tf_name]
-    	sliced_array = structured_array[start:end]
-		return sliced_array		
-		"""
 		return self.symbols_data[symbol][tf_name][start:end]
 
 	def account_info(self):
@@ -458,6 +455,7 @@ class MT5Backtest:
 		Returns:
 			dict: Symbol information.
 		"""
+		#TODO: remove the if statements - cache should be proloaded 
 		if not hasattr(self, 'symbol_info_cache'):
 			self.symbol_info_cache = {}
 
@@ -521,12 +519,10 @@ class MT5Backtest:
 			ticket (int): Specific ticket number to retrieve.
 
 		Returns:
-			dict or None: Deal dictionary or None if not found.
+			dict or None: Deal dictionary or None if not found. # none is ommotied in backtest
 		"""
-		if ticket:
-			# Return single deal if found
-			return self.closed_positions.get(ticket)
-		return None
+
+		return self.closed_positions.get(ticket)
 
 	def order_send(self, request):
 		"""
@@ -543,7 +539,6 @@ class MT5Backtest:
 		volume = request.get('volume', 0.01)
 		order_type = request.get('type')
 		price = request.get('price', 0.0)
-		deviation = request.get('deviation', 10)
 		comment = request.get('comment', '')
 		sl = request.get('sl', 0.0)
 		tp = request.get('tp', 0.0)
@@ -569,6 +564,7 @@ class MT5Backtest:
 			return result
 		elif action == TRADE_ACTION_CLOSE_BY:
 			# Close by opposite position
+			# TODO: is in use?
 			result = self.close_by_order(request)
 			result['retcode'] = TRADE_ACTIONS['DONE']
 			return result
@@ -596,11 +592,10 @@ class MT5Backtest:
 		"""
 		# Get symbol info
 		symbol_info = self.symbol_info(symbol)
-		contract_size = 100000  # For Forex standard lots
 		point = symbol_info['point']
 
 		# Calculate required margin (simplified)
-		required_margin = (contract_size * volume ) / leverage
+		required_margin =  volume  * leverage_contract_ratio # (contract_size * volume ) / leverage
 
 		if required_margin > self.account['free_margin']:
 			self.set_last_error(RES_E_FAIL, "Not enough free margin to open position.")
@@ -657,6 +652,7 @@ class MT5Backtest:
 			dict or None: Modification result or None if error.
 		"""
 		position_ticket = request.get('position')
+		#TODO: do I need to check if the position is found?
 		if position_ticket not in self.open_positions:
 			self.set_last_error(RES_E_NOT_FOUND, f"Position ticket {position_ticket} not found.")
 			return None
@@ -684,7 +680,7 @@ class MT5Backtest:
 			'action': 'MODIFY'
 		}
 		self.trade_logs.append(modification_log)
-
+		# TODO: check if no more data is needed
 		return {
 			'retcode': TRADE_RETCODE_DONE
 		}
@@ -721,9 +717,9 @@ class MT5Backtest:
 
 
 		if order_type == ORDER_TYPE_BUY:
-			price = data_dict['ask'][current_index]
-		elif order_type == ORDER_TYPE_SELL:
 			price = data_dict['bid'][current_index]
+		elif order_type == ORDER_TYPE_SELL:
+			price = data_dict['ask'][current_index]
 		else:
 			price = None
 
@@ -745,6 +741,7 @@ class MT5Backtest:
 				times = structured_array['time']
 
 				# Advance current_tick_index if next bar time <= current_time
+				#TODO: think about optimization - "smart" search or advance....
 				while current_index + 1 < len(times) and times[current_index + 1] <= self.current_time:
 					current_index += 1
 				self.current_tick_index[symbol][tf_name] = current_index
@@ -763,6 +760,8 @@ class MT5Backtest:
 		"""
 		Check if any open positions have hit their SL or TP and close them accordingly.
 		"""
+		# TODO: optimize this function - njit?
+		#TODO: check if I need the list
 		tickets_to_check = list(self.open_positions.keys())  # Create a list to avoid runtime errors
 		for ticket in tickets_to_check:
 			position = self.open_positions[ticket]
@@ -809,6 +808,7 @@ class MT5Backtest:
 		"""
 		Update account metrics based on open positions.
 		"""
+		#TODO: test throughly 
 		if not self.open_positions:
 			self.account['profit'] = 0.0
 		else:
@@ -827,6 +827,7 @@ class MT5Backtest:
 		"""
 		Close all open positions.
 		"""
+		#TODO: check if I need the list
 		for ticket in list(self.open_positions.keys()):
 			self.close_position(ticket)
 
@@ -877,24 +878,17 @@ class MT5Backtest:
 		entry_price = position['price_open']
 		contract_size = position['contract_size']
 
-		# Get current price
-		current_price = self.get_current_price(symbol, order_type)
-		if current_price is None:
-			# TODO: Add to logging
-			print(f"Warning: No price data available for {symbol}.")
-			return 0, 0  # Skip if price not available
-
 		# Determine pip value
 		pip = self.symbol_info(symbol)['pip']
 		pip_value = contract_size * pip * volume
 
-		# Calculate profit in pips
-		if order_type == ORDER_TYPE_BUY or order_type == 0:
+		#  Calculate profit in pips
+		if order_type == ORDER_TYPE_BUY:
+			current_price = self.get_current_price(symbol, ORDER_TYPE_SELL) # get the ask price
 			pips_profit = (current_price - entry_price) / pip
-		elif order_type == ORDER_TYPE_SELL or order_type == 1:
+		elif order_type == ORDER_TYPE_SELL:
+			current_price = self.get_current_price(symbol, ORDER_TYPE_BUY) # get the bid price
 			pips_profit = (entry_price - current_price) / pip
-		else:
-			pips_profit = 0
 
 		# Calculate profit in base currency
 		profit = pips_profit * pip_value
@@ -939,6 +933,7 @@ class MT5Backtest:
 			exit_price (float): The price at which the position is closed.
 			reason (str): The reason for closing ('CLOSE', 'SL', 'TP').
 		"""
+		#TODO: do I need to check if the position is already closed?
 		if ticket not in self.open_positions:
 			self.set_last_error(RES_E_NOT_FOUND, f"Position ticket {ticket} not found.")
 			print(f"Position ticket {ticket} not found.")
@@ -952,6 +947,7 @@ class MT5Backtest:
 		total_profit = profit + swap_cost
 
 		# Update account balance
+		#TODO: test throughly
 		self.account['balance'] += total_profit
 		self.account['equity'] = self.account['balance'] + self.account['profit']
 		self.account['margin'] -= position['margin']
@@ -1010,6 +1006,7 @@ class MT5Backtest:
 		"""
 		Log the account status at each simulated hour.
 		"""
+		#TODO: test throughly
 		account_doc = {
 			'datetime': self.current_time.strftime("%Y-%m-%d %H:%M:%S"),
 			'open_trades': len(self.open_positions),
@@ -1026,6 +1023,7 @@ class MT5Backtest:
 		Export trade logs and account documentation to CSV files.
 		"""
 		# Export trade logs
+		#TODO: test throughly
 		trades_df = pd.DataFrame(self.trade_logs)
 		trades_csv_path = os.path.join(self.run_folder, "trade_logs.csv")
 		trades_df.to_csv(trades_csv_path, index=False)
@@ -1346,8 +1344,6 @@ def run_backtest(strategies, symbols):
 		strategies (dict): Dictionary of strategy instances.
 		symbols (dict): Dictionary of symbol instances.
 	"""
-	if backtest is None:
-		raise RuntimeError("Backtest instance is not initialized. Call initialize_backtest() first.")
 
 	from ..run_bot import on_minute
 
@@ -1357,6 +1353,7 @@ def run_backtest(strategies, symbols):
 
 	print(f"Starting backtest from {backtest.current_time} to {backtest.end_time}")
 	try:
+		#TODO: optimize - why for loop?
 		for i in range(backtest.time_index, backtest.end_time_index):
 			# Advance time by time_step and simulate trade logic
 			backtest.step_simulation(i)
