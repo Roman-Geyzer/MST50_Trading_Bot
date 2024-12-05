@@ -712,6 +712,7 @@ class Strategy:
             # Position closed successfully, remove from open trades
             self.open_trades.pop(position['ticket'])
             self.document_closed_trade(position['ticket'])
+            print(f"Closed {direction} trade on {symbol}, ticket: {position['ticket']}")
 
     def get_price(self, symbol, direction):
         """
@@ -963,9 +964,8 @@ class Strategy:
             print(f"mt5.last_error: {last_error()}")
             print(f"new SL is:" , new_sl)
             print(f"position data: ", position)
-        else:
-
-            print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
+        # else:
+            # print(f"Successfully updated trade {trade_id}. New SL: {new_sl}")
 
     def get_total_open_trades(self, symbol):
         """

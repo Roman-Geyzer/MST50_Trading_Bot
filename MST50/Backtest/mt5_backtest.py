@@ -588,7 +588,6 @@ class MT5Backtest:
 		required_margin =  volume  * leverage_contract_ratio # (contract_size * volume ) / leverage
 
 		if required_margin > self.account['free_margin']:
-			self.set_last_error(RES_E_FAIL, "Not enough free margin to open position.")
 			print("Not enough free margin to open position.")
 			print(f"Required margin: {required_margin}, Free margin: {self.account['free_margin']}")
 			print(f"current open positions: {self.open_positions}")
@@ -733,35 +732,21 @@ class MT5Backtest:
 
 			# Get current bar data for the symbol
 			bar_data = self.get_current_bar_data(symbol)
-			if bar_data is None:
-				continue  # Skip if no bar data available
 
 			high = bar_data['high']
 			low = bar_data['low']
 
-			# Determine if SL or TP was hit
-			sl_hit = False
-			tp_hit = False
-			exit_price = None
-
+			# Determine if SL or TP was hit and close the position
 			if order_type == ORDER_TYPE_BUY:
 				if sl and low <= sl:
-					sl_hit = True
-					exit_price = sl
+					self.close_position(ticket, sl, reason='SL')
 				elif tp and high >= tp:
-					tp_hit = True
-					exit_price = tp
+					self.close_position(ticket, tp, reason='TP')
 			elif order_type == ORDER_TYPE_SELL:
 				if sl and high >= sl:
-					sl_hit = True
-					exit_price = sl
+					self.close_position(ticket, sl, reason='SL')
 				elif tp and low <= tp:
-					tp_hit = True
-					exit_price = tp
-
-			if sl_hit or tp_hit:
-				reason = 'SL' if sl_hit else 'TP'
-				self.close_position(ticket, exit_price, reason=reason)
+					self.close_position(ticket, tp, reason='TP')
 
 	def calculate_open_positions_profit(self):
 		"""

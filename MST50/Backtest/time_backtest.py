@@ -108,49 +108,46 @@ class TimeBar:
         if self.W1 != current_week:
             self.W1 = current_week
             self.current_bar = "W1"
-            updated = True
+
 
         # Check for a new daily bar
         elif self.D1 != current_time.day:
             self.D1 = current_time.day
             self.current_bar = "D1"
-            updated = True
+
 
         # Check for a new 4-hour bar
         elif self.H4 != current_time.hour // 4:
             self.H4 = current_time.hour // 4
             self.current_bar = "H4"
-            updated = True
+
 
         # Check for a new hourly bar
         elif self.H1 != current_time.hour:
             self.H1 = current_time.hour
             self.current_bar = "H1"
-            updated = True
+
 
         # Check for a new 30-minute bar
         elif self.M30 != current_time.minute // 30:
             self.M30 = current_time.minute // 30
             self.current_bar = "M30"
-            updated = True
+
 
         # Check for a new 15-minute bar
         elif self.M15 != current_time.minute // 15:
             self.M15 = current_time.minute // 15
             self.current_bar = "M15"
-            updated = True
 
         # Check for a new 5-minute bar
         elif self.M5 != current_time.minute // 5:
             self.M5 = current_time.minute // 5
             self.current_bar = "M5"
-            updated = True
 
         # Check for a new 1-minute bar
         elif self.M1 != current_time.minute:
             self.M1 = current_time.minute
             self.current_bar = "M1"
-            updated = True
 
         # If no timeframe has changed, keep current_bar as is
 

@@ -38,7 +38,7 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict, BACK
     # Fetch rates for all symbols and timeframes - the method will only update the rates if a new bar has started
     time_bar.update_tf_bar()
     Timeframe.fetch_new_bar_rates(symbols, time_bar)  # Fetch new bar rates for all symbols and all *new* timeframes
-    account_info_dict = account_info()
+
 
 
 
@@ -56,16 +56,16 @@ def on_minute(strategies, trade_hour, time_bar, symbols, account_info_dict, BACK
         else:
             print_hashtaged_msg(3, "Failed to get account info", "Failed to get account info, error code =", last_error())
 
-    def execute_strategy(strategy, symbols, time_bar, new_hour, account_info_dict):
+    def execute_strategy(strategy, symbols, time_bar, new_hour):
         if is_new_bar(strategy.timeframe, time_bar) or new_hour: # Check if a new bar has started, or if a new hour has started - new hour because for daily strategies, we can have the logic run on a certain hour - and not 00:00
             #print(f"New bar detected for strategy:{strategy.strategy_num}-{strategy.strategy_name} strategy timeframe: {strategy.str_timeframe}")
             strategy.handle_new_bar(symbols)
-            strategy.write_strategy_performance_file(account_info_dict)
+            strategy.write_strategy_performance_file(account_info())
         else:
             strategy.handle_new_minute(symbols)
 
             
 
-    [execute_strategy(strategy, symbols, time_bar, new_hour, account_info_dict) for strategy in strategies.values()]
+    [execute_strategy(strategy, symbols, time_bar, new_hour) for strategy in strategies.values()]
 
 

@@ -1179,8 +1179,7 @@ class RangeIndicator(Indicator):
         atr = rates['ATR'][-1]
 
         total_bars_needed = self.bars_from_fakeout + self.bars_before_fakeout
-        if len(rates) < total_bars_needed + 1:
-            return None, None
+
 
         #TODO: Run tests and check if sometimes both trade directions are true.....
         
