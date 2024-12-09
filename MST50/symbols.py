@@ -130,6 +130,7 @@ class Symbol:
         Returns:
             DataFrame: DataFrame containing rates for the symbol and timeframe.
         """
+        #TODO: improve this method - wasteful
         timeframe = get_timeframe_string(timeframe)
         return getattr(self, timeframe, None).rates
 
@@ -167,6 +168,7 @@ class Timeframe:
         self.symbol = symbol # Symbol object
         self.symbol_str = symbol_str
         self.length = self.calculate_tr_length(self.symbol_str, strategies)
+        #TODO: remove the flag from all methods - it's not necessary
         self.rates_error_flag = True
         self.rates = self.fetch_rates(symbol_str) # DF of historical rates for the symbol and timeframe
 

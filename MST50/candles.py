@@ -190,9 +190,9 @@ class Pattern:
         Returns:
             str or None: 'buy', 'sell', 'both' or None based on the pattern.
         """
-        if self.trade_decision_method:
-            return self.trade_decision_method(rates)
-        return None  # No trade decision method set
+
+        return self.trade_decision_method(rates)
+
 
     def upper_wick_size(self, rates: np.recarray, candle_i: int) -> float:
         """

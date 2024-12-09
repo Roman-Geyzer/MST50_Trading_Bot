@@ -95,10 +95,8 @@ class Indicators:
                    and trade_data is a dictionary with trade parameters (entry price, stop loss, take profit).
         """
         # Check if the indicator instance exists
-        if self.indicator_instance:
-            return self.indicator_instance.claculuate_and_make_make_trade_decision(rates)
-        else:
-            return None, None
+        return self.indicator_instance.claculuate_and_make_make_trade_decision(rates)
+
         
     def check_exit_condition(self, rates, direction):
         """
@@ -111,10 +109,7 @@ class Indicators:
         Returns:
             bool: True if the exit condition is met, False otherwise.
         """
-        if self.indicator_instance and self.indicator_instance.exit_decision_method:
-            return self.indicator_instance.exit_decision_method(rates, direction)
-        else:
-            return False
+        return self.indicator_instance.exit_decision_method(rates, direction)
 
 class Indicator:
     def __init__(self, name, params):

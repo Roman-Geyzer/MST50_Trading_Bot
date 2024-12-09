@@ -497,9 +497,9 @@ def load_config(sheet_name='config', strategies_run_modes=['live']):
             },
             'exit_params': {
                 'exitP_daily_profit_close': str_to_bool(row['exitP_daily_profit_close']),
-                'exitP_daily_profit_close_days': safe_int_convert(row['exitP_daily_profit_close_days']),
+                'exitP_days_for_daily_profit_close': safe_int_convert(row['exitP_days_for_daily_profit_close']),
                 'exitP_daily_close': str_to_bool(row['exitP_daily_close']),
-                'exitP_daily_close_days': safe_int_convert(row['exitP_daily_close_days']),
+                'exitP_days_for_daily_close': safe_int_convert(row['exitP_days_for_daily_close']),
                 'exitP_daily_close_hour': safe_int_convert(row['exitP_daily_close_hour']),
                 'exitP_bars_close': safe_int_convert(row['exitP_bars_close']),
                 'exitP_daily_candle_exit_hour': safe_int_convert(row['exitP_daily_candle_exit_hour']),

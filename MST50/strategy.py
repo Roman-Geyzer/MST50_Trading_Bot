@@ -11,7 +11,6 @@ Functions:
     handle_new_bar: Handle the arrival of a new bar.
     handle_new_minute: Handle the arrival of a new minute.
     document_closed_trade: Document a closed trade.
-    check_open_trades: Monitor open trades and update their status.
     write_strategy_performance_file: Write the strategy's performance to a file.
     check_trail_active: Check if trailing is active for the strategy.
     check_trading_filters: Check the trading filters for a symbol and decide whether to continue checking for entry signals and indicators.
@@ -21,6 +20,7 @@ Functions:
     prep_and_order: Prepare and order.
     prep_and_close: Prepare and close.
     prep_and_update: Prepare and update.
+    monitor_open_trades: Monitor open trades (check still open) and update SL, TP, etc.
 """
 
 import pandas as pd
@@ -80,6 +80,7 @@ class Strategy:
         self.strategy_name = strategy_config['strategy_name']
         self.tradeP_long = strategy_config['tradeP_long']
         self.tradeP_short = strategy_config['tradeP_short']
+        self.max_trades = strategy_config['tradeP_max_trades']
         self.trade_risk = strategy_config['tradeP_risk']
         self.fixed_order_size = strategy_config['tradeP_fixed_order_size']
         self.open_trades = self.get_open_trades_from_terminal()   # Dictionary to hold open trades: trade_id -> trade_info
@@ -100,21 +101,18 @@ class Strategy:
         # current_tf 
         self.current_tf_candle_patterns = CandlePatterns(self.candle_params.get('current_tf', {}))
         self.current_candle_patterns_active = self.current_tf_candle_patterns.check_candle_patterns_active()
-        self.current_candle_patterns_history_length = max(self.current_tf_candle_patterns.pattern_candles_count, 4)
 
         # higher_tf
         self.higher_tf_candle_patterns =  CandlePatterns(self.candle_params.get('higher_tf', {}))
         self.higher_timeframe = strategy_config['candle_params']['higher_tf']['timeframe']
         # self.higher_str_timeframe = get_timeframe_string(self.higher_timeframe)
         self.higher_candle_patterns_active = self.higher_tf_candle_patterns.check_candle_patterns_active()
-        self.higher_candle_patterns_history_length = max(self.higher_tf_candle_patterns.pattern_candles_count, 4)
 
         # lower_tf
         self.lower_tf_candle_patterns = CandlePatterns(self.candle_params.get('lower_tf', {}))
         self.lower_timeframe = strategy_config['candle_params']['lower_tf']['timeframe']
         # self.lower_str_timeframe = get_timeframe_string(self.lower_timeframe)
         self.lower_candle_patterns_active = self.lower_tf_candle_patterns.check_candle_patterns_active()
-        self.lower_candle_patterns_history_length = max(self.lower_tf_candle_patterns.pattern_candles_count, 4)
         
         self.candle_patterns_active = (
             self.current_candle_patterns_active or
@@ -143,10 +141,27 @@ class Strategy:
 
 
         #TODO: update the exit params to be part of the class to avoid using get from dict
-        self.exit_params = strategy_config.get('exit_params', {})
-        self.daily_candle_exit_hour = self.exit_params.get('exitP_daily_candle_exit_hour', 0)
+        exit_params = strategy_config.get('exit_params', {})
+        self.daily_candle_exit_hour = exit_params.get('exitP_daily_candle_exit_hour', 0)
+        self.daily_profit_close = exit_params.get('exitP_daily_profit_close', False)
+        if self.daily_profit_close:
+            self.days_for_profit_close = exit_params.get('exitP_days_for_daily_profit_close', 1)
+        self.daily_close = exit_params.get('exitP_daily_close', False)
+        if self.daily_close:
+            self.days_for_close = exit_params.get('exitP_days_for_daily_close', 1)
+        self.daily_close_hour = exit_params.get('exitP_daily_close_hour', 0)
 
+        if exit_params.get('exitP_bars_close', 0) > 0: # 0 is the 
+            self.bars_close = True
+            self.bars_count_to_close = exit_params.get('exitP_bars_close', 0)
+        else:
+            self.bars_close = False
 
+        # general flag for exit conditions:
+        if self.daily_profit_close or self.daily_close or self.bars_close or self.indicator_exit:
+            self.exit_conditions = True
+        else:
+            self.exit_conditions = False
 
         # Trailing stop fucntions list:
         if strategy_config['trail_params']['trail_method'] or strategy_config['trail_params']['use_fast_trail'] or strategy_config['trail_params']['use_move_to_breakeven']:
@@ -369,14 +384,14 @@ class Strategy:
         It is used update indicators, check for trading signals, etc.
         """
         #print(f"Handling new bar for strategy no. {self.strategy_num}, strategy name: {self.strategy_name}, strategy timeframe: {self.str_timeframe}")
-        self.check_open_trades() # check all open trades to make sure they are still open
+        self.monitor_open_trades(symbols) # check all open trades to make sure they are still open
                                        # document the closed trades and update strategy performance file
                                        # update the stratgy class variables
+                                       # monitor the open trades and check if trailing is enabled - if yes, update SL, TP, etc.
+                                       # the method runs every bar, but the trailing is done every minute (if enabled)
         for symbol_str in self.symbols:   
             self.check_and_place_orders(symbol_str, symbols[symbol_str]) # check for trading signals and place orders
             self.check_exit_conditions(symbol_str, symbols[symbol_str]) # check exit conditions for open trades
-            if self.trail_enabled:
-                self.monitor_open_trades(symbol_str, symbols[symbol_str]) # update SL, TP, etc. - runs every minute
     
     def handle_new_minute(self, symbols):
         """
@@ -384,21 +399,9 @@ class Strategy:
         This method is called when a new minute arrives in the strategy's timeframe.
         It is used to update indicators, check for trading signals, etc.
         """
-        # for backtest puposes:
-        if BACKTEST_MODE:
-            tf = get_timeframe_string(self.timeframe)
-        else:
-            tf = 'M1'
         if not self.trail_enabled:
-            return  # Exit the method early if trailing is not enabled
-
-        self.check_open_trades() # check all open trades to make sure they are still open
-                                        # document the closed trades and update strategy performance file   
-        
-        for symbol_str in self.symbols:
-            if symbols[symbol_str].check_symbol_tf_flag(TIMEFRAMES[tf]): # Check if 1 minute data is available (for live trading)
-                continue  # Skip to the next symbol if no 1 minute data is available
-            self.monitor_open_trades(symbol_str, symbols[symbol_str]) # update SL, TP, etc. - runs every minute
+            return # Exit the method early if trailing is not enabled, check of trades will be done in handle_new_bar
+        self.monitor_open_trades(symbols) # check open trades and update SL, TP, etc. - runs every minute
 
 
     def document_closed_trade(self, trade_id):
@@ -424,21 +427,6 @@ class Strategy:
                         {trade_info['price_open']},{trade_info['sl']},{trade_info['tp']},{trade_info['time']},{time_current()} ,\
                         {trade_info['swap']},{trade_info['profit']},{trade_info['reason']},{trade_info['comment']}\n")
 
-    def check_open_trades(self):
-        """
-        Monitor open trades and update their status.
-
-        Iterates over open trades to check if they are still open or have been closed.
-        Updates trade records accordingly and handles closed trades.
-        """
-        # Loop through a copy of open_trades to avoid modification during iteration
-        for trade_id, trade_info in list(self.open_trades.items()):
-            # Get current position from MT5
-            position = positions_get(ticket=trade_id)
-            if position is None:
-                # Trade is closed, handle closure
-                self.open_trades.pop(trade_id)
-                self.document_closed_trade(trade_id)
                 
     
     def write_strategy_performance_file(self, account_info_dict):
@@ -514,6 +502,10 @@ class Strategy:
                     return # No trade if candle decision fails
                 else:
                     candle_decision_set.add(lower_tf_candle_decision)
+            
+        candle_decision_set.remove('both') # remove the flag, remaining decision is candles final decision
+        if len(candle_decision_set) == 2:
+            return # conflicting decisions - no trade
 
         indicator_decision_set = {'both'} # Set to store indicators decisions from different indicators, 'both' is used as a flag to use candle decision
         # Proceed with normal indicator-based trade decision - up to 3 indicators can be used
@@ -524,13 +516,12 @@ class Strategy:
                     return
                 else:
                     indicator_decision_set.add(indicator_decision)
-            if len(indicator_decision_set) == 2:
+            if len(indicator_decision_set) == 3:
                 return # conflicting decisions - no trade
-            indicator_decision_set.remove('both') # remove the flag, remaining decision is indicators final decision
+        indicator_decision_set.remove('both') # remove the flag, remaining decision is indicators final decision
         
 
         
-
         # merge the candle and indicator decisions
         final_decision_set = candle_decision_set.union(indicator_decision_set)
         if len(final_decision_set) == 2: # No trade if conflicting decisions between indicators and candles
@@ -549,11 +540,11 @@ class Strategy:
 
         if final_decision == 'buy' and self.tradeP_long:
             self.close_all_trades(TRADE_DIRECTION.SELL, symbol_str)
-            if self.get_total_open_trades(symbol_str) < self.config['tradeP_max_trades']: # Check if max trades reached
+            if self.get_total_open_trades(symbol_str) < self.max_trades: # Check if max trades reached
                 self.place_order(TRADE_DIRECTION.BUY, symbol_str, rates)
         elif final_decision == 'sell' and self.tradeP_short:
             self.close_all_trades(TRADE_DIRECTION.BUY, symbol_str)
-            if self.get_total_open_trades(symbol_str) < self.config['tradeP_max_trades']: # Check if max trades reached
+            if self.get_total_open_trades(symbol_str) < self.max_trades: # Check if max trades reached
                 self.place_order(TRADE_DIRECTION.SELL, symbol_str, rates)
 
     def close_all_trades(self, direction, symbol):
@@ -775,6 +766,10 @@ class Strategy:
             symbol (str): The trading symbol.
             symbol (Symbol): The symbol object containing rates data.
         """
+
+        if not self.exit_conditions:
+            return # no exit conditions for strategy - exit the method early
+
         if len(self.open_trades) == 0:
             return # Exit the method early if no open trades
         
@@ -793,14 +788,9 @@ class Strategy:
             if trade_info['symbol'] != symbol_str:
                 continue  # Skip trades not related to the current symbol
             
-            #TODO: optimize - move this to the relvent place in the code - only calculate bars in trade when needed
-            # Calculate how long the trade has been open
 
-            # Convert numpy.datetime64 to Python datetime
-            trade_open_time = pd.Timestamp(trade_info['time']).to_pydatetime()
-            time_diff = current_time - trade_open_time
-            days_in_trade = time_diff.days
-            bars_in_trade = self.calculate_bars_in_trade(trade_info, rates)
+
+
 
             # Retrieve trade details from MT5 to get current profit
             position = positions_get(ticket=trade_id)
@@ -810,66 +800,62 @@ class Strategy:
                 self.document_closed_trade(trade_id)
                 continue
 
-            profit = position['profit']
 
+            # Will be used to calculate how long the trade has been open:
+
+            # Convert numpy.datetime64 to Python datetime
+            trade_open_time = pd.Timestamp(trade_info['time']).to_pydatetime()
+            time_diff = current_time - trade_open_time
+
+   
             #TODO: after updating the exit params to be part of the class, update the following conditions
             # Check daily profit close condition
-            if self.exit_params.get('exitP_daily_profit_close', False):
-                required_days = self.exit_params.get('exitP_daily_profit_close_days', 1)
-                if days_in_trade >= required_days and profit > 0:
-                    if self.exit_params.get('exitP_daily_close_hour', 22) == current_time.hour:
+            if self.daily_profit_close:
+                if self.daily_close_hour == current_time.hour: # check if relevent hour - no need to check other wasteful conditions
+                    days_in_trade = time_diff.days
+                    if days_in_trade >= self.days_for_profit_close and position['profit'] > 0:
                         print(f"Closing trade {trade_id} due to daily profit close condition.")
                         self.close_trade_loop(position)
                         continue  # Move to the next trade
 
             # Check daily close condition
-            if self.exit_params.get('exitP_daily_close', False):
-                required_days = self.exit_params.get('exitP_daily_close_days', 1)
-                if days_in_trade >= required_days:
-                    if self.exit_params.get('exitP_daily_close_hour', 22) == current_time.hour:
+            if self.daily_close:
+                if self.daily_close_hour == current_time.hour: # check if relevent hour - no need to check other wasteful conditions
+                    required_days = self.days_for_close
+                    if days_in_trade >= required_days:
                         print(f"Closing trade {trade_id} due to daily close condition.")
                         self.close_trade_loop(position)
                         continue  # Move to the next trade
 
             # Check bars close condition
-            bars_close = self.exit_params.get('exitP_bars_close', 0)
-            if bars_close > 0 and bars_in_trade >= bars_close:
-                print(f"Closing trade {trade_id} due to bars close condition.")
-                self.close_trade_loop(position)
-                continue  # Move to the next trade
+            if self.bars_close: # only if flag is relevent
+                bars_in_trade = self.calculate_bars_in_trade(trade_info, rates)
+                if bars_in_trade >= self.bars_count_to_close:
+                    print(f"Closing trade {trade_id} due to bars close condition.")
+                    self.close_trade_loop(position)
+                    continue  # Move to the next trade
 
             # check strategy close condition
-            if self.first_indicator_exit:
-                if self.first_indicator.check_exit_condition(rates, position['type']):
-                    print(f"Closing trade {trade_id} due to first indicator: {self.first_indicator} exit condition.")
-                    self.close_trade_loop(position)
-                    continue # Move to the next trade
-            if self.second_indicator_exit:
-                if self.second_indicator.check_exit_condition(rates, position['type']):
-                    print(f"Closing trade {trade_id} due to second indicator: {self.second_indicator,} exit condition.")
-                    self.close_trade_loop(position)
-                    continue
-            if self.third_indicator_exit:
-                if self.third_indicator.check_exit_condition(rates, position['type']):
-                    print(f"Closing trade {trade_id} due to third indicator: {self.third_indicator} exit condition.")
-                    self.close_trade_loop(position)
-                    continue
+            if self.indicator_exit:
+                for indicator_function in self.indicator_exit_functions:
+                    if indicator_function(rates):
+                        print(f"Closing trade {trade_id} due to indicator exit condition.")
+                        self.close_trade_loop(position)
+                        continue
 
 
 
-    def monitor_open_trades(self, symbol_str, symbol):
+    def monitor_open_trades(self, symbols):
         """
-        Monitor open trades and update their Stop Loss (SL) and Take Profit (TP) based on trailing strategies.
+        Monitor open trades:
+            1. Check if the trade still exists in MT5.
+            2. Update their Stop Loss (SL) and Take Profit (TP) based on trailing strategies.
         
         Parameters:
-            symbol (str): The trading symbol.
-            symbol (Symbol): The symbol object containing rates data.
+            symbols (Symbol): Dict of all symbol object containing rates data.
         """
 
         for trade_id, trade_info in list(self.open_trades.items()):
-            if trade_info['symbol'] != symbol_str:
-                continue  # Skip trades not related to the current symbol
-
             position = positions_get(ticket=trade_id)
             if position is None or len(position) == 0:
                 print(f"Trade {trade_id} no longer exists in MT5.")
@@ -877,7 +863,8 @@ class Strategy:
                 self.document_closed_trade(trade_id)
                 continue
 
-            self.monitor_open_trade(symbol_str, symbol, trade_id, position)
+            symblo_str = trade_info['symbol']
+            self.monitor_open_trade(symblo_str, symbols[symblo_str], trade_id, position)
 
 
     def monitor_open_trade(self, symbol_str, symbol, trade_id, position):
