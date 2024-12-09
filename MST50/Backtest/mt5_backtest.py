@@ -544,20 +544,13 @@ class MT5Backtest:
 		if action == TRADE_ACTION_DEAL:
 			if position_ticket is None:
 				# Open new position
-				result = self.execute_market_order(symbol, order_type, volume, price, comment, sl, tp, magic)
-				result['retcode'] = TRADE_ACTIONS['DONE']
-				return result
+				return self.execute_market_order(symbol, order_type, volume, price, comment, sl, tp, magic)		
 			else:
 				# Close existing position
-				result = self.close_position(position_ticket, price, reason='CLOSE')
-				result['order'] = position_ticket
-				result['retcode'] = TRADE_ACTIONS['DONE']
-				return result
+				return self.close_position(position_ticket, price, reason='CLOSE')
 		elif action == TRADE_ACTION_SLTP:
 			# Modify order
-			result = self.modify_order(request)
-			result['retcode'] = TRADE_ACTIONS['DONE']
-			return result
+			return self.modify_order(request)
 
 		# We should not be here!
 		request['retcode'] = TRADE_RETCODE_ERROR
@@ -628,6 +621,7 @@ class MT5Backtest:
 		result['action'] = TRADE_ACTION_DEAL
 		result['retcode'] = TRADE_RETCODE_DONE
 		result['order'] = position['ticket']
+		result['retcode'] = TRADE_ACTIONS['DONE']
 		return result
 
 	def modify_order(self, request):
