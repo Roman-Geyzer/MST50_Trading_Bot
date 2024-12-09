@@ -105,17 +105,15 @@ def get_trade_direction(trade_type):
     else:
         raise ValueError(f"Invalid trade type: {trade_type}")
 
-def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, symbol, rates):
+def calculate_sl_tp(price, direction, sl_method, tp_method, symbol, rates):
     """
     Calculate the stop-loss and take-profit prices based on the given parameters.
 
     Parameters:
         price (float): Current price.
         direction (int): Trade direction.
-        sl_method (str): Stop-loss calculation method name.
-        sl_param (float): Stop-loss parameter value.
-        tp_method (str): Take-profit calculation method name.
-        tp_param (float): Take-profit parameter value.
+        sl_method (function): Stop-loss calculation method (sl param is prepuplated using patial).
+        tp_method (function): Take-profit calculation method (tp param is prepuplated using patial).
         symbol (str): Symbol name.
         rates (np.recarray): Historical price data.
 
@@ -123,22 +121,31 @@ def calculate_sl_tp(price, direction, sl_method, sl_param, tp_method, tp_param, 
         tuple: (stop-loss price, take-profit price)
     """
     symbol_i = symbol_info(symbol)
-    point = symbol_i['point']
+    pip = symbol_i['point'] * 10
 
-    sl = calculate_sl(price, direction, sl_method, sl_param, symbol, point, rates)
-    tp = calculate_tp(price, direction, tp_method, tp_param, symbol, point,rates, sl)
+    sl = sl_method(price = price, direction = direction, symbol = symbol, pip = pip, rates = rates)
+    tp = tp_method(price = price, direction = direction, symbol = symbol, pip = pip, rates = rates, sl = sl)
 
-    # Round to the number of decimal places based on the point size
-    point_decimal = Decimal(str(point))
-    decimal_places = -point_decimal.as_tuple().exponent
-    decimal_places = min(decimal_places, 5)
-    sl = round(sl, decimal_places)
-    tp = round(tp, decimal_places)
+    # Round to the number of decimal places based on the disigt (pip size)
+    sl = round(sl, symbol_i['digits'])
+    tp = round(tp, symbol_i['digits'])
 
     return sl, tp
 
 # SL methods
-def calculate_sl(price, direction, sl_method_name, sl_param, symbol, point, rates):
+def get_sl_method(sl_method_name):
+    """
+    Get the SL method function based on the method name.
+
+    Parameters:
+        sl_method_name (str): SL calculation method name.
+
+    Returns:
+        function: SL method function.
+    """
+    return sl_methods.get(sl_method_name)
+
+def calculate_sl(price, direction, sl_method_name, sl_param, symbol, pip, rates):
     """
     Calculate the stop loss (SL) price using sl_method based on the given parameters.
 
@@ -148,20 +155,19 @@ def calculate_sl(price, direction, sl_method_name, sl_param, symbol, point, rate
         sl_method_name (str): SL calculation method name.
         sl_param (float): SL parameter value.
         symbol (str): Symbol name.
-        point (float): Point value for the symbol.
+        pip (float): pip value for the symbol.
 
     Returns:
         float: Calculated SL price.
     """
     # Look up the SL method function based on the method name
     sl_method_func = sl_methods.get(sl_method_name)
-    if sl_method_func is None:
-        raise ValueError(f"Invalid SL method: {sl_method_name}")
+
 
     # Call the SL method function with the provided parameters
-    return sl_method_func(price, direction, sl_param, symbol, point,rates)
+    return sl_method_func(price, direction, sl_param, symbol, pip,rates)
 
-def UsePerc_SL(price, direction, sl_param, symbol, point,rates):
+def UsePerc_SL(price, direction, sl_param, symbol, pip,rates):
     """
     Calculate SL using percentage.
 
@@ -170,7 +176,7 @@ def UsePerc_SL(price, direction, sl_param, symbol, point,rates):
         direction (int): Trade direction.
         sl_param (float): SL percentage.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): pip value.
 
     Returns:
         float: Calculated SL price.
@@ -183,29 +189,29 @@ def UsePerc_SL(price, direction, sl_param, symbol, point,rates):
         raise ValueError(f"Invalid trade direction: {direction}")
     return sl
 
-def UseFixed_SL(price, direction, sl_param, symbol, point,rates):
+def UseFixed_SL(price, direction, sl_param, symbol, pip,rates):
     """
-    Calculate SL using a fixed number of points.
+    Calculate SL using a fixed number of pips.
 
     Parameters:
         price (float): Current price.
         direction (int): Trade direction.
         sl_param (float): SL parameter.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated SL price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
-        sl = price - sl_param * point
+        sl = price - sl_param * pip
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
-        sl = price + sl_param * point
+        sl = price + sl_param * pip
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
     return sl
 
-def UseCandles_SL(price, direction, sl_param, symbol, point,rates):
+def UseCandles_SL(price, direction, sl_param, symbol, pip,rates):
     """
     Calculate SL based on candle data.
 
@@ -214,7 +220,7 @@ def UseCandles_SL(price, direction, sl_param, symbol, point,rates):
         direction (int): Trade direction.
         sl_param (int): Number of candles to consider.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated SL price.
@@ -222,7 +228,7 @@ def UseCandles_SL(price, direction, sl_param, symbol, point,rates):
     # This function needs implementation based on your candle data availability
     pass
 
-def UseSR_SL(price, direction, sl_param, symbol, point,rates):
+def UseSR_SL(price, direction, sl_param, symbol, pip,rates):
     """
     Calculate SL based on Support and Resistance levels.
 
@@ -231,7 +237,7 @@ def UseSR_SL(price, direction, sl_param, symbol, point,rates):
         direction (int): Trade direction.
         sl_param (float): Parameter for SR calculation.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Point value.
 
     Returns:
         float: Calculated SL price.
@@ -239,7 +245,7 @@ def UseSR_SL(price, direction, sl_param, symbol, point,rates):
     # This function needs implementation based on your SR levels
     pass
 
-def UseTrend_SL(price, direction, sl_param, symbol, point,rates):
+def UseTrend_SL(price, direction, sl_param, symbol, pip,rates):
     """
     Calculate SL based on trend lines.
 
@@ -248,7 +254,7 @@ def UseTrend_SL(price, direction, sl_param, symbol, point,rates):
         direction (int): Trade direction.
         sl_param (float): Parameter for trend calculation.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated SL price.
@@ -256,7 +262,7 @@ def UseTrend_SL(price, direction, sl_param, symbol, point,rates):
     # This function needs implementation based on your trend line data
     pass
 
-def UseMA_SL(price, direction, sl_param, symbol, point,rates):
+def UseMA_SL(price, direction, sl_param, symbol, pip,rates):
     """
     Calculate SL based on Moving Averages.
 
@@ -265,7 +271,7 @@ def UseMA_SL(price, direction, sl_param, symbol, point,rates):
         direction (int): Trade direction.
         sl_param (int): MA period.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated SL price.
@@ -275,7 +281,7 @@ def UseMA_SL(price, direction, sl_param, symbol, point,rates):
     return ma
 
 
-def UseATR_SL(price, direction, sl_param, symbol, point,rates):
+def UseATR_SL(price, direction, sl_param, symbol, pip,rates):
     """
     Calculate SL based on Average True Range (ATR).
 
@@ -284,7 +290,7 @@ def UseATR_SL(price, direction, sl_param, symbol, point,rates):
         direction (int): Trade direction.
         sl_param (int): MA period.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated SL price.
@@ -309,7 +315,20 @@ sl_methods = {
 }
 
 # TP methods
-def calculate_tp(price, direction, tp_method_name, tp_param, symbol, point,rates=None, sl=None):
+def get_tp_method(tp_method_name):
+    """
+    Get the TP method function based on the method name.
+
+    Parameters:
+        tp_method_name (str): TP calculation method name.
+
+    Returns:
+        function: TP method function.
+    """
+    return tp_methods.get(tp_method_name)
+
+
+def calculate_tp(price, direction, tp_method_name, tp_param, symbol, pip,rates=None, sl=None):
     """
     Calculate the take profit (TP) price using tp_method based on the given parameters.
 
@@ -319,7 +338,7 @@ def calculate_tp(price, direction, tp_method_name, tp_param, symbol, point,rates
         tp_method_name (str): TP calculation method name.
         tp_param (float): TP parameter value.
         symbol (str): Symbol name.
-        point (float): Point value for the symbol.
+        pip (float): Pip value for the symbol.
         sl (float, optional): Stop-loss price. Required for certain TP methods.
 
     Returns:
@@ -327,14 +346,12 @@ def calculate_tp(price, direction, tp_method_name, tp_param, symbol, point,rates
     """
     # Look up the TP method function based on the method name
     tp_method_func = tp_methods.get(tp_method_name)
-    if tp_method_func is None:
-        raise ValueError(f"Invalid TP method: {tp_method_name}")
 
     # Call the TP method function with the provided parameters
-    return tp_method_func(price, direction, tp_param, symbol, point, rates, sl)
+    return tp_method_func(price, direction, tp_param, symbol, pip, rates, sl)
 
 
-def UsePerc_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
+def UsePerc_TP(price, direction, tp_param, symbol, pip,rates=None, sl=None):
     """
     Calculate TP using percentage.
 
@@ -343,7 +360,7 @@ def UsePerc_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
         direction (int): Trade direction.
         tp_param (float): TP percentage.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Point value.
 
     Returns:
         float: Calculated TP price.
@@ -356,29 +373,29 @@ def UsePerc_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
-def UseFixed_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
+def UseFixed_TP(price, direction, tp_param, symbol, pip,rates=None, sl=None):
     """
-    Calculate TP using a fixed number of points.
+    Calculate TP using a fixed number of pips.
 
     Parameters:
         price (float): Current price.
         direction (int): Trade direction.
         tp_param (float): TP parameter.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated TP price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
-        tp = price + tp_param * point
+        tp = price + tp_param * pip
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
-        tp = price - tp_param * point
+        tp = price - tp_param * pip
     else:
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
-def UseCandles_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
+def UseCandles_TP(price, direction, tp_param, symbol, pip,rates=None, sl=None):
     """
     Calculate TP based on candle data.
 
@@ -387,7 +404,7 @@ def UseCandles_TP(price, direction, tp_param, symbol, point,rates=None, sl=None)
         direction (int): Trade direction.
         tp_param (int): Number of candles to consider.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated TP price.
@@ -395,7 +412,7 @@ def UseCandles_TP(price, direction, tp_param, symbol, point,rates=None, sl=None)
     tp = max(rates['close'][-tp_param:-1])
     return tp
 
-def UseSR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
+def UseSR_TP(price, direction, tp_param, symbol, pip,rates=None, sl=None):
     """
     Calculate TP based on Support and Resistance levels.
 
@@ -404,7 +421,7 @@ def UseSR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
         direction (int): Trade direction.
         tp_param (float): Parameter for SR calculation.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated TP price.
@@ -412,7 +429,7 @@ def UseSR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     # This function needs implementation based on your SR levels
     pass
 
-def UseTrend_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
+def UseTrend_TP(price, direction, tp_param, symbol, pip,rates=None, sl=None):
     """
     Calculate TP based on trend lines.
 
@@ -421,7 +438,7 @@ def UseTrend_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
         direction (int): Trade direction.
         tp_param (float): Parameter for trend calculation.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated TP price.
@@ -429,7 +446,7 @@ def UseTrend_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     # This function needs implementation based on your trend line data
     pass
 
-def UseMA_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
+def UseMA_TP(price, direction, tp_param, symbol, pip,rates=None, sl=None):
     """
     Calculate TP based on Moving Averages.
 
@@ -438,7 +455,7 @@ def UseMA_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
         direction (int): Trade direction.
         tp_param (int): MA period.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated TP price.
@@ -447,7 +464,7 @@ def UseMA_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
     ma = rates[ma_column][-1]
     return ma
 
-def UseRR_TP(price, direction, tp_param, symbol, point, rates=None, sl=None):
+def UseRR_TP(price, direction, tp_param, symbol, pip, rates=None, sl=None):
     """
     Calculate TP using Risk-Reward ratio.
 
@@ -456,7 +473,7 @@ def UseRR_TP(price, direction, tp_param, symbol, point, rates=None, sl=None):
         direction (int): Trade direction.
         tp_param (float): RR ratio.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
         sl (float): Stop-loss price.
 
     Returns:
@@ -472,7 +489,7 @@ def UseRR_TP(price, direction, tp_param, symbol, point, rates=None, sl=None):
         raise ValueError(f"Invalid trade direction: {direction}")
     return tp
 
-def UseATR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
+def UseATR_TP(price, direction, tp_param, symbol, pip,rates=None, sl=None):
     """
     Calculate TP based on Average True Range (ATR).
 
@@ -481,7 +498,7 @@ def UseATR_TP(price, direction, tp_param, symbol, point,rates=None, sl=None):
         direction (int): Trade direction.
         tp_param (int): ATR period.
         symbol (str): Symbol name.
-        point (float): Point value.
+        pip (float): Pip value.
 
     Returns:
         float: Calculated TP price.
@@ -508,252 +525,198 @@ tp_methods = {
 }
 
 # Trail methods
-def check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point):
+    
+def get_trail_method(trail_method_name):
     """
-    Check if the trailing stop conditions are met.
+    Get the trail method function based on the method name.
 
     Parameters:
-        price (float): Current price.
-        direction (int): Trade direction.
-        trail_price (float): Proposed new trailing stop price.
-        current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
-
-    Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
-    """
-    # Round to the number of decimal places based on the point size
-    point_decimal = Decimal(str(point))
-    decimal_places = -point_decimal.as_tuple().exponent
-    decimal_places = min(decimal_places, 5)
-    trail_price = round(trail_price, decimal_places)
-    if both_sides_trail:
-        return trail_price
-    if direction == 0 or direction == TRADE_DIRECTION.BUY: # Buy
-        if trail_price > current_sl:
-            return trail_price
-        return None  # No change to SL
-    elif direction == 1 or direction == TRADE_DIRECTION.SELL: # Sell
-        if trail_price < current_sl:
-            return trail_price
-        return None
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-
-def calculate_trail(price, current_sl, both_sides_trail, direction, trail_method_name, trail_param, symbol, point, rates_df):
-    """
-    Calculate the trailing stop price using trail_method based on the given parameters.
-
-    Parameters:
-        price (float): Current price.
-        current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
-        direction (int): Trade direction.
         trail_method_name (str): Trail calculation method name.
-        trail_param (float): Trail parameter value.
-        symbol (str): Symbol name.
-        point (float): Point value for the symbol.
-        rates_df (np.recarray): Historical price data.
 
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        function: Trail method function.
     """
-    # Look up the trail method function based on the method name
-    trail_method_func = trail_methods.get(trail_method_name)
+    return trail_methods.get(trail_method_name)
 
-    # Call the trail method function with the provided parameters
-    return trail_method_func(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df)
 
-def UsePerc_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UsePerc_Trail(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop using percentage.
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
-        trail_param (float): Trail percentage.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
+        trail_param (float): Trail parameter value - precentage for this method.
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
 
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
         trail_price = price - trail_param * price / 100
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         trail_price = price + trail_param * price / 100
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
+    return trail_price
 
-def UseFixed_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UseFixed_Trail(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
-    Calculate trailing stop using a fixed number of points.
+    Calculate trailing stop using a fixed number of pips.
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
-        trail_param (float): Trail parameter.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
+        trail_param (float): Trail parameter value - fixed number of pips.
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
 
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
-        trail_price = price - trail_param * point
+        trail_price = price - trail_param * pip
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
-        trail_price = price + trail_param * point
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
+        trail_price = price + trail_param * pip
+    return trail_price
 
-def UseCandles_Trail_Close(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UseCandles_Trail_Close(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop using the close prices of the last N candles.
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
         trail_param (int): Number of candles to consider.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
-
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY: # Buy
-        trail_prices = rates_df['close'][-trail_param:-1]
+        trail_prices = tf_rates['close'][-trail_param:-1]
         trail_price = min(trail_prices)
     elif direction == 1 or direction == TRADE_DIRECTION.SELL: # Sell
-        trail_prices = rates_df['close'][-trail_param:-1]
+        trail_prices = tf_rates['close'][-trail_param:-1]
         trail_price = max(trail_prices)
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
+    return trail_price
 
-def UseCandles_Trail_Extreme(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UseCandles_Trail_Extreme(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop using the high/low prices of the last N candles.
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
         trail_param (int): Number of candles to consider.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
-
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
-        trail_prices = rates_df['low'][-trail_param:-1]
+        trail_prices = tf_rates['low'][-trail_param:-1]
         trail_price = min(trail_prices)
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
-        trail_prices = rates_df['high'][-trail_param:-1]
+        trail_prices = tf_rates['high'][-trail_param:-1]
         trail_price = max(trail_prices)
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
+    return trail_price
 
-def UseSR_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UseSR_Trail(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop based on Support and Resistance levels.
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
-        trail_param (float): Parameter for SR calculation.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
-
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
+        trail_param (int): Number of candles to consider.
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss.
     """
     # This function needs implementation based on your SR levels
     pass
 
-def UseTrend_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UseTrend_Trail(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop based on trend lines.
 
     Parameters:
-        price (float): Current price.
-        current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
-        direction (int): Trade direction.
-        trail_param (float): Parameter for trend calculation.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
 
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss .
     """
     # This function needs implementation based on your trend line data
     pass
 
-def UseMA_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UseMA_Trail(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop based on Moving Averages.
 
     Parameters:
-        price (float): Current price.
-        current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
-        direction (int): Trade direction.
-        trail_param (int): MA period.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
 
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss price:
     """
     ma_column = f'MA_{trail_param}'
-    ma = rates_df[ma_column][-1]
+    ma = tf_rates[ma_column][-1]
     return ma
 
-def UseATR_Trail(price, current_sl, both_sides_trail, direction, trail_param, symbol, point, rates_df):
+def UseATR_Trail(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop based on Average True Range (ATR).
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
-        trail_param (int): ATR period.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates_df (np.recarray): Historical price data.
-
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
+        trail_param (int): ATR multiplier.
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
     Returns:
         float or None: New stop-loss price if conditions are met, otherwise None.
     """
-    atr = rates_df['ATR'][-1]
+    atr = tf_rates['ATR'][-1]
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
         trail_price = price - trail_param * atr
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         trail_price = price + trail_param * atr
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
+    return trail_price
 
 trail_methods = {
     'UsePerc_Trail': UsePerc_Trail,
@@ -771,44 +734,47 @@ trail_methods = {
 
 
 
-def calculate_fast_trail(price, current_sl, both_sides_trail, direction, n_minutes,start_multi, trail_multi,point, rates, atr):
+def calculate_fast_trail(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi, trail_multi, open_price= None):
     """
     Calculate trailing stop based on fast price movement on the last N minutes candles.
 
     Parameters:
         price (float): Current price.
         current_sl (float): Current stop-loss price.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
         direction (int): Trade direction.
-        n_minutes (int): Number of minutes to consider.
-        start_multi (float): Multiplier for the start of the move.
-        trail_multi (float): Multiplier for the trailing stop.
-        symbol (str): Symbol name.
-        point (float): Point value.
-        rates (numpy.ndarray): Historical price data of m1 timeframe for the symbol.
-        atr (float): ATR value for the strategy tf and symbol.
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
+        trail_param (int): Number of minutes to consider.
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
+    Returns: float : New stop-loss (if no new SL, the current SL will be returned)
     """
 
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
-        # Get the minimum low in the last N minutes (excluding the current minute)
-        MinutesMin = rates['low'][-(n_minutes+1):-1].min()
+        # Get the minimum low in the last N minutes 
+        MinutesMin = m1_rates['low'][-(trail_param):].min()
         UpMove = price - MinutesMin
         if UpMove > start_multi * atr:
             trail_price = price - trail_multi * atr
-            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
+            return trail_price
+        else:
+            return current_sl
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
-        # Get the maximum high in the last N minutes (excluding the current minute)
-        MinutesMax = rates['high'][-(n_minutes+1):-1].max()
+        # Get the maximum high in the last N minutes 
+        MinutesMax = m1_rates['high'][-(trail_param):].max()
         DownMove = MinutesMax - price
         if DownMove > start_multi * atr:
             trail_price = price + trail_multi * atr
-            return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return None
+            return trail_price
+        else:
+            return current_sl
+
     
 
-def calculate_breakeven(price, current_sl, direction,  both_sides_trail, BE_ATRs ,open_price, point, rates_df):
+def calculate_breakeven(price, current_sl,  direction, pip, atr, tf_rates, m1_rates, trail_param,  start_multi = None, trail_multi=None, open_price= None):
     """
     Calculate trailing stop based on breakeven level.
 
@@ -816,33 +782,33 @@ def calculate_breakeven(price, current_sl, direction,  both_sides_trail, BE_ATRs
         price (float): Current price.
         current_sl (float): Current stop-loss price.
         direction (int): Trade direction.
-        both_sides_trail (bool): Whether trailing is allowed in both directions.
-        BE_ATRs (float): ATR multiplier for breakeven.
-        open_price (float): Open price of the position.
-        point (float): Point value.
-        rates_df (DataFrame): Historical price data
+        pip (float): Pip value.
+        atr (float): Average True Range (ATR) value.
+        tf_rates (np.recarray): Historical price data for the timeframe.
+        m1_rates (np.recarray): Historical price data for the M1 timeframe.
+        trail_param (int): BE_ATRs - how many ATRs price move required to update SL.
+        start_multi (float, optional): Start multiplier for fast trail calculation.
+        trail_multi (float, optional): Trail multiplier for fast trail calculation.
+        open_price (float, optional): Open price of the trade.
     Returns:
-        float or None: New stop-loss price if conditions are met, otherwise None.
+        float : New stop-loss price if conditions are met, otherwise current SL.
     """
-    if open_price is None:
-        raise ValueError("open_price is required for UseMoveToBreakeven method")
 
-    atr = rates_df['ATR'][-1]
+    atr = tf_rates['ATR'][-1]
 
-    pip_value = point  # Assuming 1 pip = point size
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
-        trail_price = open_price + pip_value
+        trail_price = open_price + pip
         if trail_price > current_sl:
-            if price > open_price + BE_ATRs * atr and price > trail_price:
-                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
+            if price > open_price + trail_param * atr and price > trail_price:
+                return trail_price
+        return current_sl # else to both conditions
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
-        trail_price = open_price - pip_value
+        trail_price = open_price - pip
         if trail_price < current_sl:
-            if price < open_price - BE_ATRs * atr and price < trail_price:
-                return check_trail_conditions(price, direction, trail_price, current_sl, both_sides_trail, point)
-    else:
-        raise ValueError(f"Invalid trade direction: {direction}")
-    return None
+            if price < open_price - trail_param * atr and price < trail_price:
+                return trail_price
+        return current_sl # else to both conditions
+
 
 
 

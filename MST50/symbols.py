@@ -188,31 +188,33 @@ class Timeframe:
         for strategy in strategies.values():
             if symbol_str in strategy.symbols:
                 config = strategy.config
+                # Calculate for the same timeframe as the strategy
                 if self.timeframe == strategy.timeframe:
-                    if strategy.sl_method in ['UseCandles_SL', 'UseATR_SL']:
-                        timeframe_length_in_strategies.append(strategy.sl_param)
-                    if strategy.tp_method in ['UseCandles_TP', 'UseATR_TP']:
-                        timeframe_length_in_strategies.append(strategy.tp_param)
+                    if config['sl_method'] in ['UseCandles_SL', 'UseATR_SL']:
+                        timeframe_length_in_strategies.append(config['sl_param'])
+                    if ['tp_method'] in ['UseCandles_TP', 'UseATR_TP']:
+                        timeframe_length_in_strategies.append(config['tp_param'])
                     if strategy.trail_enabled:
-                        if strategy.trail_method in ['UseCandles_Trail_Close', 'UseCandles_Trail_Extreme', 'UseATR_Tral']:
-                            timeframe_length_in_strategies.append(strategy.trail_param)
-                        if strategy.use_fast_trail:
-                            timeframe_length_in_strategies.append(strategy.fast_trail_minutes_count)
+                        if config['trail_params']['trail_method'] in ['UseCandles_Trail_Close', 'UseCandles_Trail_Extreme', 'UseATR_Tral']:
+                            timeframe_length_in_strategies.append(config['trail_params']['trail_param'])
 
                     if strategy.first_indicator:
-                        timeframe_length_in_strategies.append(strategy.config['indicators']['first_indicator']['indicator_params']['a'])
+                        timeframe_length_in_strategies.append(config['indicators']['first_indicator']['indicator_params']['a'])
                         if strategy.second_indicator:
-                            timeframe_length_in_strategies.append(strategy.config['indicators']['second_indicator']['indicator_params']['a'])
+                            timeframe_length_in_strategies.append(config['indicators']['second_indicator']['indicator_params']['a'])
                             if strategy.third_indicator:
-                                timeframe_length_in_strategies.append(strategy.config['indicators']['third_indicator']['indicator_params']['a'])
+                                timeframe_length_in_strategies.append(config['indicators']['third_indicator']['indicator_params']['a'])
                     timeframe_length_in_strategies.append(config['filterP_rsi_period'])
-                if strategy.higher_candle_patterns_active:
+                
+                # Calculate for higher, lower and m1 timeframes - no need to compare to the strategy timeframe
+                elif strategy.higher_candle_patterns_active:
                     if self.timeframe == config['candle_params']['higher_tf']['timeframe']:
-                        timeframe_length_in_strategies.append(strategy.config['candle_params']['higher_tf']['barsP_pattern_count'])
-                if strategy.lower_candle_patterns_active:
+                        return config['candle_params']['higher_tf']['barsP_pattern_count'] + 1
+                elif strategy.lower_candle_patterns_active:
                     if self.timeframe == config['candle_params']['lower_tf']['timeframe']:
-                        timeframe_length_in_strategies.append(strategy.config['candle_params']['lower_tf']['barsP_pattern_count'])
-
+                        return config['candle_params']['lower_tf']['barsP_pattern_count'] + 1
+                elif self.timeframe == "M1": # Only add M1 if not in backtest mode - since in backtest mode we use the backtest_tf
+                    return max(config['trail_params']['fast_trail_minutes_count'], 5) + 2
         # Convert all elements to integers using list comprehension
         timeframe_length_in_strategies = [int(length) for length in timeframe_length_in_strategies if length  and not pd.isna(length)]
         return max(timeframe_length_in_strategies) + 3
@@ -270,7 +272,7 @@ class Timeframe:
         """
         Update rates if there is a new bar since the last update.
         """
-        latest_time = self.rates['time'][-1] if len(self.rates) > 0 else None
+        latest_time = self.rates['time'][-1] 
         new_rates = self.fetch_rates(self.symbol_str)
         if new_rates is not None and len(new_rates) > 0:
             new_latest_time = new_rates['time'][-1]

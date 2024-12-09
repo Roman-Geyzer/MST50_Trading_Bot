@@ -27,7 +27,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import os
-
+from functools import partial # used in order to pass parameters to the preloaded functions
 
 
 # Determine if we are in backtesting mode
@@ -36,7 +36,8 @@ BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 # Import utility functions and constants
 from .utils import (load_config,  get_final_magic_number, get_timeframe_string,
                     print_hashtaged_msg, attempt_with_stages_and_delay,print_with_info, get_mt5_timeframe)
-from .orders import calculate_lot_size, calculate_sl_tp, calculate_trail, get_mt5_trade_type, get_trade_direction, calculate_fast_trail, calculate_breakeven
+from .orders import (calculate_lot_size, calculate_sl_tp, get_mt5_trade_type, get_trade_direction, calculate_fast_trail, calculate_breakeven,
+                     get_trail_method, get_sl_method, get_tp_method)
 from .indicators import Indicators
 from .constants import DEVIATION, TRADE_DIRECTION
 from .signals import RSISignal
@@ -123,44 +124,63 @@ class Strategy:
         #future implementation: add more signals
         #self.er_signal = ERSignal(strategy_config['exitP_ER_low_value'], strategy_config['EXITP_ER_high_value'])
 
-        self.sl_method = strategy_config['sl_method']
-        self.sl_param = strategy_config['sl_param']
-        if self.sl_method in {'UseCandles_SL'}:
-            self.sl_param = int(self.sl_param)
+        # Set the SL and TP methods
+        sl_method = get_sl_method(strategy_config['sl_method'])
+        if strategy_config['sl_method'] in {'UseCandles_SL'}:
+            sl_param = int(strategy_config['sl_param'])
+        else:
+            sl_param = strategy_config['sl_param']
 
-        self.tp_method = strategy_config['tp_method']
-        self.tp_param = strategy_config['tp_param']
-        if self.tp_method in {'UseCandles_TP'}:
-            self.tp_param = int(self.tp_param)
+        self.sl_method_function = partial(sl_method, sl_param = sl_param)
+        
+        tp_method = get_tp_method(strategy_config['tp_method'])
+        if strategy_config['tp_method'] in {'UseCandles_TP'}:
+            tp_param = int(strategy_config['tp_param'])
+        else:
+            tp_param = strategy_config['tp_param']
+        
+        self.tp_method_function = partial(tp_method, tp_param = tp_param)
+
+
         #TODO: update the exit params to be part of the class to avoid using get from dict
         self.exit_params = strategy_config.get('exit_params', {})
         self.daily_candle_exit_hour = self.exit_params.get('exitP_daily_candle_exit_hour', 0)
 
-        self.trail_both_directions = strategy_config['trail_params']['trail_both_directions']
 
-        # Trailing stop parameters
-        self.trail_method = strategy_config['trail_params']['trail_method']
-        self.trail_param = strategy_config['trail_params']['trail_param']
-        # Fast trail parameters
-        self.use_fast_trail = strategy_config['trail_params']['use_fast_trail']
-        self.fast_trail_minutes_count = strategy_config['trail_params']['fast_trail_minutes_count']
-        self.fast_trail_ATR_start_multiplier = strategy_config['trail_params']['fast_trail_ATR_start_multiplier']
-        self.fast_trail_ATR_trail_multiplier = strategy_config['trail_params']['fast_trail_ATR_trail_multiplier']
-        # Move to breakeven parameters
-        self.use_move_to_breakeven = strategy_config['trail_params']['use_move_to_breakeven']
-        self.breakeven_ATRs = strategy_config['trail_params']['breakeven_ATRs']
-        # Check if trailing is enabled
-        self.trail_enabled = self.trail_method or self.use_fast_trail or self.use_move_to_breakeven
 
-        self.backtest_params = strategy_config['backtest_params']
-        self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
-        # If using fast trail, set the backtest timeframe to M1 (for minute data)
-        if self.use_fast_trail:
-            self.backtest_tf = get_mt5_timeframe('M1')
+        # Trailing stop fucntions list:
+        if strategy_config['trail_params']['trail_method'] or strategy_config['trail_params']['use_fast_trail'] or strategy_config['trail_params']['use_move_to_breakeven']:
+            self.trail_enabled = True
+            self.trail_functions = []
+            if strategy_config['trail_params']['trail_method']: # Add trailing stop method
+                trail_method = get_trail_method(strategy_config['trail_params']['trail_method'])
+                trail_method_function = partial(trail_method, trail_param = strategy_config['trail_params']['trail_param'], start_multi = None, trail_multi=None, open_price= None)
+                self.trail_functions.append(trail_method_function)
+            if strategy_config['trail_params']['use_fast_trail']:
+                fast_trail_function = partial(calculate_fast_trail, trail_param = strategy_config['trail_params']['fast_trail_minutes_count'],
+                                                start_multi = strategy_config['trail_params']['fast_trail_ATR_start_multiplier'],
+                                                trail_multi = strategy_config['trail_params']['fast_trail_ATR_trail_multiplier'],
+                                                open_price= None)
+                self.trail_functions.append(fast_trail_function)
+            if strategy_config['trail_params']['use_move_to_breakeven']:
+                breakeven_function = partial(calculate_breakeven, trail_param = strategy_config['trail_params']['breakeven_ATRs'])
+                self.trail_functions.append(breakeven_function)
         else:
-            self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
-            
-        # self.backtest_str_tf = get_timeframe_string(self.backtest_tf)
+            self.trail_enabled = False
+            self.trail_functions = None
+
+
+        
+        # Set Backtest timeframe
+        if BACKTEST_MODE:
+            self.backtest_start_date = strategy_config['backtest_params']['backtest_start_date']
+            # If using fast trail, set the backtest timeframe to M1 (for minute data)
+            if strategy_config['trail_params']['use_fast_trail']:
+                self.backtest_tf = get_mt5_timeframe('M1')
+            else:
+                self.backtest_tf = strategy_config['backtest_params']['backtest_tf']
+                
+            # self.backtest_str_tf = get_timeframe_string(self.backtest_tf)
 
         self.rsi_signal = RSISignal(
             rsi_period=self.config.get('filterP_rsi_period', 14),
@@ -608,7 +628,7 @@ class Strategy:
             volume = position['volume']
             magic_num = position['magic']
         else:
-            sl, tp = calculate_sl_tp(price, direction,self.config['sl_method'], self.config['sl_param'], self.config['tp_method'], self.config['tp_param'], symbol, rates)
+            sl, tp = calculate_sl_tp(price, direction,self.sl_method_function,  self.tp_method_function, symbol, rates)
             #pyro can't get np.float64
             if not BACKTEST_MODE:
                 sl = float(sl)
@@ -712,6 +732,7 @@ class Strategy:
             # Position closed successfully, remove from open trades
             self.open_trades.pop(position['ticket'])
             self.document_closed_trade(position['ticket'])
+            print(f"Closed {direction} trade on {symbol}, ticket: {position['ticket']}")
             
 
     def get_price(self, symbol, direction):
@@ -904,40 +925,30 @@ class Strategy:
             trade_id (int): The trade ID.
             position (dict): The position data.
         """
-        tick = symbol_info_tick(symbol_str)
         direction = position['type']  
-        if direction == 0:  # buy
-            price = tick['ask']
-        else:  # sell
-            price = tick['bid']
         current_sl = position['sl']
-        point = symbol_info(symbol_str)['point']
         sl_price = [position['sl']]
-        #TODO: this is wrong - need to sent ATR of original time frame and not the current one (m1)
+        open_price = position['price_open']
+        symbol_i = symbol_info(symbol_str)
+        pip = symbol_i['point'] * 10 # pip is 10* point
+
+
         rates = symbol.get_tf_rates(self.timeframe)
+        m1_rates = symbol.get_tf_rates(get_mt5_timeframe('M1')) # get M1 rates - last price +  fast trail
 
-        if self.use_fast_trail:
-            atr = rates['ATR'][-1]
-            m1_rates = symbol.get_tf_rates(get_mt5_timeframe('M1')) # get M1 rates for fast trail
-            sl_price.append(calculate_fast_trail(price, current_sl, self.trail_both_directions, direction, self.fast_trail_minutes_count, 
-                                            self.fast_trail_ATR_start_multiplier, self.fast_trail_ATR_trail_multiplier,point, m1_rates, atr))
-        if self.use_move_to_breakeven:
-            sl_price.append(calculate_breakeven(price, current_sl, direction,self.trail_both_directions, self.breakeven_ATRs,
-                                                 position['price_open'], point, rates))
-        if self.trail_method:
-            sl_price.append(calculate_trail(
-                price, current_sl, self.trail_both_directions, direction,
-                self.trail_method, self.trail_param, symbol_str, point, rates
-            ))
-        # Choose the new SL by comparing the new SLs from different methods
+        atr = rates['ATR'][-1]
+        current_price = m1_rates['close'][-1]
 
-        # remove NaN values
-        sl_price = [sl for sl in sl_price if sl is not None]
+        for func in self.trail_functions:
+            sl_price.append(func(price = current_price, current_sl = current_sl, direction = direction, pip = pip, atr = atr, tf_rates = rates, m1_rates = m1_rates, open_price = open_price))
+
+        # check if the new SL is different from the current SL and update the trade
         if direction == 0:  # buy
             new_sl = max(sl_price)
         else:  # sell
             new_sl = min(sl_price)
-        if new_sl and abs(new_sl - current_sl) > 10 * min_pips_for_trail_update * point: # pip is 10* point
+        if new_sl and abs(new_sl - current_sl) > 10 * min_pips_for_trail_update * pip: # update the SL only if the new SL is different from the current SL
+            new_sl = round(new_sl, symbol_i['digits'])
             self.update_trade(trade_id=trade_id, position=position, new_sl=new_sl)
 
 

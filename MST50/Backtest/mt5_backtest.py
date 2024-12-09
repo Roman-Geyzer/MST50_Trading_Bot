@@ -1077,7 +1077,7 @@ class MT5Backtest:
 			'profit': 0.0,
 			'margin_level': 0.0 # used only in live trading - here for consistency
 		}
-		self.set_last_error(RES_S_OK, "Shutdown complete.")
+
 
 # ----------------------------
 # Exported Functions

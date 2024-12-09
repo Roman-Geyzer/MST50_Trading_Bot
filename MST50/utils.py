@@ -467,7 +467,6 @@ def load_config(sheet_name='config', strategies_run_modes=['live']):
             'trail_params': {
                 'trail_method': row['trail_method'],
                 'trail_param': safe_float_convert(row['trail_param']),
-                'trail_both_directions': str_to_bool(row['trail_both_directions']),
                 'use_fast_trail': str_to_bool(row['use_fast_trail']),
                 'fast_trail_minutes_count': safe_int_convert(row['fast_trail_minutes_count']),
                 'fast_trail_ATR_start_multiplier': safe_float_convert(row['fast_trail_ATR_start_multiplier']),
