@@ -229,64 +229,36 @@ class Strategy:
         """
         Initialize indicator and collect the required columns based on the indicators used in the strategy.
         """
-        # First Indicator
-        first_indicator_config = self.config['indicators']['first_indicator']
-        if first_indicator_config['indicator_name']:
-            self.first_indicator = Indicators(first_indicator_config)
-            self.first_indicator_name = first_indicator_config['indicator_name']
-            self.add_indicator_columns(first_indicator_config)
-            if first_indicator_config['indicator_use'] in ['Enter', 'Both']:
-                self.first_indicator_enter = True
-            else:
-                self.first_indicator_enter = False
-            if first_indicator_config['indicator_use'] in ['Exit', 'Both']:
-                self.first_indicator_exit = True
-            else:
-                self.first_indicator_exit = False
-        else: # No indicator
-            self.first_indicator = None
-            self.first_indicator_enter = False
-            self.first_indicator_exit = False
+        self.indicators = []
+        self.indicator_enter_functions = []
+        self.indicator_exit_functions = []
+        self.indicator_enter = True
+        self.indicator_exit = True
 
-        # Second Indicator
-        second_indicator_config = self.config['indicators']['second_indicator']
-        if second_indicator_config['indicator_name']:
-            self.second_indicator = Indicators(second_indicator_config)
-            self.second_indicator_name = second_indicator_config['indicator_name']
-            self.add_indicator_columns(second_indicator_config)
-            if second_indicator_config['indicator_use'] in ['Enter', 'Both']:
-                self.second_indicator_enter = True
-            else:
-                self.second_indicator_enter = False
-            if second_indicator_config['indicator_use'] in ['Exit', 'Both']:
-                self.second_indicator_exit = True
-            if second_indicator_config['indicator_use'] in ['Exit', 'Both']:
-                self.second_indicator_exit = True
-            else:
-                self.second_indicator_exit = False
-        else:
-            self.second_indicator = None
-            self.second_indicator_enter = False
-            self.second_indicator_exit = False
 
-        # Third Indicator
-        third_indicator_config = self.config['indicators']['third_indicator']
-        if third_indicator_config['indicator_name']:
-            self.third_indicator = Indicators(third_indicator_config)
-            self.third_indicator_name = third_indicator_config['indicator_name']
-            self.add_indicator_columns(third_indicator_config)
-            if third_indicator_config['indicator_use'] in ['Enter', 'Both']:
-                self.third_indicator_enter = True
-            else:
-                self.third_indicator_enter = False
-            if third_indicator_config['indicator_use'] in ['Exit', 'Both']:
-                self.third_indicator_exit = True
-            else:
-                self.third_indicator_exit = False
-        else:
-            self.third_indicator = None
-            self.third_indicator_enter = False
-            self.third_indicator_exit = False
+        for i in range(3):  # Loop through the indicators (only 3 indicators are supported)
+            indicator_config = self.config['indicators'][f'indicator_{i+1}']
+            if indicator_config['indicator_name']:
+                self.indicators.append(Indicators(indicator_config))
+                if indicator_config['indicator_use'] in ['Enter', 'Both']:
+                    self.indicator_enter_functions.append(self.indicators[i].make_trade_decision)
+                if indicator_config['indicator_use'] in ['Exit', 'Both']:
+                    self.indicator_exit_functions.append(self.indicators[i].make_trade_decision)
+                self.add_indicator_columns(indicator_config)
+
+        # Check if any indicators are active - if not, remove the indicator functions
+        if len(self.indicator_enter_functions) == 0:
+            self.indicator_enter = False
+            del self.indicator_enter_functions
+        if len(self.indicator_exit_functions) == 0:
+            self.indicator_exit = False
+            del self.indicator_exit_functions
+        
+        if not self.indicator_enter and not self.indicator_exit:
+            print_hashtaged_msg(1, f"Strategy {self.strategy_num} has no active indicators.")
+            del self.indicators
+
+
 
     def add_indicator_columns(self, indicator_config):
         """
@@ -545,33 +517,26 @@ class Strategy:
 
         indicator_decision_set = {'both'} # Set to store indicators decisions from different indicators, 'both' is used as a flag to use candle decision
         # Proceed with normal indicator-based trade decision - up to 3 indicators can be used
-        if self.first_indicator_enter: # Check if indicator is active
-            first_indicator_decision, first_indicator_trade_data = self.first_indicator.make_trade_decision(rates)
-            if first_indicator_decision is None:
-                return
-            else:
-                indicator_decision_set.add(first_indicator_decision)
-        if self.second_indicator_enter:
-            second_indicator_decision, second_indicator_trade_data = self.second_indicator.make_trade_decision(rates)
-            if second_indicator_decision is None:
-                return
-            else:
-                indicator_decision_set.add(second_indicator_decision)
-        if self.third_indicator_enter:
-            third_indicator_decision, third_indicator_trade_data = self.third_indicator.make_trade_decision(rates)
-            if third_indicator_decision is None:
-                return
-            else:
-                indicator_decision_set.add(third_indicator_decision)
+        if self.indicator_enter:
+            for indicator_function in self.indicator_enter_functions:
+                indicator_decision, indicator_trade_data = indicator_function(rates)
+                if indicator_decision is None:
+                    return
+                else:
+                    indicator_decision_set.add(indicator_decision)
+            if len(indicator_decision_set) == 2:
+                return # conflicting decisions - no trade
+            indicator_decision_set.remove('both') # remove the flag, remaining decision is indicators final decision
         
+
+        
+
         # merge the candle and indicator decisions
         final_decision_set = candle_decision_set.union(indicator_decision_set)
-        if len(final_decision_set) == 1: # No trade if no decision is made
+        if len(final_decision_set) == 2: # No trade if conflicting decisions between indicators and candles
             return
-        final_decision_set.remove('both')
-        if len(final_decision_set) == 2: # conflicting decisions - no trade
-            return
-        final_decision = final_decision_set.pop()
+        
+        final_decision = final_decision_set.pop() # get the final decision
 
         # Check the RSI signal before making a trade
         if not self.rsi_signal.check_rsi_signal(rates['RSI'][-1], final_decision): 

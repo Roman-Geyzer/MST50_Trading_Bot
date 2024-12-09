@@ -198,12 +198,8 @@ class Timeframe:
                         if config['trail_params']['trail_method'] in ['UseCandles_Trail_Close', 'UseCandles_Trail_Extreme', 'UseATR_Tral']:
                             timeframe_length_in_strategies.append(config['trail_params']['trail_param'])
 
-                    if strategy.first_indicator:
-                        timeframe_length_in_strategies.append(config['indicators']['first_indicator']['indicator_params']['a'])
-                        if strategy.second_indicator:
-                            timeframe_length_in_strategies.append(config['indicators']['second_indicator']['indicator_params']['a'])
-                            if strategy.third_indicator:
-                                timeframe_length_in_strategies.append(config['indicators']['third_indicator']['indicator_params']['a'])
+                    for i in range(len(strategy.indicators)):
+                        timeframe_length_in_strategies.append(config['indicators'][f'indicator_{i+1}']['indicator_params']['a'])
                     timeframe_length_in_strategies.append(config['filterP_rsi_period'])
                 
                 # Calculate for higher, lower and m1 timeframes - no need to compare to the strategy timeframe
