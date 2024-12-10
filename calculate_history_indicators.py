@@ -131,7 +131,7 @@ SR_configs = [
 
 fixed_SR_params = {
     'min_height_of_sr_distance': 3.0,    # Min height of SR distance - used in calculating SR levels
-    'max_height_of_sr_distance': 50.0,   # Max height of SR distance - used in calculating SR levels
+    'max_height_of_sr_distance': 60.0,   # Max height of SR distance - used in calculating SR levels
 }
 
 def calculate_indicators(df, pip):
@@ -153,9 +153,11 @@ def calculate_indicators(df, pip):
     df['low'] = df['low'].astype('float32')
     df['close'] = df['close'].astype('float32')
 
-    # 1. Calculate RSI (Period 14)
-    rsi_indicator = ta.momentum.RSIIndicator(close=df['close'], window=14)
-    df['RSI'] = rsi_indicator.rsi().astype('float32')
+    # 1. Calculate RSI's
+    RSIs = [2,7, 14, 21, 50]
+    for rsi_period in RSIs:
+        rsi_indicator = ta.momentum.RSIIndicator(close=df['close'], window=rsi_period)
+        df[f'RSI_{rsi_period}'] = rsi_indicator.rsi().astype('float32')
 
     # 2. Calculate ATR (Period 14)
     atr_indicator = ta.volatility.AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14)
