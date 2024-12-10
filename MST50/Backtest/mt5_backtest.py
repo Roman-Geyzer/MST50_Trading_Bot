@@ -50,7 +50,7 @@ import time
 # Constants
 backtest_end_relative_to_today = 180
 leverage = 100  # Assuming leverage of 1:100
-contract_size = 100000  # For Forex standard lots
+contract_size = 100_000  # For Forex standard lots
 leverage_contract_ratio = contract_size/leverage
 
 constants = get_constants()
@@ -64,7 +64,7 @@ TRADE_RETCODES = constants['TRADE_RETCODES']
 
 drive = "x:" if os.name == 'nt' else "/Volumes/TM"
 
-initial_balance = 100_000.0
+initial_balance = 1_000_000.0
 
 def collect_usd_currency_pairs_and_non_usd_bases(symbols):
 	"""
@@ -580,6 +580,7 @@ class MT5Backtest:
 		# Calculate required margin (simplified)
 		required_margin =  volume  * leverage_contract_ratio # (contract_size * volume ) / leverage
 
+		#TODO: implement logic to exit backtest and return prameters
 		if required_margin > self.account['free_margin']:
 			print("Not enough free margin to open position.")
 			print(f"Required margin: {required_margin}, Free margin: {self.account['free_margin']}")
@@ -1238,7 +1239,13 @@ def last_error():
 	Returns:
 		tuple: (error_code, error_description)
 	"""
-	return backtest.last_error()
+	print("************************************************************************************************")
+	print("################################################################################################")
+	print(f"last_error() was called but it is not implemented in backtest mode.")
+	print("################################################################################################")
+	print("************************************************************************************************")
+
+	# return backtest.last_error()
 
 def time_current():
 	"""

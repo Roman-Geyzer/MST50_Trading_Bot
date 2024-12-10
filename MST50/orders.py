@@ -55,6 +55,7 @@ def calculate_lot_size(symbol: str, trade_risk_percent: float,fixed_order_size: 
     """
 
     # Get account balance
+    # TODO - update the method to get the account balance in the header (it's the 3rd time we are calling it in the open trade loop)
     account_balance = account_info()['balance']
     if fixed_order_size:
         lot_size = trade_risk_percent * account_balance / 100000

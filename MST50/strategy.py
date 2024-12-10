@@ -72,6 +72,7 @@ class Strategy:
             strategy_config (dict): A dictionary containing the strategy's configuration parameters.
         """
         self.config = strategy_config
+        self.num = strategy_config['strategy_num']
         self.symbols = strategy_config['symbols']  # List of symbols to trade
         self.timeframe = strategy_config['timeframe']
         self.str_timeframe = get_timeframe_string(self.timeframe)
@@ -87,6 +88,7 @@ class Strategy:
 
         self.start_hour_trading = strategy_config['tradeP_hour_start']
         self.end_hour_trading = self.start_hour_trading + strategy_config['tradeP_hour_length']
+        self.trading_days = strategy_config['tradeP_days']
 
         # Initialize required columns set
         self.required_columns = set(['time', 'open', 'high', 'low', 'close', 'spread'])
@@ -95,7 +97,7 @@ class Strategy:
         self.required_columns.update(['ATR', 'RSI'])
 
         # Initialize Indicators and collect required columns(in rates df) based on indicators
-        self.init_indicators_and_collect_required_columns()
+        self.init_indicators_and_collect_required_columns(strategy_config['indicators'])
 
         self.candle_params = strategy_config['candle_params']
         # current_tf 
@@ -198,9 +200,9 @@ class Strategy:
             # self.backtest_str_tf = get_timeframe_string(self.backtest_tf)
 
         self.rsi_signal = RSISignal(
-            rsi_period=self.config.get('filterP_rsi_period', 14),
-            max_deviation=self.config['filterP_max_rsi_deviation'],
-            min_deviation=self.config['filterP_min_rsi_deviation']
+            rsi_period=strategy_config.get('filterP_rsi_period', 14),
+            max_deviation=strategy_config['filterP_max_rsi_deviation'],
+            min_deviation=strategy_config['filterP_min_rsi_deviation']
         )
 
         
@@ -240,7 +242,7 @@ class Strategy:
                 #TODO: update the header for errors
                 pass
         
-    def init_indicators_and_collect_required_columns(self):
+    def init_indicators_and_collect_required_columns(self, indicators_config):
         """
         Initialize indicator and collect the required columns based on the indicators used in the strategy.
         """
@@ -252,7 +254,7 @@ class Strategy:
 
 
         for i in range(3):  # Loop through the indicators (only 3 indicators are supported)
-            indicator_config = self.config['indicators'][f'indicator_{i+1}']
+            indicator_config = indicators_config[f'indicator_{i+1}']
             if indicator_config['indicator_name']:
                 self.indicators.append(Indicators(indicator_config))
                 if indicator_config['indicator_use'] in ['Enter', 'Both']:
@@ -449,7 +451,7 @@ class Strategy:
             return False # Exit the method early if not in trading hours
         current_day = str(time_current().weekday())
         
-        if current_day not in self.config['tradeP_days']:
+        if current_day not in self.trading_days:
             return  False # Exit the method early if not a trading day
         
         # add more based on candles and other filters
@@ -576,20 +578,27 @@ class Strategy:
         """
         #TODO: update this method per the original mql5 code - need to use paremeters from the strategy config ???
         trade_type = get_mt5_trade_type(TRADE_DIRECTION(direction))
-        price = self.get_price(symbol, direction)
+
         #round price to the nearest pip
         price = round(price, symbol_info(symbol)['digits'])
         if ticket > 0:
+            # get the "opposite" price for the close trade
+            if direction == TRADE_DIRECTION.BUY:
+                price = self.get_price(symbol, TRADE_DIRECTION.SELL)
+            elif direction == TRADE_DIRECTION.SELL:
+                price = self.get_price(symbol, TRADE_DIRECTION.BUY)
             position = positions_get(ticket=ticket)
             volume = position['volume']
             magic_num = position['magic']
         else:
+            #TODO: sent the symbol inforaton to the function - it calls it again and that's a waste
+            price = self.get_price(symbol, direction)
             sl, tp = calculate_sl_tp(price, direction,self.sl_method_function,  self.tp_method_function, symbol, rates)
             #pyro can't get np.float64
             if not BACKTEST_MODE:
                 sl = float(sl)
                 tp = float(tp)
-            volume = calculate_lot_size(symbol, self.config['tradeP_risk'], self.fixed_order_size,sl)
+            volume = calculate_lot_size(symbol, self.trade_risk, self.fixed_order_size,sl)
             magic_num = get_final_magic_number(symbol, self.magic_num)
 
         request = {
@@ -616,13 +625,7 @@ class Strategy:
         used in order to retry the order in case of failure
         """
         request = self.fill_request_data(direction, symbol, ticket, comment, rates)
-        result =  order_send(request)
-        if result['retcode'] == TRADE_ACTIONS['DONE']:
-            ticket = result['order']
-            self.open_trades[ticket] = result
-            # Order succeeded, store trade info
-            #print(f"Opened {direction} trade on {symbol}, ticket: {result['order']}")
-        return result
+        return order_send(request) # i.e. - result, dict with order info
     
     def prep_and_close(self, direction, symbol, ticket, comment):
         """
@@ -746,15 +749,17 @@ class Strategy:
             print("mt5.last_error:", last_error())
         else:
             # Order succeeded, store trade info
+            ticket = result['order']
+            # Aditional trade info
             trade_info = {
-                'symbol': symbol,
                 'time': time.time(),
                 'direction': direction,
-                'ticket': result['order']
             }
-            self.open_trades[result['order']] = trade_info
+            result.update(trade_info)
+            self.open_trades[ticket] = result
             # TODO: log the trade
-            msg = f"Opened {direction} trade on {symbol}, ticket: {result['order']}"
+            msg = f"Opened {direction} trade on {symbol}, ticket: {ticket}"
+            print(msg)
 
 
 
@@ -880,7 +885,7 @@ class Strategy:
         """
         direction = position['type']  
         current_sl = position['sl']
-        sl_price = [position['sl']]
+        sl_price = position['sl']
         open_price = position['price_open']
         symbol_i = symbol_info(symbol_str)
         pip = symbol_i['point'] * 10 # pip is 10* point
@@ -892,15 +897,16 @@ class Strategy:
         atr = rates['ATR'][-1]
         current_price = m1_rates['close'][-1]
 
+        sl_prices = [sl_price]
         for func in self.trail_functions:
-            sl_price.append(func(price = current_price, current_sl = current_sl, direction = direction, pip = pip, atr = atr, tf_rates = rates, m1_rates = m1_rates, open_price = open_price))
+            sl_prices.append(func(price = current_price, current_sl = current_sl, direction = direction, pip = pip, atr = atr, tf_rates = rates, m1_rates = m1_rates, open_price = open_price))
 
         # check if the new SL is different from the current SL and update the trade
         if direction == 0:  # buy
-            new_sl = max(sl_price)
+            new_sl = max(sl_prices)
         else:  # sell
-            new_sl = min(sl_price)
-        if new_sl and abs(new_sl - current_sl) > 10 * min_pips_for_trail_update * pip: # update the SL only if the new SL is different from the current SL
+            new_sl = min(sl_prices)
+        if abs(new_sl - current_sl) > min_pips_for_trail_update * pip: # update the SL only if the new SL is different from the current SL
             new_sl = round(new_sl, symbol_i['digits'])
             self.update_trade(trade_id=trade_id, position=position, new_sl=new_sl)
 
