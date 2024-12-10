@@ -133,3 +133,17 @@ cython_debug/
 docs/_build/
 documentation
 documentation/
+
+# charts folder
+charts/
+
+# all png files
+*.png
+
+# all html and prof files
+*.html
+*.prof
+
+# other
+scalene_report.txt
+profile.json

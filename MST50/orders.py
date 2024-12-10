@@ -31,6 +31,7 @@ from .mt5_interface import (
 )
 from .constants import TRADE_DIRECTION
 from .utils import print_with_info
+import pandas as pd
 
 # Helper dictionaries
 trade_dict = {
@@ -76,6 +77,25 @@ def calculate_lot_size(symbol: str, trade_risk_percent: float,fixed_order_size: 
     lot_size = round(lot_size, 2)
     lot_size = max(0.01, lot_size)  # Minimum lot size is 0.01
     return lot_size
+
+def calculate_bars_in_trade(trade_info, rates):
+    """
+    Calculate the number of bars since the trade was opened.
+
+    Parameters:
+        trade_info (dict): Information about the trade.
+        rates (np.recarray): Rates data.
+
+    Returns:
+        int: Number of bars since the trade was opened.
+    """
+    open_time = trade_info['time']
+    trade_time = pd.to_datetime(open_time, unit='s')
+    latest_bar_time = pd.to_datetime(rates['time'][-1], unit='s')
+    time_diff = latest_bar_time - trade_time
+    bar_duration = pd.Timedelta(minutes=1)  # Adjust based on timeframe if needed
+    bars = int(time_diff / bar_duration)
+    return bars
 
 def get_mt5_trade_type(direction):
     """
@@ -123,13 +143,14 @@ def calculate_sl_tp(price, direction, sl_method, tp_method, symbol, rates):
     """
     symbol_i = symbol_info(symbol)
     pip = symbol_i['point'] * 10
+    digits = symbol_i['digits']
 
     sl = sl_method(price = price, direction = direction, symbol = symbol, pip = pip, rates = rates)
     tp = tp_method(price = price, direction = direction, symbol = symbol, pip = pip, rates = rates, sl = sl)
 
     # Round to the number of decimal places based on the disigt (pip size)
-    sl = round(sl, symbol_i['digits'])
-    tp = round(tp, symbol_i['digits'])
+    sl = round(sl, digits)
+    tp = round(tp, digits)
 
     return sl, tp
 
@@ -612,10 +633,10 @@ def UseCandles_Trail_Close(price, current_sl,  direction, pip, atr, tf_rates, m1
         float : New stop-loss price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY: # Buy
-        trail_prices = tf_rates['close'][-trail_param:-1]
+        trail_prices = tf_rates['close'][-trail_param:]
         trail_price = min(trail_prices)
     elif direction == 1 or direction == TRADE_DIRECTION.SELL: # Sell
-        trail_prices = tf_rates['close'][-trail_param:-1]
+        trail_prices = tf_rates['close'][-trail_param:]
         trail_price = max(trail_prices)
     return trail_price
 
@@ -639,10 +660,10 @@ def UseCandles_Trail_Extreme(price, current_sl,  direction, pip, atr, tf_rates, 
         float : New stop-loss price.
     """
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
-        trail_prices = tf_rates['low'][-trail_param:-1]
+        trail_prices = tf_rates['low'][-trail_param:]
         trail_price = min(trail_prices)
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
-        trail_prices = tf_rates['high'][-trail_param:-1]
+        trail_prices = tf_rates['high'][-trail_param:]
         trail_price = max(trail_prices)
     return trail_price
 
@@ -756,7 +777,7 @@ def calculate_fast_trail(price, current_sl,  direction, pip, atr, tf_rates, m1_r
 
     if direction == 0 or direction == TRADE_DIRECTION.BUY:
         # Get the minimum low in the last N minutes 
-        MinutesMin = m1_rates['low'][-(trail_param):].min()
+        MinutesMin = m1_rates['low'][-trail_param:].min()
         UpMove = price - MinutesMin
         if UpMove > start_multi * atr:
             trail_price = price - trail_multi * atr
@@ -765,7 +786,7 @@ def calculate_fast_trail(price, current_sl,  direction, pip, atr, tf_rates, m1_r
             return current_sl
     elif direction == 1 or direction == TRADE_DIRECTION.SELL:
         # Get the maximum high in the last N minutes 
-        MinutesMax = m1_rates['high'][-(trail_param):].max()
+        MinutesMax = m1_rates['high'][-trail_param:].max()
         DownMove = MinutesMax - price
         if DownMove > start_multi * atr:
             trail_price = price + trail_multi * atr

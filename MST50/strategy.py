@@ -37,7 +37,7 @@ BACKTEST_MODE = os.environ.get('BACKTEST_MODE', 'False') == 'True'
 from .utils import (load_config,  get_final_magic_number, get_timeframe_string,
                     print_hashtaged_msg, attempt_with_stages_and_delay,print_with_info, get_mt5_timeframe)
 from .orders import (calculate_lot_size, calculate_sl_tp, get_mt5_trade_type, get_trade_direction, calculate_fast_trail, calculate_breakeven,
-                     get_trail_method, get_sl_method, get_tp_method)
+                     get_trail_method, get_sl_method, get_tp_method, calculate_bars_in_trade)
 from .indicators import Indicators
 from .constants import DEVIATION, TRADE_DIRECTION
 from .signals import RSISignal
@@ -579,9 +579,7 @@ class Strategy:
         #TODO: update this method per the original mql5 code - need to use paremeters from the strategy config ???
         trade_type = get_mt5_trade_type(TRADE_DIRECTION(direction))
 
-        #round price to the nearest pip
-        price = round(price, symbol_info(symbol)['digits'])
-        if ticket > 0:
+        if ticket > 0: # close trade
             # get the "opposite" price for the close trade
             if direction == TRADE_DIRECTION.BUY:
                 price = self.get_price(symbol, TRADE_DIRECTION.SELL)
@@ -590,7 +588,7 @@ class Strategy:
             position = positions_get(ticket=ticket)
             volume = position['volume']
             magic_num = position['magic']
-        else:
+        else: # open trade
             #TODO: sent the symbol inforaton to the function - it calls it again and that's a waste
             price = self.get_price(symbol, direction)
             sl, tp = calculate_sl_tp(price, direction,self.sl_method_function,  self.tp_method_function, symbol, rates)
@@ -600,6 +598,10 @@ class Strategy:
                 tp = float(tp)
             volume = calculate_lot_size(symbol, self.trade_risk, self.fixed_order_size,sl)
             magic_num = get_final_magic_number(symbol, self.magic_num)
+
+        #TODO: check if I can get the symbol info from the symbol object
+        #round price to the nearest pip
+        price = round(price, symbol_info(symbol)['digits'])
 
         request = {
             "action": TRADE_ACTIONS['DEAL'],
@@ -704,7 +706,7 @@ class Strategy:
         returns:
             prict (float): The current price for the symbol.
         """
-
+        # TODO: check if symbol info can be sent to the method to avoid calling it again
         if direction == TRADE_DIRECTION.BUY or direction == TRADE_DIRECTION.BUY.value:
             return symbol_info_tick(symbol)['ask']
         elif direction == TRADE_DIRECTION.SELL or direction == TRADE_DIRECTION.SELL.value:
@@ -835,7 +837,7 @@ class Strategy:
 
             # Check bars close condition
             if self.bars_close: # only if flag is relevent
-                bars_in_trade = self.calculate_bars_in_trade(trade_info, rates)
+                bars_in_trade = calculate_bars_in_trade(trade_info, rates)
                 if bars_in_trade >= self.bars_count_to_close:
                     print(f"Closing trade {trade_id} due to bars close condition.")
                     self.close_trade_loop(position)
@@ -951,23 +953,6 @@ class Strategy:
 
 
     
-    def calculate_bars_in_trade(self, trade_info, rates):
-        """
-        Calculate the number of bars since the trade was opened.
 
-        Parameters:
-            trade_info (dict): Information about the trade.
-            rates (np.recarray): Rates data.
-
-        Returns:
-            int: Number of bars since the trade was opened.
-        """
-        open_time = trade_info['time']
-        trade_time = pd.to_datetime(open_time, unit='s')
-        latest_bar_time = pd.to_datetime(rates['time'][-1], unit='s')
-        time_diff = latest_bar_time - trade_time
-        bar_duration = pd.Timedelta(minutes=1)  # Adjust based on timeframe if needed
-        bars = int(time_diff / bar_duration)
-        return bars
 
 

@@ -43,13 +43,95 @@ timeframes = [
 ]
 
 # SR Parameters
-SR_PARAMS = {
-    'period_for_sr': 100,                # Lookback period for SR levels
-    'touches_for_sr': 3,                 # Number of touches for SR levels
-    'slack_for_sr_atr_div': 10.0,        # Slack for SR levels based on ATR
-    'atr_rejection_multiplier': 1.0,     # ATR rejection multiplier for SR levels
+# Lookback period for SR levels, number of touches,Slack for SR levels based on ATR  , ATR rejection multiplier
+SR_configs = [
+        (75,  3, 5, 0.5 , 'SR75_3_5_0.5'),
+        (200, 3, 5, 0.5 , 'SR200_3_5_0.5'),
+        (500, 3, 5, 0.5 , 'SR500_3_5_0.5'),
+        (75,  4, 5, 0.5 , 'SR75_4_5_0.5'),
+        (200, 4, 5, 0.5 , 'SR200_4_5_0.5'),
+        (500, 4, 5, 0.5 , 'SR500_4_5_0.5'),
+        (75,  5, 5, 0.5 , 'SR75_5_5_0.5'),
+        (200, 5, 5, 0.5 , 'SR200_5_5_0.5'),
+        (500, 5, 5, 0.5 , 'SR500_5_5_0.5'),
+        (75,  3, 10, 0.5 , 'SR75_3_10_0.5'),
+        (200, 3, 10, 0.5 , 'SR200_3_10_0.5'),
+        (500, 3, 10, 0.5 , 'SR500_3_10_0.5'),
+        (75,  4, 10, 0.5 , 'SR75_4_10_0.5'),
+        (200, 4, 10, 0.5 , 'SR200_4_10_0.5'),
+        (500, 4, 10, 0.5 , 'SR500_4_10_0.5'),
+        (75,  5, 10, 0.5 , 'SR75_5_10_0.5'),
+        (200, 5, 10, 0.5 , 'SR200_5_10_0.5'),
+        (500, 5, 10, 0.5 , 'SR500_5_10_0.5'),
+        (75,  3, 15, 0.5 , 'SR75_3_15_0.5'),
+        (200, 3, 15, 0.5 , 'SR200_3_15_0.5'),
+        (500, 3, 15, 0.5 , 'SR500_3_15_0.5'),
+        (75,  4, 15, 0.5 , 'SR75_4_15_0.5'),
+        (200, 4, 15, 0.5 , 'SR200_4_15_0.5'),
+        (500, 4, 15, 0.5 , 'SR500_4_15_0.5'),
+        (75,  5, 15, 0.5 , 'SR75_5_15_0.5'),
+        (200, 5, 15, 0.5 , 'SR200_5_15_0.5'),
+        (500, 5, 15, 0.5 , 'SR500_5_15_0.5'),
+        (75,  3, 5, 1.0 , 'SR75_3_5_1.0'),
+        (200, 3, 5, 1.0 , 'SR200_3_5_1.0'),
+        (500, 3, 5, 1.0 , 'SR500_3_5_1.0'),
+        (75,  4, 5, 1.0 , 'SR75_4_5_1.0'),
+        (200, 4, 5, 1.0 , 'SR200_4_5_1.0'),
+        (500, 4, 5, 1.0 , 'SR500_4_5_1.0'),
+        (75,  5, 5, 1.0 , 'SR75_5_5_1.0'),
+        (200, 5, 5, 1.0 , 'SR200_5_5_1.0'),
+        (500, 5, 5, 1.0 , 'SR500_5_5_1.0'),
+        (75,  3, 10, 1.0 , 'SR75_3_10_1.0'),
+        (200, 3, 10, 1.0 , 'SR200_3_10_1.0'),
+        (500, 3, 10, 1.0 , 'SR500_3_10_1.0'),
+        (75,  3, 10, 1.0 , 'SR75_4_10_1.0'),
+        (200, 4, 10, 1.0 , 'SR200_4_10_1.0'),
+        (500, 4, 10, 1.0 , 'SR500_4_10_1.0'),
+        (75,  5, 10, 1.0 , 'SR75_5_10_1.0'),
+        (200, 5, 10, 1.0 , 'SR200_5_10_1.0'),
+        (500, 5, 10, 1.0 , 'SR500_5_10_1.0'),
+        (75,  3, 15, 1.0 , 'SR75_3_15_1.0'),
+        (200, 3, 15, 1.0 , 'SR200_3_15_1.0'),
+        (500, 3, 15, 1.0 , 'SR500_3_15_1.0'),
+        (75,  4, 15, 1.0 , 'SR75_4_15_1.0'),
+        (200, 4, 15, 1.0 , 'SR200_4_15_1.0'),
+        (500, 4, 15, 1.0 , 'SR500_4_15_1.0'),
+        (75,  5, 15, 1.0 , 'SR75_5_15_1.0'),
+        (200, 5, 15, 1.0 , 'SR200_5_15_1.0'),
+        (500, 5, 15, 1.0 , 'SR500_5_15_1.0'),
+        (75,  3, 5, 1.5 , 'SR75_3_5_1.5'),
+        (200, 3, 5, 1.5 , 'SR200_3_5_1.5'),
+        (500,  3, 5, 1.5 , 'SR500_3_5_1.5'),
+        (75,   4, 5, 1.5 , 'SR75_4_5_1.5'),
+        (200,  4, 5, 1.5 , 'SR200_4_5_1.5'),
+        (500,  4, 5, 1.5 , 'SR500_4_5_1.5'),
+        (75,   5, 5, 1.5 , 'SR75_5_5_1.5'),
+        (200,  5, 5, 1.5 , 'SR200_5_5_1.5'),
+        (500,  5, 5, 1.5 , 'SR500_5_5_1.5'),
+        (75,   3, 10, 1.5 , 'SR75_3_10_1.5'),
+        (200,  3, 10, 1.5 , 'SR200_3_10_1.5'),
+        (500,  3, 10, 1.5 , 'SR500_3_10_1.5'),
+        (75,   4, 10, 1.5 , 'SR75_4_10_1.5'),
+        (200,  4, 10, 1.5 , 'SR200_4_10_1.5'),
+        (500,  4, 10, 1.5 , 'SR500_4_10_1.5'),
+        (75,   5, 10, 1.5 , 'SR75_5_10_1.5'),
+        (200,  5, 10, 1.5 , 'SR200_5_10_1.5'),
+        (500,  5, 10, 1.5 , 'SR500_5_10_1.5'),
+        (75,   3, 15, 1.5 , 'SR75_3_15_1.5'),
+        (200,  3, 15, 1.5 , 'SR200_3_15_1.5'),
+        (500,  3, 15, 1.5 , 'SR500_3_15_1.5'),
+        (75,   4, 15, 1.5 , 'SR75_4_15_1.5'),
+        (200,  4, 15, 1.5 , 'SR200_4_15_1.5'),
+        (500,  4, 15, 1.5 , 'SR500_4_15_1.5'),
+        (75,   5, 15, 1.5 , 'SR75_5_15_1.5'),
+        (200,  5, 15, 1.5 , 'SR200_5_15_1.5'),
+        (500,  5, 15, 1.5 , 'SR500_5_15_1.5'),
+    ]
+
+
+fixed_SR_params = {
     'min_height_of_sr_distance': 3.0,    # Min height of SR distance - used in calculating SR levels
-    'max_height_of_sr_distance': 30.0,   # Max height of SR distance - used in calculating SR levels
+    'max_height_of_sr_distance': 50.0,   # Max height of SR distance - used in calculating SR levels
 }
 
 def calculate_indicators(df, pip):
@@ -81,9 +163,15 @@ def calculate_indicators(df, pip):
 
     # 3. Calculate Bollinger Bands with different deviations
     bollinger_settings = [
-        (20, 1.5, 'BB15'),
-        (20, 2.0, 'BB20'),
-        (20, 2.5, 'BB25')
+        (15, 1.5, 'BB15_1.5'),
+        (15, 2.0, 'BB15_2.0'),
+        (15, 2.5, 'BB15_2.5'),
+        (20, 1.5, 'BB20_1.5'),
+        (20, 2.0, 'BB20_2.0'),
+        (20, 2.5, 'BB20_2.5'),
+        (25, 1.5, 'BB25_1.5'),
+        (25, 2.0, 'BB25_2.0'),
+        (25, 2.5, 'BB25_2.5'),
     ]
 
     for period, deviation, label in bollinger_settings:
@@ -158,9 +246,14 @@ def rolling_sum_numba(data, window):
         result[i] = np.nan
     return result
 
-def calculate_sr_levels(df, sr_params):
+def calculate_sr_levels(df, sr_params, upper_sr_col, lower_sr_col):
     """
     Calculate Support and Resistance (SR) levels and add them as new columns to the DataFrame.
+    Parameters:
+        df (pd.DataFrame): DataFrame containing historical price data.
+        sr_params (dict): Dictionary containing SR calculation parameters.
+        upper_sr_col (str): Column name for the upper SR levels.
+        lower_sr_col (str): Column name for the lower SR levels.
     """
     # Initialize SR columns with default values
     df['upper_sr'] = 0.0
@@ -192,8 +285,8 @@ def calculate_sr_levels(df, sr_params):
         atr_rejection_multiplier, min_height_of_sr_distance, max_height_of_sr_distance
     )
 
-    df['upper_sr'] = upper_sr_array
-    df['lower_sr'] = lower_sr_array
+    df[upper_sr_col] = upper_sr_array
+    df[lower_sr_col] = lower_sr_array
 
     return df
 
@@ -356,14 +449,32 @@ def process_symbol_timeframe(args):
         return
 
     # Calculate SR levels
-    try:
-        df = calculate_sr_levels(df, SR_PARAMS)
-    except Exception as e:
-        print(f"    Error calculating SR levels: {e}")
-        return
+        # Iterate over each SR configuration
+    for config in SR_configs:
+        period_for_sr, touches_for_sr, slack_for_sr_atr_div, atr_rejection_multiplier, config_id = config
+        
+        # Update SR_PARAMS with current configuration
+        SR_PARAMS = {
+            'period_for_sr': period_for_sr,
+            'touches_for_sr': touches_for_sr,
+            'slack_for_sr_atr_div': slack_for_sr_atr_div,
+            'atr_rejection_multiplier': atr_rejection_multiplier,
+        }
+        SR_PARAMS.update(fixed_SR_params)
+        
+        print(f"Calculating SR levels for configuration: {config_id}")
+        
+        try:
+            # Calculate SR levels on a copy to avoid overwriting
+            df = calculate_sr_levels(df.copy(), SR_PARAMS, f"upper_{config_id}", f"lower_{config_id}")
+            print(f"    Calculated SR levels for {config_id}")
+        except Exception as e:
+            print(f"    Error calculating SR levels for {config_id}: {e}")
+            continue  # Skip to the next configuration
 
-    # Handle potential NaN values resulting from SR calculation
-    df[['upper_sr', 'lower_sr']] = df[['upper_sr', 'lower_sr']].fillna(0)
+        # Handle potential NaN values resulting from SR calculation
+        df[[f"upper_{config_id}", f"lower_{config_id}"]] = df[[f"upper_{config_id}", f"lower_{config_id}"]].fillna(0)
+        
 
     # Save updated data to Parquet
     try:
