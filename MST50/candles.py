@@ -766,6 +766,7 @@ class KangarooTailPartial(Pattern):
         return None
 
 
+#TODO: remove this pattern
 class Fakeout(Pattern):
     """
     Fakeout pattern.

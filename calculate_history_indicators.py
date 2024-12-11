@@ -42,15 +42,12 @@ timeframes = [
     'W1',
 ]
 
-# Candlestick patterns supprt functions and variables
+# Candlestick patterns supprt functions and variable
 
 
-ENGULF = 0
-HARAMI = 1
-DOJI = 2
-HAMMER = 3
-INVERTED_HAMMER = 4
-MARUBOZU = 5
+MARUBOZU = 3
+BULLISH_MARUBOZU = 4
+BEARISH_MARUBOZU = 5
 SAME_COLOR = 6
 HH = 7
 LL = 8
@@ -59,12 +56,9 @@ LLLC = 10
 
 # Map comparison types to integer codes
 comparison_mapping = {
-    'Engulf': ENGULF,
-    'Harami': HARAMI,
-    'Doji': DOJI,
-    'Hammer': HAMMER,
-    'Inverted_Hammer': INVERTED_HAMMER,
     'Marubozu': MARUBOZU,
+    'Bullish_Marubozu': BULLISH_MARUBOZU,
+    'Bearish_Marubozu': BEARISH_MARUBOZU,
     'Same_Color': SAME_COLOR,
     'HH': HH,
     'LL': LL,
@@ -96,23 +90,14 @@ def count_consecutive(df, comparison_type):
     
     for i in range(1, n):
         condition = False
-        if comparison_type == ENGULF:
-            if df['Engulf'][i]:
+        if comparison_type == MARUBOZU:
+            if df['Marubozu'][i] and df['canal_color'][i] == df['candle_color'][-1]: # Check if the current candle is a Marubozu with the same color as the previous candle
                 condition = True
-        elif comparison_type == HARAMI:
-            if df['Harami'][i]:
+        elif comparison_type == BULLISH_MARUBOZU:
+            if df['Bullish_Marubozu'][i]:
                 condition = True
-        elif comparison_type == DOJI:
-            if df['Doji'][i]:
-                condition = True
-        elif comparison_type == HAMMER:
-            if df['Hammer'][i]:
-                condition = True
-        elif comparison_type == INVERTED_HAMMER:
-            if df['Inverted_Hammer'][i]:
-                condition = True
-        elif comparison_type == MARUBOZU:
-            if df['Marubozu'][i]:
+        elif comparison_type == BEARISH_MARUBOZU:
+            if df['Bearish_Marubozu'][i]:
                 condition = True
         elif comparison_type == SAME_COLOR:
             if df['candle_color'][i] == df['candle_color'][i - 1]:
@@ -138,16 +123,237 @@ def count_consecutive(df, comparison_type):
 
 
 
-# Function to apply the count_consecutive with a given comparison type
-def apply_consecutive_count(df, comparison):
-    comparison_code = comparison_mapping.get(comparison)
+def apply_consecutive_count(df, pattern, column_name, window=10):
+    """Count consecutive occurrences of a boolean pattern."""
+    arr = df[pattern].astype(bool).values
+    count_arr = np.zeros(len(arr), dtype=np.int8)
+    consec = 0
+    for i in range(len(arr)):
+        if arr[i]:
+            consec += 1
+        else:
+            consec = 0
+        count_arr[i] = consec
+    df[column_name] = count_arr.astype(np.int8)
+
+
+@njit
+def compute_candle_measures(open_arr, high_arr, low_arr, close_arr, color_arr):
+    n = len(open_arr)
+    body_size = np.abs(close_arr - open_arr)
+    candle_size = np.abs(high_arr - low_arr)
     
-    # Apply the Numba-optimized function
-    counts = count_consecutive(df, comparison_code)
+    upper_wik_size = np.empty(n, dtype=np.float32)
+    lower_wik_size = np.empty(n, dtype=np.float32)
     
-    # Assign the counts to a new column
-    column_name = f'Consec_{comparison}'
-    df[column_name] = counts
+    for i in range(n):
+        if color_arr[i] == -1:  # Red candle
+            upper_wik_size[i] = high_arr[i] - open_arr[i]
+            lower_wik_size[i] = close_arr[i] - low_arr[i]
+        else:  # Green or Doji candle
+            upper_wik_size[i] = high_arr[i] - close_arr[i]
+            lower_wik_size[i] = open_arr[i] - low_arr[i]
+    
+    upper_wik_ratio = np.where(upper_wik_size == 0, 1000, body_size / upper_wik_size)
+    lower_wik_ratio = np.where(lower_wik_size == 0, 1000, body_size / lower_wik_size)
+
+    sum_wik = upper_wik_size + lower_wik_size
+    wik_ratio = np.where(sum_wik == 0, 10, body_size / sum_wik)
+
+    return body_size, candle_size, upper_wik_size, lower_wik_size, upper_wik_ratio, lower_wik_ratio, wik_ratio
+
+
+
+#TODO: check chatgpt functions and names
+def populate_candles_measures(df):
+    # Already defined: Body_Size, Candle_Size, Upper_Wik_Size, Lower_Wik_Size, Upper_wik_ratio, Lower_wik_ratio, wik_ratio
+    # Ensure correct dtypes for efficiency
+    df['open'] = df['open'].astype('float32')
+    df['high'] = df['high'].astype('float32')
+    df['low'] = df['low'].astype('float32')
+    df['close'] = df['close'].astype('float32')
+    df['candle_color'] = df['candle_color'].astype('int8')
+
+    body_size = np.abs(df['close'] - df['open'])
+    candle_size = np.abs(df['high'] - df['low'])
+
+    # Upper/Lower wick size depends on candle color
+    upper_wik_size = np.where(df['candle_color'] == -1,
+                              df['high'] - df['open'],
+                              df['high'] - df['close'])
+
+    lower_wik_size = np.where(df['candle_color'] == -1,
+                              df['close'] - df['low'],
+                              df['open'] - df['low'])
+
+    upper_wik_ratio = np.where(upper_wik_size == 0, 1000, body_size / upper_wik_size)
+    lower_wik_ratio = np.where(lower_wik_size == 0, 1000, body_size / lower_wik_size)
+    sum_wik = upper_wik_size + lower_wik_size
+    wik_ratio = np.where(sum_wik == 0, 10, body_size / sum_wik)
+
+    df['Body_Size'] = body_size.astype('float32')
+    df['Candle_Size'] = candle_size.astype('float32')
+    df['Upper_Wik_Size'] = upper_wik_size.astype('float32')
+    df['Lower_Wik_Size'] = lower_wik_size.astype('float32')
+    df['Upper_wik_ratio'] = upper_wik_ratio.astype('float32')
+    df['Lower_wik_ratio'] = lower_wik_ratio.astype('float32')
+    df['wik_ratio'] = wik_ratio.astype('float32')
+
+
+
+def calculate_patterns(df):
+    doji_ratio = 0.1
+    upper_quarter_threshold = 0.75
+    lower_quarter_threshold = 0.25
+    wik_ratio_threshold = 0.25
+    marubozu_threshold = 2.5
+
+    # Candle color is set before calling this function
+    populate_candles_measures(df)
+
+    # HH, LL, HHHC, LLLC from MQL5 logic (compare current with previous)
+    df['HH'] = (df['high'] > df['high'].shift(1))
+    df['LL'] = (df['low'] < df['low'].shift(1))
+    df['HHHC'] = (df['high'] > df['high'].shift(1)) & (df['close'] > df['close'].shift(1))
+    df['LLLC'] = (df['low'] < df['low'].shift(1)) & (df['close'] < df['close'].shift(1))
+
+    # Doji definition:
+    # Body small relative to candle size and body center in candle’s middle part
+    body_center = (df['open'] + df['close']) / 2
+    relative_pos = (body_center - df['low']) / df['Candle_Size']
+    df['Doji'] = (df['Body_Size'] < df['Candle_Size'] * doji_ratio) & \
+                 (relative_pos >= lower_quarter_threshold) & (relative_pos <= upper_quarter_threshold)
+
+    # Marubozu per MQL5:
+    # if max(upper_wik_ratio, lower_wik_ratio)>=marubozu_threshold && wik_ratio>1.75 && candle_color!=0
+    df['Marubozu'] = ((np.maximum(df['Upper_wik_ratio'], df['Lower_wik_ratio']) >= marubozu_threshold) &
+                      (df['wik_ratio'] > 1.75) &
+                      (df['candle_color'] != 0))
+    df['Bullish_Marubozu'] = df['Marubozu'] & (df['candle_color'] == 1)
+    df['Bearish_Marubozu'] = df['Marubozu'] & (df['candle_color'] == -1)
+
+    apply_consecutive_count(df, 'Marubozu', 'Marubozu_Count', 10)
+    apply_consecutive_count(df, 'Bullish_Marubozu', 'Bullish_Marubozu_Count', 10)
+    apply_consecutive_count(df, 'Bearish_Marubozu', 'Bearish_Marubozu_Count', 10)
+
+    # Same_Color consecutive
+    df['Same_Color'] = df['candle_color'] == df['candle_color'].shift(1)
+    apply_consecutive_count(df, 'Same_Color', 'Same_Color_Count', 10)
+
+    # HH, LL counts
+    apply_consecutive_count(df, 'HH', 'HH_Count', 10)
+    apply_consecutive_count(df, 'LL', 'LL_Count', 10)
+    apply_consecutive_count(df, 'HHHC', 'HHHC_Count', 10)
+    apply_consecutive_count(df, 'LLLC', 'LLLC_Count', 10)
+
+    # Hammer (Ham): 
+    # if wik_ratio(i)<=wik_ratio_threshold AND (Upper_Wik_Size==0 OR Lower_Wik_Size/Upper_Wik_Size>2)
+    df['Hammer'] = (df['wik_ratio'] <= wik_ratio_threshold) & \
+                   ((df['Upper_Wik_Size'] == 0) | ((df['Lower_Wik_Size'] / df['Upper_Wik_Size']) > 2))
+
+    # Inverted Hammer (InvHam):
+    # if wik_ratio(i)<=wik_ratio_threshold AND (Lower_Wik_Size==0 OR Upper_Wik_Size/Lower_Wik_Size>2)
+    df['Inverted_Hammer'] = (df['wik_ratio'] <= wik_ratio_threshold) & \
+                            ((df['Lower_Wik_Size'] == 0) | ((df['Upper_Wik_Size'] / df['Lower_Wik_Size']) > 2))
+
+    # Upper/Lower shadow patterns
+    df['upper_shadow'] = df['Upper_Wik_Size'] > df['Body_Size'] * wik_ratio_threshold
+    df['lower_shadow'] = df['Lower_Wik_Size'] > df['Body_Size'] * wik_ratio_threshold
+    df['upper_shadow_doji'] = df['upper_shadow'] & df['Doji']
+    df['lower_shadow_doji'] = df['lower_shadow'] & df['Doji']
+
+    # Outside/Inside Bar per MQL5
+    df['Outside_Bar'] = (df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
+    df['Inside_Bar'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
+
+    # Engulf per MQL5 (using previous candle):
+    # opposite colors and current body engulfs previous body
+    # Bullish: current green: open <= prev close & close >= prev open
+    # Bearish: current red:   open >= prev close & close <= prev open
+    df['Engulf'] = ((df['candle_color'] != df['candle_color'].shift(1)) &
+                    (((df['candle_color'] == 1) & (df['open'] <= df['close'].shift(1)) & (df['close'] >= df['open'].shift(1))) |
+                     ((df['candle_color'] == -1) & (df['open'] >= df['close'].shift(1)) & (df['close'] <= df['open'].shift(1)))))
+
+    # Bullish/Bearish Engulfing can be derived from Engulf if needed or kept separate
+    df['Bullish_Engulfing'] = (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & df['Engulf']
+    df['Bearish_Engulfing'] = (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & df['Engulf']
+
+    # Marubozu followed by a Doji:
+    df['Marubozu_Doji'] = df['Marubozu'] & df['Doji'].shift(-1)
+
+    # Bullish Harami & Bearish Harami
+    # (No direct MQL5 code given, assume logic remains same)
+    df['Bullish_Harami'] = (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & df['Inside_Bar']
+    df['Bearish_Harami'] = (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & df['Inside_Bar']
+
+    # Use MQL5 logic for Kangaroo Tail, Partial Kangaroo Tail, etc.:
+    # KangoroTail per MQL5:
+    # For bullish: LHLL(2) && HHHL(1)
+    # For bearish: HHHL(2) && LHLL(1)
+    # We'll define HHHL(i) and LHLL(i) in terms of shift logic:
+    # HHHL(i): high[i]>high[i+1] and low[i]>low[i+1]
+    # In pandas: for HHHL at i: (high[i]>high[i-1]) & (low[i]>low[i-1])
+    # Adjust indexing as needed. For simplicity, we reuse HH/LL logic:
+    # We'll define helper columns:
+    df['HHHL'] = (df['high'] > df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
+    df['LHLL'] = (df['high'] < df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
+
+    # KangoroTail logic:
+    # If previous candle color ==1 (bullish):
+    #   if LHLL(2) && HHHL(1) true
+    # If previous candle color ==-1 (bearish):
+    #   if HHHL(2) && LHLL(1) true
+    df['Kangaroo_Tail'] = ((df['candle_color'].shift(1) == 1) & df['LHLL'].shift(2) & df['HHHL'].shift(1)) | \
+                          ((df['candle_color'].shift(1) == -1) & df['HHHL'].shift(2) & df['LHLL'].shift(1))
+
+    # Partial Kangaroo Tail:
+    # LongPartialKangoro: low[2]<low[3] and low[2]<low[1]
+    df['Long_Partial_Kangaroo'] = ((df['low'].shift(2) < df['low'].shift(3)) & (df['low'].shift(2) < df['low'].shift(1)))
+    # ShortPartialKangoro: high[2]>high[3] and high[2]>high[1]
+    df['Short_Partial_Kangaroo'] = ((df['high'].shift(2) > df['high'].shift(3)) & (df['high'].shift(2) > df['high'].shift(1)))
+
+    # Hammer/Inverted Hammer already defined above
+    # Shooting_Star and Falling_Star per MQL5 logic can be re-defined using Ham/InvHam logic if desired.
+    # For simplicity, rely on Hammer & Inverted Hammer logic above.
+
+    # Morning Star / Evening Star with Doji:
+    df['Morning_Star'] = (df['candle_color'].shift(2) == -1) & (df['Doji'].shift(1)) & (df['candle_color'] == 1)
+    df['Evening_Star'] = (df['candle_color'].shift(2) == 1) & (df['Doji'].shift(1)) & (df['candle_color'] == -1)
+
+    # Three_White_Soldiers: now consider using consecutive marubozus or candle_color:
+    df['Three_White_Soldiers'] = (df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 1) & (df['candle_color'] == 1)
+    df['Three_Black_Crows'] = (df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == -1) & (df['candle_color'] == -1)
+
+    # With doji:
+    df['Three_White_Soldiers_Doji'] = df['Three_White_Soldiers'] & df['Doji'].shift(-1)
+    df['Three_Black_Crows_Doji'] = df['Three_Black_Crows'] & df['Doji'].shift(-1)
+
+    # Kicker (from MQL5 logic: color change and conditions)
+    df['Kicker'] = (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1)
+    df['Kanazawa'] = (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1)
+
+    # Kicker/Doji:
+    df['Kicker_Doji'] = df['Kicker'] & df['Doji'].shift(-1)
+    df['Kanazawa_Doji'] = df['Kanazawa'] & df['Doji'].shift(-1)
+
+    # Harami + Doji:
+    df['Bullish_Harami_Doji'] = (df['Bearish_Harami']) & df['Doji'].shift(-1)
+    df['Bearish_Harami_Doji'] = (df['Bullish_Harami']) & df['Doji'].shift(-1)
+
+    # Inside Breakout per MQL5:
+    # InsideBreakout_check_is_buy:
+    # if InBar(2) && Close[1]>High[3] -> bullish breakout
+    df['Inside_Breakout_Buy'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) > df['high'].shift(3))
+    # InsideBreakout_check_is_sell:
+    # if InBar(2) && Close[1]<Low[3] -> bearish breakout
+    df['Inside_Breakout_Sell'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) < df['low'].shift(3))
+
+    # Convert pattern columns to bool for efficiency
+    pattern_cols = [c for c in df.columns if df[c].dtype == bool or 'Count' in c]
+    for c in pattern_cols:
+        if df[c].dtype != bool and not c.endswith('_Count'):
+            df[c] = df[c].astype(bool)
+
 
 # SR Parameters
 # Lookback period for SR levels, number of touches,Slack for SR levels based on ATR  , ATR rejection multiplier
@@ -355,87 +561,21 @@ def calculate_indicators(df, pip):
     df['bid'] = df['open'] - df['spread'] * pip / 2
     df['ask'] = df['open'] + df['spread'] * pip / 2
 
+
+
     #TODO's : 
     # update and check with my candles.py
-    # update types to bool, int8, float32
     # update the columns to be added to the dataframe
     # update the columns to be dropped from the dataframe
     # update the columns to be used in the calculations
     # update for live trading...
     # update required columns in strategy.py
-    
+    # Update config.xslx - will need to account for all new (also can add columns and use multiple patterns for entering and exiting trades)
 
     # 8. Find candlestick patterns
-    df['candle_color'] = np.where(df['open'] < df['close'], 1, np.where(df['open'] > df['close'], -1, 0))  # Candle color column - 1 for green, -1 for red, 0 for doji
-    df['Doji'] = np.where(df['candle_color'] == 0, True, False)  # Doji pattern
-    df['Engulf'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1), True, False)  # Engulfing pattern
-    df['Harami'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1), True, False)  # Harami pattern
-    df['Hammer'] = np.where((df['candle_color'] == -1) & (df['low'] < df['open'] - 0.5 * (df['close'] - df['open'])), True, False)  # Hammer pattern
-    df['Inverted_Hammer'] = np.where((df['candle_color'] == 1) & (df['high'] > df['open'] + 0.5 * (df['close'] - df['open'])), True, False)  # Inverted Hammer pattern
-    df['Shooting_Star'] = np.where((df['candle_color'] == 1) & (df['high'] > df['open'] + 0.5 * (df['close'] - df['open'])), True, False)  # Shooting Star pattern
-    df['Morning_Star'] = np.where((df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == 0) & (df['candle_color'] == 1), True, False)  # Morning Star pattern
-    df['Evening_Star'] = np.where((df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 0) & (df['candle_color'] == -1), True, False)  # Evening Star pattern
-    df['Three_White_Soldiers'] = np.where((df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 1) & (df['candle_color'] == 1), True, False)  # Three White Soldiers pattern
-    df['Three_Black_Crows'] = np.where((df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == -1) & (df['candle_color'] == -1), True, False)  # Three Black Crows pattern
-    df['Marubozu'] = np.where((df['open'] == df['high']) & (df['open'] == df['low']) & (df['open'] == df['close']), True, False)  # Marubozu pattern
-    df['Outside_Bar'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1)), True, False)  # Outside Bar pattern
-    df['Inside_Bar'] = np.where((df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1)), True, False)  # Inside Bar pattern
-    df['Kicker'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1), True, False)  # Kicker pattern
-    df['Kanazawa'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1), True, False)  # Kanazawa pattern
-    df['Kangaroo_Tail'] = np.where((df['candle_color'] == -1) & (df['low'] < df['open'] - 0.5 * (df['close'] - df['open'])), True, False)  # Kangaroo Tail pattern
-    df['Partial_Kangaroo_Tail'] = np.where((df['candle_color'] == -1) & (df['low'] < df['open'] - 0.25 * (df['close'] - df['open'])), True, False)  # Partial Kangaroo Tail pattern
-    df['Bullish_Harami'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1), True, False)  # Bullish Harami pattern
-    df['Bearish_Harami'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1), True, False)  # Bearish Harami pattern
-    df['Pin_Bar'] = np.where((df['candle_color'] == -1) & (df['high'] > df['open'] + 0.5 * (df['close'] - df['open'])), True, False)  # Pin Bar pattern
-    df['Tweezer_Top'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == 1) & (df['high'] == df['high'].shift(1)), True, False)  # Tweezer Top pattern
-    df['Tweezer_Bottom'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == -1) & (df['low'] == df['low'].shift(1)), True, False)  # Tweezer Bottom pattern
-    df['Bullish_Engulfing'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1), True, False)  # Bullish Engulfing pattern
-    df['Bearish_Engulfing'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1), True, False)  # Bearish Engulfing pattern
-    df['Morning_Doji_Star'] = np.where((df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == 0) & (df['candle_color'] == 1), True, False)  # Morning Doji Star pattern
-    df['Evening_Doji_Star'] = np.where((df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 0) & (df['candle_color'] == -1), True, False)  # Evening Doji Star pattern
-    df['Three_White_Soldiers_Doji'] = np.where((df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 1) & (df['candle_color'] == 1) & (df['candle_color'].shift(-1) == 0), True, False)  # Three White Soldiers Doji pattern
-    df['Three_Black_Crows_Doji'] = np.where((df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == -1) & (df['candle_color'] == -1) & (df['candle_color'].shift(-1) == 0), True, False)  # Three Black Crows Doji pattern
-    df['Marubozu_Doji'] = np.where((df['open'] == df['high']) & (df['open'] == df['low']) & (df['open'] == df['close']) & (df['candle_color'].shift(-1) == 0), True, False)  # Marubozu Doji pattern
-    df['Outside_Bar_Doji'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1)) & (df['candle_color'].shift(-1) == 0), True, False)  # Outside Bar Doji pattern
-    df['Inside_Bar_Doji'] = np.where((df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1)) & (df['candle_color'].shift(-1) == 0), True, False)  # Inside Bar Doji pattern
-    df['Kicker_Doji'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & (df['candle_color'].shift(-1) == 0), True, False)  # Kicker Doji pattern
-    df['Kanazawa_Doji'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & (df['candle_color'].shift(-1) == 0), True, False)  # Kanazawa Doji pattern
-    df['Kangaroo_Tail_Doji'] = np.where((df['candle_color'] == -1) & (df['low'] < df['open'] - 0.5 * (df['close'] - df['open'])) & (df['candle_color'].shift(-1) == 0), True, False)  # Kangaroo Tail Doji pattern
-    df['Partial_Kangaroo_Tail_Doji'] = np.where((df['candle_color'] == -1) & (df['low'] < df['open'] - 0.25 * (df['close'] - df['open'])) & (df['candle_color'].shift(-1) == 0), True, False)  # Partial Kangaroo Tail Doji pattern
-    df['Bullish_Harami_Doji'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & (df['candle_color'].shift(-1) == 0), True, False)  # Bullish Harami Doji pattern
-    df['Bearish_Harami_Doji'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & (df['candle_color'].shift(-1) == 0), True, False)  # Bearish Harami Doji pattern
-    df['Pin_Bar_Doji'] = np.where((df['candle_color'] == -1) & (df['high'] > df['open'] + 0.5 * (df['close'] - df['open'])) & (df['candle_color'].shift(-1) == 0), True, False)  # Pin Bar Doji pattern
-    df['Tweezer_Top_Doji'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == 1) & (df['high'] == df['high'].shift(1)) & (df['candle_color'].shift(-1) == 0), True, False)  # Tweezer Top Doji pattern
-    df['Tweezer_Bottom_Doji'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == -1) & (df['low'] == df['low'].shift(1)) & (df['candle_color'].shift(-1) == 0), True, False)  # Tweezer Bottom Doji pattern
-    df['Bullish_Engulfing_Doji'] = np.where((df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & (df['candle_color'].shift(-1) == 0), True, False)  # Bullish Engulfing Doji pattern
-    df['Bearish_Engulfing_Doji'] = np.where((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & (df['candle_color'].shift(-1) == 0), True, False)  # Bearish Engulfing Doji pattern
-    df['Morning_Doji_Star_Doji'] = np.where((df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == 0) & (df['candle_color'] == 1) & (df['candle_color'].shift(-1) == 0), True, False)  # Morning Doji Star Doji pattern
-    df['Evening_Doji_Star_Doji'] = np.where((df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 0) & (df['candle_color'] == -1) & (df['candle_color'].shift(-1) == 0), True, False)  # Evening Doji Star Doji pattern
-    df['Three_White_Soldiers_Doji_Doji'] = np.where((df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 1) & (df['candle_color'] == 1) & (df['candle_color'].shift(-1) == 0), True, False)  # Three White Soldiers Doji Doji pattern
-    df['Three_Black_Crows_Doji_Doji'] = np.where((df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == -1) & (df['candle_color'] == -1) & (df['candle_color'].shift(-1) == 0), True, False)  # Three Black Crows Doji Doji pattern
-    df['Marubozu_Doji_Doji'] = np.where((df['open'] == df['high']) & (df['open'] == df['low']) & (df['open'] == df['close']) & (df['candle_color'].shift(-1) == 0), True, False)  # Marubozu Doji Doji pattern
-    df['Outside_Bar_Doji_Doji'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1)) & (df['candle_color'].shift(-1) == 0), True, False)  # Outside Bar Doji Doji pattern
-    df['Inside_Bar_Doji_Doji'] = np.where((df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1)) & (df['candle_color'].shift(-1) == 0), True, False)  # Inside Bar Doji Doji pattern
-    df['Fakey'] = np.where((df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1), True, False)  # Fakey pattern
-    df['Fakeout'] = np.where((df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1), True, False)  # Fakeout pattern 
-    df['Inside_Breakout'] = np.where((df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1)) & (df['candle_color'] == 1) & (df['candle_color'].shift(1) == -1), True, False)  # Inside Bar Breakout pattern
-    df['HH'] = np.where(df['high'] > df['high'].shift(1), True, False) # check if high is greater than the previous high
-    df['LL'] = np.where(df['low'] < df['low'].shift(1), True, False) # check if low is less than the previous low
-    df['HHHC'] = np.where((df['high'] > df['high'].shift(1)) & (df['close'] > df['close'].shift(1)), True, False) # check if high is greater than the previous high and close is greater than the previous close
-    df['LLLC'] = np.where((df['low'] < df['low'].shift(1)) & (df['close'] < df['close'].shift(1)), True, False) # check if low is less than the previous low and close is less than the previous close
+    calculate_patterns(df)
 
- 
-    apply_consecutive_count(df, 'Engulf', 'Engulf_Count', 10)  # Count of consecutive Engulfing patterns
-    apply_consecutive_count(df, 'Harami', 'Harami_Count', 10)  # Count of consecutive Harami patterns
-    apply_consecutive_count(df, 'Doji', 'Doji_Count', 10)  # Count of consecutive Doji patterns
-    apply_consecutive_count(df, 'Hammer', 'Hammer_Count', 10)  # Count of consecutive Hammer patterns
-    apply_consecutive_count(df, 'Inverted_Hammer', 'Inverted_Hammer_Count', 10)  # Count of consecutive Inverted Hammer patterns
-    apply_consecutive_count(df, 'Marubozu', 'Marubozu_Count', 10)  # Count of consecutive Marubozu patterns
-    apply_consecutive_count(df, 'Same_Color', 'Same_Color_Count', 10)  # Count of consecutive candles with the same color
-    apply_consecutive_count(df, 'HH', 'HH_Count', 10)  # Count of consecutive Higher Highs
-    apply_consecutive_count(df, 'LL', 'LL_Count', 10)  # Count of consecutive Lower Lows
-    apply_consecutive_count(df, 'HHHC', 'HHHC_Count', 10)  # Count of consecutive Higher Highs and Higher Closes
-    apply_consecutive_count(df, 'LLLC', 'LLLC_Count', 10)  # Count of consecutive Lower Lows and Lower Closes
+
 
     return df
 
