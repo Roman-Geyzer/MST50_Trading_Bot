@@ -164,7 +164,7 @@ def compute_candle_measures(open_arr, high_arr, low_arr, close_arr, color_arr):
 
 
 
-#TODO: check chatgpt functions and names
+
 def populate_candles_measures(df):
     # Already defined: Body_Size, Candle_Size, Upper_Wik_Size, Lower_Wik_Size, Upper_wik_ratio, Lower_wik_ratio, wik_ratio
     # Ensure correct dtypes for efficiency
@@ -207,6 +207,8 @@ def calculate_patterns(df):
     lower_quarter_threshold = 0.25
     wik_ratio_threshold = 0.25
     marubozu_threshold = 2.5
+
+    df['candle_color'] = np.where(df['close'] > df['open'], 1, np.where(df['close'] < df['open'], -1, 0)).astype(np.int8)
 
     # Candle color is set before calling this function
     populate_candles_measures(df)
@@ -262,11 +264,11 @@ def calculate_patterns(df):
     df['upper_shadow_doji'] = df['upper_shadow'] & df['Doji']
     df['lower_shadow_doji'] = df['lower_shadow'] & df['Doji']
 
-    # Outside/Inside Bar per MQL5
-    df['Outside_Bar'] = (df['high'] > df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
+    # Outside/Inside Bar:
+    df['Outside_Bar'] = df['HH'].shift(1) & df['LL'].shift(1)
     df['Inside_Bar'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
 
-    # Engulf per MQL5 (using previous candle):
+    # Engulf
     # opposite colors and current body engulfs previous body
     # Bullish: current green: open <= prev close & close >= prev open
     # Bearish: current red:   open >= prev close & close <= prev open
@@ -282,19 +284,13 @@ def calculate_patterns(df):
     df['Marubozu_Doji'] = df['Marubozu'] & df['Doji'].shift(-1)
 
     # Bullish Harami & Bearish Harami
-    # (No direct MQL5 code given, assume logic remains same)
     df['Bullish_Harami'] = (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & df['Inside_Bar']
     df['Bearish_Harami'] = (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & df['Inside_Bar']
 
-    # Use MQL5 logic for Kangaroo Tail, Partial Kangaroo Tail, etc.:
-    # KangoroTail per MQL5:
+    # Kangaroo Tail:
     # For bullish: LHLL(2) && HHHL(1)
     # For bearish: HHHL(2) && LHLL(1)
-    # We'll define HHHL(i) and LHLL(i) in terms of shift logic:
-    # HHHL(i): high[i]>high[i+1] and low[i]>low[i+1]
-    # In pandas: for HHHL at i: (high[i]>high[i-1]) & (low[i]>low[i-1])
-    # Adjust indexing as needed. For simplicity, we reuse HH/LL logic:
-    # We'll define helper columns:
+    # Helper columns:
     df['HHHL'] = (df['high'] > df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
     df['LHLL'] = (df['high'] < df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
 
@@ -305,12 +301,15 @@ def calculate_patterns(df):
     #   if HHHL(2) && LHLL(1) true
     df['Kangaroo_Tail'] = ((df['candle_color'].shift(1) == 1) & df['LHLL'].shift(2) & df['HHHL'].shift(1)) | \
                           ((df['candle_color'].shift(1) == -1) & df['HHHL'].shift(2) & df['LHLL'].shift(1))
+    
+    df['Kangaroo_Tail_Bullish'] = df['Kangaroo_Tail'] & (df['candle_color'] == 1)
+    df['Kangaroo_Tail_Bearish'] = df['Kangaroo_Tail'] & (df['candle_color'] == -1)
 
     # Partial Kangaroo Tail:
     # LongPartialKangoro: low[2]<low[3] and low[2]<low[1]
-    df['Long_Partial_Kangaroo'] = ((df['low'].shift(2) < df['low'].shift(3)) & (df['low'].shift(2) < df['low'].shift(1)))
+    df['Partial_Kangaroo_Bullish'] = ((df['low'].shift(2) < df['low'].shift(3)) & (df['low'].shift(2) < df['low'].shift(1)))
     # ShortPartialKangoro: high[2]>high[3] and high[2]>high[1]
-    df['Short_Partial_Kangaroo'] = ((df['high'].shift(2) > df['high'].shift(3)) & (df['high'].shift(2) > df['high'].shift(1)))
+    df['Partial_Kangaroo_Bearish'] = ((df['high'].shift(2) > df['high'].shift(3)) & (df['high'].shift(2) > df['high'].shift(1)))
 
     # Hammer/Inverted Hammer already defined above
     # Shooting_Star and Falling_Star per MQL5 logic can be re-defined using Ham/InvHam logic if desired.
@@ -343,10 +342,10 @@ def calculate_patterns(df):
     # Inside Breakout per MQL5:
     # InsideBreakout_check_is_buy:
     # if InBar(2) && Close[1]>High[3] -> bullish breakout
-    df['Inside_Breakout_Buy'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) > df['high'].shift(3))
+    df['Inside_Breakout_Bullish'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) > df['high'].shift(3))
     # InsideBreakout_check_is_sell:
     # if InBar(2) && Close[1]<Low[3] -> bearish breakout
-    df['Inside_Breakout_Sell'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) < df['low'].shift(3))
+    df['Inside_Breakout_Bearish'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) < df['low'].shift(3))
 
     # Convert pattern columns to bool for efficiency
     pattern_cols = [c for c in df.columns if df[c].dtype == bool or 'Count' in c]
@@ -467,6 +466,16 @@ def get_required_columns():
     required_columns.extend([f'GA_{window}' for window in [50, 100, 200, 500]])
     required_columns.extend([f'MA_{period}_comp' for period in [7, 21, 50]])
     required_columns.extend(['bid', 'ask'])
+    required_columns.extend(['candle_color'])
+    required_columns.extend(['Body_Size', 'Candle_Size', 'Upper_Wik_Size', 'Lower_Wik_Size', 'Upper_wik_ratio', 'Lower_wik_ratio', 'wik_ratio'])
+    required_columns.extend(['Doji', 'Marubozu', 'Bullish_Marubozu', 'Bearish_Marubozu', 'Marubozu_Count', 'Bullish_Marubozu_Count', 'Bearish_Marubozu_Count'])
+    required_columns.extend(['Same_Color', 'Same_Color_Count', 'HH', 'LL', 'HHHC', 'LLLC', 'HH_Count', 'LL_Count', 'HHHC_Count', 'LLLC_Count'])
+    required_columns.extend(['Hammer', 'Inverted_Hammer', 'upper_shadow', 'lower_shadow', 'upper_shadow_doji', 'lower_shadow_doji'])
+    required_columns.extend(['Outside_Bar', 'Inside_Bar', 'Engulf', 'Bullish_Engulfing', 'Bearish_Engulfing', 'Marubozu_Doji', 'Bullish_Harami', 'Bearish_Harami'])
+    required_columns.extend(['Kangaroo_Tail', 'Kangaroo_Tail_Bullish', 'Kangaroo_Tail_Bearish', 'Partial_Kangaroo_Bullish', 'Partial_Kangaroo_Bearish'])
+    required_columns.extend(['Morning_Star', 'Evening_Star', 'Three_White_Soldiers', 'Three_Black_Crows', 'Three_White_Soldiers_Doji', 'Three_Black_Crows_Doji'])
+    required_columns.extend(['Kicker', 'Kanazawa', 'Kicker_Doji', 'Kanazawa_Doji', 'Bullish_Harami_Doji', 'Bearish_Harami_Doji', 'Inside_Breakout_Bullish', 'Inside_Breakout_Bearish'])
+
     
     return required_columns
 
@@ -783,27 +792,39 @@ def process_symbol_timeframe(args):
         print(f"    Error reading data file: {e}")
         return
 
-    # Check if indicators are missing
-    indicators_missing = False
-    required_columns = ['RSI', 'ATR', 'BB15_Upper', 'MA_7', 'upper_sr']
+    # Ensure all required columns exist, if missing, create them with NaN
+    required_columns = get_required_columns()
     for col in required_columns:
-        if col not in df.columns or df[col].isna().any():
-            indicators_missing = True
-            break
+        if col not in df.columns:
+            df[col] = np.nan
 
-    if not indicators_missing:
+    # Identify which rows are incomplete (NaN in required columns)
+    incomplete_mask = df[required_columns].isna().any(axis=1)
+
+    if not incomplete_mask.any():
         print("    Indicators already calculated for all data.")
         return
 
-    # Calculate indicators
+    # Find the first incomplete row
+    first_incomplete_idx = np.where(incomplete_mask)[0][0]
+
+    # Start calculation 510 rows before first_incomplete_idx, if possible
+    start_idx = max(first_incomplete_idx - 510, 0)
+    df_to_calc = df.iloc[start_idx:].copy()
+
+    # Calculate indicators on the subset
     try:
-        df = calculate_indicators(df, pip)
+        df_to_calc = calculate_indicators(df_to_calc, pip)
     except Exception as e:
         print(f"    Error calculating indicators: {e}")
         return
 
-    # Calculate SR levels
-        # Iterate over each SR configuration
+    # Update main df with the newly calculated values
+    df.update(df_to_calc)
+
+    # Calculate SR levels for the entire DataFrame (or at least from start_idx if SR depends on history)
+    # If SR calculations depend on the entire history, it's simpler to recalculate for all data.
+    # If performance is a concern, you could do it from start_idx, but ensure the logic is correct.
     for config in SR_configs:
         period_for_sr, touches_for_sr, slack_for_sr_atr_div, atr_rejection_multiplier, config_id = config
         
@@ -819,7 +840,8 @@ def process_symbol_timeframe(args):
         print(f"Calculating SR levels for configuration: {config_id}")
         
         try:
-            # Calculate SR levels on a copy to avoid overwriting
+            # Recalculate SR levels for all data or at least from start_idx
+            # Here we do for all to ensure integrity:
             df = calculate_sr_levels(df.copy(), SR_PARAMS, f"upper_{config_id}", f"lower_{config_id}")
             print(f"    Calculated SR levels for {config_id}")
         except Exception as e:
@@ -828,7 +850,6 @@ def process_symbol_timeframe(args):
 
         # Handle potential NaN values resulting from SR calculation
         df[[f"upper_{config_id}", f"lower_{config_id}"]] = df[[f"upper_{config_id}", f"lower_{config_id}"]].fillna(0)
-        
 
     # Save updated data to Parquet
     try:
@@ -836,6 +857,8 @@ def process_symbol_timeframe(args):
         print(f"    Updated data with indicators saved to {filepath}")
     except Exception as e:
         print(f"    Error saving data to Parquet: {e}")
+
+
 
 def calculate_indicators_for_files():
     output_dir = os.path.join(drive, folder)
