@@ -2,8 +2,18 @@
 
 """
 This script reads historical data files for currency pairs and timeframes,
-calculates technical indicators and SR levels, and updates the data files with the new columns.
+calculates technical indicators, SR levels, and candle patterns, and updates the data files with new columns.
 It utilizes Numba for JIT compilation and multiprocessing for parallel processing to optimize performance.
+
+Logic:
+- Split into 3 groups: Indicators, SR, Candle Patterns.
+- If no data for a column in the group: calculate from start.
+- If partial data missing: find first incomplete index and recalculate only from that index - 510.
+- If full data: no recalculation.
+
+Refactored:  
+All functions now directly modify 'df' in place.  
+No function returns 'df', and no intermediate DataFrame copies for assignment.
 """
 
 import pandas as pd
@@ -42,9 +52,6 @@ timeframes = [
     'W1',
 ]
 
-# Candlestick patterns supprt functions and variable
-
-
 MARUBOZU = 3
 BULLISH_MARUBOZU = 4
 BEARISH_MARUBOZU = 5
@@ -54,7 +61,6 @@ LL = 8
 HHHC = 9
 LLLC = 10
 
-# Map comparison types to integer codes
 comparison_mapping = {
     'Marubozu': MARUBOZU,
     'Bullish_Marubozu': BULLISH_MARUBOZU,
@@ -67,74 +73,59 @@ comparison_mapping = {
 }
 
 
-@numba.njit
-def count_consecutive(df, comparison_type):
-    """
-    Counts consecutive events based on the comparison type up to each position in the array.
-
-    Parameters:
-    - df (pd.DataFrame): DataFrame containing price data and previously calculated indicators.
-    - comparison_type (int): Integer code representing the comparison type.
-
-    Returns:
-    - np.ndarray: Array of consecutive counts.
-    """
-
+def count_consecutive(df: pd.DataFrame, comparison_type: str) -> np.ndarray:
     n = len(df)
     counts = np.empty(n, dtype=np.int32)
+
     if n == 0:
         return counts
-    
-    counts[0] = 1  # The first candle has a count of 1
+
+    counts[0] = 1
     current_count = 1
-    
+
     for i in range(1, n):
         condition = False
+
         if comparison_type == MARUBOZU:
-            if df['Marubozu'][i] and df['canal_color'][i] == df['candle_color'][-1]: # Check if the current candle is a Marubozu with the same color as the previous candle
+            if df.at[i, 'Marubozu'] and df.at[i, 'candle_color'] == df.at[i - 1, 'candle_color']:
                 condition = True
+
         elif comparison_type == BULLISH_MARUBOZU:
-            if df['Bullish_Marubozu'][i]:
+            if df.at[i, 'Bullish_Marubozu']:
                 condition = True
+
         elif comparison_type == BEARISH_MARUBOZU:
-            if df['Bearish_Marubozu'][i]:
+            if df.at[i, 'Bearish_Marubozu']:
                 condition = True
+
         elif comparison_type == SAME_COLOR:
-            if df['candle_color'][i] == df['candle_color'][i - 1]:
+            if df.at[i, 'candle_color'] == df.at[i - 1, 'candle_color']:
                 condition = True
+
         elif comparison_type == HH:
-            if df['high'][i] > df['high'][i - 1]:
+            if df.at[i, 'high'] > df.at[i - 1, 'high']:
                 condition = True
+
         elif comparison_type == LL:
-            if df['low'][i] < df['low'][i - 1]:
+            if df.at[i, 'low'] < df.at[i - 1, 'low']:
                 condition = True
+
         elif comparison_type == HHHC:
-            condition = df['HHHC'][i]   # Use the HHHC column from the DataFrame
+            if df.at[i, 'HHHC']:
+                condition = True
+
         elif comparison_type == LLLC:
-            condition = df['LLLC'][i]   # Use the LLLC column from the DataFrame
+            if df.at[i, 'LLLC']:
+                condition = True
 
         if condition:
             current_count += 1
         else:
             current_count = 1
+
         counts[i] = current_count
-    
+
     return counts
-
-
-
-def apply_consecutive_count(df, pattern, column_name, window=10):
-    """Count consecutive occurrences of a boolean pattern."""
-    arr = df[pattern].astype(bool).values
-    count_arr = np.zeros(len(arr), dtype=np.int8)
-    consec = 0
-    for i in range(len(arr)):
-        if arr[i]:
-            consec += 1
-        else:
-            consec = 0
-        count_arr[i] = consec
-    df[column_name] = count_arr.astype(np.int8)
 
 
 @njit
@@ -142,457 +133,96 @@ def compute_candle_measures(open_arr, high_arr, low_arr, close_arr, color_arr):
     n = len(open_arr)
     body_size = np.abs(close_arr - open_arr)
     candle_size = np.abs(high_arr - low_arr)
-    
+
     upper_wik_size = np.empty(n, dtype=np.float32)
     lower_wik_size = np.empty(n, dtype=np.float32)
-    
+
     for i in range(n):
         if color_arr[i] == -1:  # Red candle
             upper_wik_size[i] = high_arr[i] - open_arr[i]
             lower_wik_size[i] = close_arr[i] - low_arr[i]
-        else:  # Green or Doji candle
+        else:  # Green or Doji
             upper_wik_size[i] = high_arr[i] - close_arr[i]
             lower_wik_size[i] = open_arr[i] - low_arr[i]
-    
+
     upper_wik_ratio = np.where(upper_wik_size == 0, 1000, body_size / upper_wik_size)
     lower_wik_ratio = np.where(lower_wik_size == 0, 1000, body_size / lower_wik_size)
-
     sum_wik = upper_wik_size + lower_wik_size
     wik_ratio = np.where(sum_wik == 0, 10, body_size / sum_wik)
 
     return body_size, candle_size, upper_wik_size, lower_wik_size, upper_wik_ratio, lower_wik_ratio, wik_ratio
 
 
-
-
-def populate_candles_measures(df):
-    # Already defined: Body_Size, Candle_Size, Upper_Wik_Size, Lower_Wik_Size, Upper_wik_ratio, Lower_wik_ratio, wik_ratio
-    # Ensure correct dtypes for efficiency
-    df['open'] = df['open'].astype('float32')
-    df['high'] = df['high'].astype('float32')
-    df['low'] = df['low'].astype('float32')
-    df['close'] = df['close'].astype('float32')
-    df['candle_color'] = df['candle_color'].astype('int8')
-
-    body_size = np.abs(df['close'] - df['open'])
-    candle_size = np.abs(df['high'] - df['low'])
-
-    # Upper/Lower wick size depends on candle color
-    upper_wik_size = np.where(df['candle_color'] == -1,
-                              df['high'] - df['open'],
-                              df['high'] - df['close'])
-
-    lower_wik_size = np.where(df['candle_color'] == -1,
-                              df['close'] - df['low'],
-                              df['open'] - df['low'])
-
-    upper_wik_ratio = np.where(upper_wik_size == 0, 1000, body_size / upper_wik_size)
-    lower_wik_ratio = np.where(lower_wik_size == 0, 1000, body_size / lower_wik_size)
-    sum_wik = upper_wik_size + lower_wik_size
-    wik_ratio = np.where(sum_wik == 0, 10, body_size / sum_wik)
-
-    df['Body_Size'] = body_size.astype('float32')
-    df['Candle_Size'] = candle_size.astype('float32')
-    df['Upper_Wik_Size'] = upper_wik_size.astype('float32')
-    df['Lower_Wik_Size'] = lower_wik_size.astype('float32')
-    df['Upper_wik_ratio'] = upper_wik_ratio.astype('float32')
-    df['Lower_wik_ratio'] = lower_wik_ratio.astype('float32')
-    df['wik_ratio'] = wik_ratio.astype('float32')
-
-
-
-def calculate_patterns(df):
-    doji_ratio = 0.1
-    upper_quarter_threshold = 0.75
-    lower_quarter_threshold = 0.25
-    wik_ratio_threshold = 0.25
-    marubozu_threshold = 2.5
-
-    df['candle_color'] = np.where(df['close'] > df['open'], 1, np.where(df['close'] < df['open'], -1, 0)).astype(np.int8)
-
-    # Candle color is set before calling this function
-    populate_candles_measures(df)
-
-    # HH, LL, HHHC, LLLC from MQL5 logic (compare current with previous)
-    df['HH'] = (df['high'] > df['high'].shift(1))
-    df['LL'] = (df['low'] < df['low'].shift(1))
-    df['HHHC'] = (df['high'] > df['high'].shift(1)) & (df['close'] > df['close'].shift(1))
-    df['LLLC'] = (df['low'] < df['low'].shift(1)) & (df['close'] < df['close'].shift(1))
-
-    # Doji definition:
-    # Body small relative to candle size and body center in candle’s middle part
-    body_center = (df['open'] + df['close']) / 2
-    relative_pos = (body_center - df['low']) / df['Candle_Size']
-    df['Doji'] = (df['Body_Size'] < df['Candle_Size'] * doji_ratio) & \
-                 (relative_pos >= lower_quarter_threshold) & (relative_pos <= upper_quarter_threshold)
-
-    # Marubozu per MQL5:
-    # if max(upper_wik_ratio, lower_wik_ratio)>=marubozu_threshold && wik_ratio>1.75 && candle_color!=0
-    df['Marubozu'] = ((np.maximum(df['Upper_wik_ratio'], df['Lower_wik_ratio']) >= marubozu_threshold) &
-                      (df['wik_ratio'] > 1.75) &
-                      (df['candle_color'] != 0))
-    df['Bullish_Marubozu'] = df['Marubozu'] & (df['candle_color'] == 1)
-    df['Bearish_Marubozu'] = df['Marubozu'] & (df['candle_color'] == -1)
-
-    apply_consecutive_count(df, 'Marubozu', 'Marubozu_Count', 10)
-    apply_consecutive_count(df, 'Bullish_Marubozu', 'Bullish_Marubozu_Count', 10)
-    apply_consecutive_count(df, 'Bearish_Marubozu', 'Bearish_Marubozu_Count', 10)
-
-    # Same_Color consecutive
-    df['Same_Color'] = df['candle_color'] == df['candle_color'].shift(1)
-    apply_consecutive_count(df, 'Same_Color', 'Same_Color_Count', 10)
-
-    # HH, LL counts
-    apply_consecutive_count(df, 'HH', 'HH_Count', 10)
-    apply_consecutive_count(df, 'LL', 'LL_Count', 10)
-    apply_consecutive_count(df, 'HHHC', 'HHHC_Count', 10)
-    apply_consecutive_count(df, 'LLLC', 'LLLC_Count', 10)
-
-    # Hammer (Ham): 
-    # if wik_ratio(i)<=wik_ratio_threshold AND (Upper_Wik_Size==0 OR Lower_Wik_Size/Upper_Wik_Size>2)
-    df['Hammer'] = (df['wik_ratio'] <= wik_ratio_threshold) & \
-                   ((df['Upper_Wik_Size'] == 0) | ((df['Lower_Wik_Size'] / df['Upper_Wik_Size']) > 2))
-
-    # Inverted Hammer (InvHam):
-    # if wik_ratio(i)<=wik_ratio_threshold AND (Lower_Wik_Size==0 OR Upper_Wik_Size/Lower_Wik_Size>2)
-    df['Inverted_Hammer'] = (df['wik_ratio'] <= wik_ratio_threshold) & \
-                            ((df['Lower_Wik_Size'] == 0) | ((df['Upper_Wik_Size'] / df['Lower_Wik_Size']) > 2))
-
-    # Upper/Lower shadow patterns
-    df['upper_shadow'] = df['Upper_Wik_Size'] > df['Body_Size'] * wik_ratio_threshold
-    df['lower_shadow'] = df['Lower_Wik_Size'] > df['Body_Size'] * wik_ratio_threshold
-    df['upper_shadow_doji'] = df['upper_shadow'] & df['Doji']
-    df['lower_shadow_doji'] = df['lower_shadow'] & df['Doji']
-
-    # Outside/Inside Bar:
-    df['Outside_Bar'] = df['HH'].shift(1) & df['LL'].shift(1)
-    df['Inside_Bar'] = (df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
-
-    # Engulf
-    # opposite colors and current body engulfs previous body
-    # Bullish: current green: open <= prev close & close >= prev open
-    # Bearish: current red:   open >= prev close & close <= prev open
-    df['Engulf'] = ((df['candle_color'] != df['candle_color'].shift(1)) &
-                    (((df['candle_color'] == 1) & (df['open'] <= df['close'].shift(1)) & (df['close'] >= df['open'].shift(1))) |
-                     ((df['candle_color'] == -1) & (df['open'] >= df['close'].shift(1)) & (df['close'] <= df['open'].shift(1)))))
-
-    # Bullish/Bearish Engulfing can be derived from Engulf if needed or kept separate
-    df['Bullish_Engulfing'] = (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & df['Engulf']
-    df['Bearish_Engulfing'] = (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & df['Engulf']
-
-    # Marubozu followed by a Doji:
-    df['Marubozu_Doji'] = df['Marubozu'] & df['Doji'].shift(-1)
-
-    # Bullish Harami & Bearish Harami
-    df['Bullish_Harami'] = (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1) & df['Inside_Bar']
-    df['Bearish_Harami'] = (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1) & df['Inside_Bar']
-
-    # Kangaroo Tail:
-    # For bullish: LHLL(2) && HHHL(1)
-    # For bearish: HHHL(2) && LHLL(1)
-    # Helper columns:
-    df['HHHL'] = (df['high'] > df['high'].shift(1)) & (df['low'] > df['low'].shift(1))
-    df['LHLL'] = (df['high'] < df['high'].shift(1)) & (df['low'] < df['low'].shift(1))
-
-    # KangoroTail logic:
-    # If previous candle color ==1 (bullish):
-    #   if LHLL(2) && HHHL(1) true
-    # If previous candle color ==-1 (bearish):
-    #   if HHHL(2) && LHLL(1) true
-    df['Kangaroo_Tail'] = ((df['candle_color'].shift(1) == 1) & df['LHLL'].shift(2) & df['HHHL'].shift(1)) | \
-                          ((df['candle_color'].shift(1) == -1) & df['HHHL'].shift(2) & df['LHLL'].shift(1))
-    
-    df['Kangaroo_Tail_Bullish'] = df['Kangaroo_Tail'] & (df['candle_color'] == 1)
-    df['Kangaroo_Tail_Bearish'] = df['Kangaroo_Tail'] & (df['candle_color'] == -1)
-
-    # Partial Kangaroo Tail:
-    # LongPartialKangoro: low[2]<low[3] and low[2]<low[1]
-    df['Partial_Kangaroo_Bullish'] = ((df['low'].shift(2) < df['low'].shift(3)) & (df['low'].shift(2) < df['low'].shift(1)))
-    # ShortPartialKangoro: high[2]>high[3] and high[2]>high[1]
-    df['Partial_Kangaroo_Bearish'] = ((df['high'].shift(2) > df['high'].shift(3)) & (df['high'].shift(2) > df['high'].shift(1)))
-
-    # Hammer/Inverted Hammer already defined above
-    # Shooting_Star and Falling_Star per MQL5 logic can be re-defined using Ham/InvHam logic if desired.
-    # For simplicity, rely on Hammer & Inverted Hammer logic above.
-
-    # Morning Star / Evening Star with Doji:
-    df['Morning_Star'] = (df['candle_color'].shift(2) == -1) & (df['Doji'].shift(1)) & (df['candle_color'] == 1)
-    df['Evening_Star'] = (df['candle_color'].shift(2) == 1) & (df['Doji'].shift(1)) & (df['candle_color'] == -1)
-
-    # Three_White_Soldiers: now consider using consecutive marubozus or candle_color:
-    df['Three_White_Soldiers'] = (df['candle_color'].shift(2) == 1) & (df['candle_color'].shift(1) == 1) & (df['candle_color'] == 1)
-    df['Three_Black_Crows'] = (df['candle_color'].shift(2) == -1) & (df['candle_color'].shift(1) == -1) & (df['candle_color'] == -1)
-
-    # With doji:
-    df['Three_White_Soldiers_Doji'] = df['Three_White_Soldiers'] & df['Doji'].shift(-1)
-    df['Three_Black_Crows_Doji'] = df['Three_Black_Crows'] & df['Doji'].shift(-1)
-
-    # Kicker (from MQL5 logic: color change and conditions)
-    df['Kicker'] = (df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1)
-    df['Kanazawa'] = (df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1)
-
-    # Kicker/Doji:
-    df['Kicker_Doji'] = df['Kicker'] & df['Doji'].shift(-1)
-    df['Kanazawa_Doji'] = df['Kanazawa'] & df['Doji'].shift(-1)
-
-    # Harami + Doji:
-    df['Bullish_Harami_Doji'] = (df['Bearish_Harami']) & df['Doji'].shift(-1)
-    df['Bearish_Harami_Doji'] = (df['Bullish_Harami']) & df['Doji'].shift(-1)
-
-    # Inside Breakout per MQL5:
-    # InsideBreakout_check_is_buy:
-    # if InBar(2) && Close[1]>High[3] -> bullish breakout
-    df['Inside_Breakout_Bullish'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) > df['high'].shift(3))
-    # InsideBreakout_check_is_sell:
-    # if InBar(2) && Close[1]<Low[3] -> bearish breakout
-    df['Inside_Breakout_Bearish'] = (df['Inside_Bar'].shift(2)) & (df['close'].shift(1) < df['low'].shift(3))
-
-    # Convert pattern columns to bool for efficiency
-    pattern_cols = [c for c in df.columns if df[c].dtype == bool or 'Count' in c]
-    for c in pattern_cols:
-        if df[c].dtype != bool and not c.endswith('_Count'):
-            df[c] = df[c].astype(bool)
-
-
-# SR Parameters
-# Lookback period for SR levels, number of touches,Slack for SR levels based on ATR  , ATR rejection multiplier
-SR_configs = [
-        (75,  3, 5, 0.5 , 'SR75_3_5_0.5'),
-        (200, 3, 5, 0.5 , 'SR200_3_5_0.5'),
-        (500, 3, 5, 0.5 , 'SR500_3_5_0.5'),
-        (75,  4, 5, 0.5 , 'SR75_4_5_0.5'),
-        (200, 4, 5, 0.5 , 'SR200_4_5_0.5'),
-        (500, 4, 5, 0.5 , 'SR500_4_5_0.5'),
-        (75,  5, 5, 0.5 , 'SR75_5_5_0.5'),
-        (200, 5, 5, 0.5 , 'SR200_5_5_0.5'),
-        (500, 5, 5, 0.5 , 'SR500_5_5_0.5'),
-        (75,  3, 10, 0.5 , 'SR75_3_10_0.5'),
-        (200, 3, 10, 0.5 , 'SR200_3_10_0.5'),
-        (500, 3, 10, 0.5 , 'SR500_3_10_0.5'),
-        (75,  4, 10, 0.5 , 'SR75_4_10_0.5'),
-        (200, 4, 10, 0.5 , 'SR200_4_10_0.5'),
-        (500, 4, 10, 0.5 , 'SR500_4_10_0.5'),
-        (75,  5, 10, 0.5 , 'SR75_5_10_0.5'),
-        (200, 5, 10, 0.5 , 'SR200_5_10_0.5'),
-        (500, 5, 10, 0.5 , 'SR500_5_10_0.5'),
-        (75,  3, 15, 0.5 , 'SR75_3_15_0.5'),
-        (200, 3, 15, 0.5 , 'SR200_3_15_0.5'),
-        (500, 3, 15, 0.5 , 'SR500_3_15_0.5'),
-        (75,  4, 15, 0.5 , 'SR75_4_15_0.5'),
-        (200, 4, 15, 0.5 , 'SR200_4_15_0.5'),
-        (500, 4, 15, 0.5 , 'SR500_4_15_0.5'),
-        (75,  5, 15, 0.5 , 'SR75_5_15_0.5'),
-        (200, 5, 15, 0.5 , 'SR200_5_15_0.5'),
-        (500, 5, 15, 0.5 , 'SR500_5_15_0.5'),
-        (75,  3, 5, 1.0 , 'SR75_3_5_1.0'),
-        (200, 3, 5, 1.0 , 'SR200_3_5_1.0'),
-        (500, 3, 5, 1.0 , 'SR500_3_5_1.0'),
-        (75,  4, 5, 1.0 , 'SR75_4_5_1.0'),
-        (200, 4, 5, 1.0 , 'SR200_4_5_1.0'),
-        (500, 4, 5, 1.0 , 'SR500_4_5_1.0'),
-        (75,  5, 5, 1.0 , 'SR75_5_5_1.0'),
-        (200, 5, 5, 1.0 , 'SR200_5_5_1.0'),
-        (500, 5, 5, 1.0 , 'SR500_5_5_1.0'),
-        (75,  3, 10, 1.0 , 'SR75_3_10_1.0'),
-        (200, 3, 10, 1.0 , 'SR200_3_10_1.0'),
-        (500, 3, 10, 1.0 , 'SR500_3_10_1.0'),
-        (75,  3, 10, 1.0 , 'SR75_4_10_1.0'),
-        (200, 4, 10, 1.0 , 'SR200_4_10_1.0'),
-        (500, 4, 10, 1.0 , 'SR500_4_10_1.0'),
-        (75,  5, 10, 1.0 , 'SR75_5_10_1.0'),
-        (200, 5, 10, 1.0 , 'SR200_5_10_1.0'),
-        (500, 5, 10, 1.0 , 'SR500_5_10_1.0'),
-        (75,  3, 15, 1.0 , 'SR75_3_15_1.0'),
-        (200, 3, 15, 1.0 , 'SR200_3_15_1.0'),
-        (500, 3, 15, 1.0 , 'SR500_3_15_1.0'),
-        (75,  4, 15, 1.0 , 'SR75_4_15_1.0'),
-        (200, 4, 15, 1.0 , 'SR200_4_15_1.0'),
-        (500, 4, 15, 1.0 , 'SR500_4_15_1.0'),
-        (75,  5, 15, 1.0 , 'SR75_5_15_1.0'),
-        (200, 5, 15, 1.0 , 'SR200_5_15_1.0'),
-        (500, 5, 15, 1.0 , 'SR500_5_15_1.0'),
-        (75,  3, 5, 1.5 , 'SR75_3_5_1.5'),
-        (200, 3, 5, 1.5 , 'SR200_3_5_1.5'),
-        (500,  3, 5, 1.5 , 'SR500_3_5_1.5'),
-        (75,   4, 5, 1.5 , 'SR75_4_5_1.5'),
-        (200,  4, 5, 1.5 , 'SR200_4_5_1.5'),
-        (500,  4, 5, 1.5 , 'SR500_4_5_1.5'),
-        (75,   5, 5, 1.5 , 'SR75_5_5_1.5'),
-        (200,  5, 5, 1.5 , 'SR200_5_5_1.5'),
-        (500,  5, 5, 1.5 , 'SR500_5_5_1.5'),
-        (75,   3, 10, 1.5 , 'SR75_3_10_1.5'),
-        (200,  3, 10, 1.5 , 'SR200_3_10_1.5'),
-        (500,  3, 10, 1.5 , 'SR500_3_10_1.5'),
-        (75,   4, 10, 1.5 , 'SR75_4_10_1.5'),
-        (200,  4, 10, 1.5 , 'SR200_4_10_1.5'),
-        (500,  4, 10, 1.5 , 'SR500_4_10_1.5'),
-        (75,   5, 10, 1.5 , 'SR75_5_10_1.5'),
-        (200,  5, 10, 1.5 , 'SR200_5_10_1.5'),
-        (500,  5, 10, 1.5 , 'SR500_5_10_1.5'),
-        (75,   3, 15, 1.5 , 'SR75_3_15_1.5'),
-        (200,  3, 15, 1.5 , 'SR200_3_15_1.5'),
-        (500,  3, 15, 1.5 , 'SR500_3_15_1.5'),
-        (75,   4, 15, 1.5 , 'SR75_4_15_1.5'),
-        (200,  4, 15, 1.5 , 'SR200_4_15_1.5'),
-        (500,  4, 15, 1.5 , 'SR500_4_15_1.5'),
-        (75,   5, 15, 1.5 , 'SR75_5_15_1.5'),
-        (200,  5, 15, 1.5 , 'SR200_5_15_1.5'),
-        (500,  5, 15, 1.5 , 'SR500_5_15_1.5'),
+def get_indicator_columns():
+    indicator_cols = ['open', 'high', 'low', 'close', 'spread', 'time', 'bid', 'ask', 'ATR']
+    RSIs = [2, 7, 14, 21, 50]
+    for r in RSIs:
+        indicator_cols.append(f'RSI_{r}')
+    bb_settings = [
+        (15, 1.5, 'BB15_1.5'), (15, 2.0, 'BB15_2.0'), (15, 2.5, 'BB15_2.5'),
+        (20, 1.5, 'BB20_1.5'), (20, 2.0, 'BB20_2.0'), (20, 2.5, 'BB20_2.5'),
+        (25, 1.5, 'BB25_1.5'), (25, 2.0, 'BB25_2.0'), (25, 2.5, 'BB25_2.5'),
     ]
+    for period, deviation, label in bb_settings:
+        indicator_cols.extend([f'{label}_Upper', f'{label}_Middle', f'{label}_Lower', f'{label}_Bool_Above', f'{label}_Bool_Below'])
+
+    for p in [7, 21, 50, 200]:
+        indicator_cols.append(f'MA_{p}')
+        if p in [7, 21, 50]:
+            indicator_cols.append(f'MA_{p}_comp')
+    for w in [50, 100, 200, 500]:
+        indicator_cols.append(f'GA_{w}')
+
+    # Ensure uniqueness and order
+    indicator_cols = list(dict.fromkeys(indicator_cols))
+    return indicator_cols
 
 
-fixed_SR_params = {
-    'min_height_of_sr_distance': 3.0,    # Min height of SR distance - used in calculating SR levels
-    'max_height_of_sr_distance': 60.0,   # Max height of SR distance - used in calculating SR levels
-}
+def get_sr_columns():
+    sr_cols = []
+    period = [75, 200, 500]
+    touches = [3, 4, 5]
+    slack_div = [5, 10, 15]
+    rejection_multi = [0.5, 1.0, 1.5]
+
+    # SR_configs inline:
+    for r in rejection_multi:
+        for t in slack_div:
+            for s in touches:
+                for l in period:
+                    config_id = f"SR{l}_{s}_{t}_{r}"
+                    sr_cols.append(f'upper_{config_id}')
+                    sr_cols.append(f'lower_{config_id}')
+
+    sr_cols = list(dict.fromkeys(sr_cols))
+    return sr_cols
+
+
+def get_pattern_columns():
+    pattern_cols = [
+        'candle_color', 'Body_Size', 'Candle_Size', 'Upper_Wik_Size', 'Lower_Wik_Size', 'Upper_wik_ratio', 'Lower_wik_ratio', 'wik_ratio',
+        'Doji', 'Marubozu', 'Bullish_Marubozu', 'Bearish_Marubozu', 'Marubozu_Count', 'Bullish_Marubozu_Count', 'Bearish_Marubozu_Count',
+        'Same_Color', 'Same_Color_Count', 'HH', 'LL', 'HHHC', 'LLLC', 'HH_Count', 'LL_Count', 'HHHC_Count', 'LLLC_Count',
+        'Hammer', 'Inverted_Hammer', 'upper_shadow', 'lower_shadow', 'upper_shadow_doji', 'lower_shadow_doji',
+        'Outside_Bar', 'Inside_Bar', 'Engulf', 'Bullish_Engulfing', 'Bearish_Engulfing', 'Marubozu_Doji', 'Bullish_Harami', 'Bearish_Harami',
+        'Kangaroo_Tail', 'Kangaroo_Tail_Bullish', 'Kangaroo_Tail_Bearish', 'Partial_Kangaroo_Bullish', 'Partial_Kangaroo_Bearish',
+        'Morning_Star', 'Evening_Star', 'Three_White_Soldiers', 'Three_Black_Crows', 'Three_White_Soldiers_Doji', 'Three_Black_Crows_Doji',
+        'Kicker', 'Kanazawa', 'Kicker_Doji', 'Kanazawa_Doji', 'Bullish_Harami_Doji', 'Bearish_Harami_Doji', 'Inside_Breakout_Bullish', 'Inside_Breakout_Bearish'
+    ]
+    pattern_cols = list(dict.fromkeys(pattern_cols))
+    return pattern_cols
 
 
 def get_required_columns():
-    """
-    Get the list of required columns for calculating indicators.
-    """
-    required_columns = [
-        'open', 'high', 'low', 'close', 'spread', 'time'
-    ]
-    required_columns.extend([f'upper_{config_id}' for _, _, _, _, config_id in SR_configs])
-    required_columns.extend([f'lower_{config_id}' for _, _, _, _, config_id in SR_configs])
-    required_columns.extend([f'RSI_{rsi_period}' for rsi_period in [2, 7, 14, 21, 50]])
-    required_columns.extend([f'BB{period}_{deviation}_Upper' for period, deviation, _ in [(15, 1.5, 'BB15_1.5'), (15, 2.0, 'BB15_2.0'), (15, 2.5, 'BB15_2.5'), (20, 1.5, 'BB20_1.5'), (20, 2.0, 'BB20_2.0'), (20, 2.5, 'BB20_2.5'), (25, 1.5, 'BB25_1.5'), (25, 2.0, 'BB25_2.0'), (25, 2.5, 'BB25_2.5')]])
-    required_columns.extend([f'BB{period}_{deviation}_Middle' for period, deviation, _ in [(15, 1.5, 'BB15_1.5'), (15, 2.0, 'BB15_2.0'), (15, 2.5, 'BB15_2.5'), (20, 1.5, 'BB20_1.5'), (20, 2.0, 'BB20_2.0'), (20, 2.5, 'BB20_2.5'), (25, 1.5, 'BB25_1.5'), (25, 2.0, 'BB25_2.0'), (25, 2.5, 'BB25_2.5')]])
-    required_columns.extend([f'BB{period}_{deviation}_Lower' for period, deviation, _ in [(15, 1.5, 'BB15_1.5'), (15, 2.0, 'BB15_2.0'), (15, 2.5, 'BB15_2.5'), (20, 1.5, 'BB20_1.5'), (20, 2.0, 'BB20_2.0'), (20, 2.5, 'BB20_2.5'), (25, 1.5, 'BB25_1.5'), (25, 2.0, 'BB25_2.0'), (25, 2.5, 'BB25_2.5')]])
-    required_columns.extend([f'BB{period}_{deviation}_Bool_Above' for period, deviation, _ in [(15, 1.5, 'BB15_1.5'), (15, 2.0, 'BB15_2.0'), (15, 2.5, 'BB15_2.5'), (20, 1.5, 'BB20_1.5'), (20, 2.0, 'BB20_2.0'), (20, 2.5, 'BB20_2.5'), (25, 1.5, 'BB25_1.5'), (25, 2.0, 'BB25_2.0'), (25, 2.5, 'BB25_2.5')]])
-    required_columns.extend([f'BB{period}_{deviation}_Bool_Below' for period, deviation, _ in [(15, 1.5, 'BB15_1.5'), (15, 2.0, 'BB15_2.0'), (15, 2.5, 'BB15_2.5'), (20, 1.5, 'BB20_1.5'), (20, 2.0, 'BB20_2.0'), (20, 2.5, 'BB20_2.5'), (25, 1.5, 'BB25_1.5'), (25, 2.0, 'BB25_2.0'), (25, 2.5, 'BB25_2.5')]])
-    required_columns.extend([f'MA_{period}' for period in [7, 21, 50, 200]])
-    required_columns.extend([f'GA_{window}' for window in [50, 100, 200, 500]])
-    required_columns.extend([f'MA_{period}_comp' for period in [7, 21, 50]])
-    required_columns.extend(['bid', 'ask'])
-    required_columns.extend(['candle_color'])
-    required_columns.extend(['Body_Size', 'Candle_Size', 'Upper_Wik_Size', 'Lower_Wik_Size', 'Upper_wik_ratio', 'Lower_wik_ratio', 'wik_ratio'])
-    required_columns.extend(['Doji', 'Marubozu', 'Bullish_Marubozu', 'Bearish_Marubozu', 'Marubozu_Count', 'Bullish_Marubozu_Count', 'Bearish_Marubozu_Count'])
-    required_columns.extend(['Same_Color', 'Same_Color_Count', 'HH', 'LL', 'HHHC', 'LLLC', 'HH_Count', 'LL_Count', 'HHHC_Count', 'LLLC_Count'])
-    required_columns.extend(['Hammer', 'Inverted_Hammer', 'upper_shadow', 'lower_shadow', 'upper_shadow_doji', 'lower_shadow_doji'])
-    required_columns.extend(['Outside_Bar', 'Inside_Bar', 'Engulf', 'Bullish_Engulfing', 'Bearish_Engulfing', 'Marubozu_Doji', 'Bullish_Harami', 'Bearish_Harami'])
-    required_columns.extend(['Kangaroo_Tail', 'Kangaroo_Tail_Bullish', 'Kangaroo_Tail_Bearish', 'Partial_Kangaroo_Bullish', 'Partial_Kangaroo_Bearish'])
-    required_columns.extend(['Morning_Star', 'Evening_Star', 'Three_White_Soldiers', 'Three_Black_Crows', 'Three_White_Soldiers_Doji', 'Three_Black_Crows_Doji'])
-    required_columns.extend(['Kicker', 'Kanazawa', 'Kicker_Doji', 'Kanazawa_Doji', 'Bullish_Harami_Doji', 'Bearish_Harami_Doji', 'Inside_Breakout_Bullish', 'Inside_Breakout_Bearish'])
-
-    
-    return required_columns
-
-def calculate_indicators(df, pip):
-    """
-    Calculate technical indicators and add them as new columns to the DataFrame.
-    """
-    # Ensure the DataFrame is sorted by time in ascending order
-    df = df.sort_values(by='time').reset_index(drop=True)
-
-    # Check if necessary columns exist
-    required_columns = ['open', 'high', 'low', 'close']
-    for col in required_columns:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column: {col}")
-
-    # Convert to float32 to save memory
-    df['open'] = df['open'].astype('float32')
-    df['high'] = df['high'].astype('float32')
-    df['low'] = df['low'].astype('float32')
-    df['close'] = df['close'].astype('float32')
-
-    # 1. Calculate RSI's
-    RSIs = [2,7, 14, 21, 50]
-    for rsi_period in RSIs:
-        rsi_indicator = ta.momentum.RSIIndicator(close=df['close'], window=rsi_period)
-        df[f'RSI_{rsi_period}'] = rsi_indicator.rsi().astype('float32')
-
-    # 2. Calculate ATR (Period 14)
-    atr_indicator = ta.volatility.AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14)
-    df['ATR'] = atr_indicator.average_true_range().astype('float32')
-
-    # 3. Calculate Bollinger Bands with different deviations
-    bollinger_settings = [
-        (15, 1.5, 'BB15_1.5'),
-        (15, 2.0, 'BB15_2.0'),
-        (15, 2.5, 'BB15_2.5'),
-        (20, 1.5, 'BB20_1.5'),
-        (20, 2.0, 'BB20_2.0'),
-        (20, 2.5, 'BB20_2.5'),
-        (25, 1.5, 'BB25_1.5'),
-        (25, 2.0, 'BB25_2.0'),
-        (25, 2.5, 'BB25_2.5'),
-    ]
-
-    for period, deviation, label in bollinger_settings:
-        bollinger = ta.volatility.BollingerBands(close=df['close'], window=period, window_dev=deviation)
-        df[f'{label}_Upper'] = bollinger.bollinger_hband().astype('float32')
-        df[f'{label}_Middle'] = bollinger.bollinger_mavg().astype('float32')
-        df[f'{label}_Lower'] = bollinger.bollinger_lband().astype('float32')
-        # Boolean flags for Close above Upper Band and below Lower Band
-        df[f'{label}_Bool_Above'] = (df['close'] > df[f'{label}_Upper'])
-        df[f'{label}_Bool_Below'] = (df['close'] < df[f'{label}_Lower'])
-
-    # 4. Calculate Moving Averages
-    moving_averages = {
-        'MA_7': 7,      # Short-term
-        'MA_21': 21,    # Medium-term
-        'MA_50': 50,    # Long-term
-        'MA_200': 200   # Very Long-term
-    }
-
-    for ma_label, period in moving_averages.items():
-        ma_indicator = ta.trend.SMAIndicator(close=df['close'], window=period)
-        df[ma_label] = ma_indicator.sma_indicator().astype('float32')
-
-    # 5. Calculate Green-Red Candle Ratios
-    # Use Numba-accelerated function
-    df['Is_Green'] = (df['close'] > df['open']).astype('int8')
-    green_red_settings = [
-        (50, 'GA_50'),
-        (100, 'GA_100'),
-        (200, 'GA_200'),
-        (500, 'GA_500')
-    ]
-
-    for window, column_name in green_red_settings:
-        df[column_name] = rolling_sum_numba(df['Is_Green'].values, window) / window
-
-    # Drop intermediate columns if not needed
-    df.drop(['Is_Green'], axis=1, inplace=True)
-
-    # 6. Compare Price with Moving Averages
-    for ma_label in ['MA_7', 'MA_21', 'MA_50']:
-        df[f'{ma_label}_comp'] = np.where(
-            df['close'] > df[ma_label],
-            'above',
-            np.where(df['close'] < df[ma_label], 'below', 'equal')
-        )
-
-    # 7. Calculate bid and ask
-    df['bid'] = df['open'] - df['spread'] * pip / 2
-    df['ask'] = df['open'] + df['spread'] * pip / 2
+    indicators = get_indicator_columns()
+    sr = get_sr_columns()
+    patterns = get_pattern_columns()
+    required_columns = list(dict.fromkeys(indicators + sr + patterns))
+    return required_columns, indicators, sr, patterns
 
 
-
-    #TODO's : 
-    # update and check with my candles.py
-    # update the columns to be added to the dataframe
-    # update the columns to be dropped from the dataframe
-    # update the columns to be used in the calculations
-    # update for live trading...
-    # update required columns in strategy.py
-    # Update config.xslx - will need to account for all new (also can add columns and use multiple patterns for entering and exiting trades)
-
-    # 8. Find candlestick patterns
-    calculate_patterns(df)
-
-
-
-    return df
-
-@njit(parallel=True)
+@njit
 def rolling_sum_numba(data, window):
-    """
-    Compute rolling sum using Numba for acceleration.
-    """
     result = np.empty(len(data), dtype=np.float32)
     cumulative_sum = 0.0
     for i in range(len(data)):
@@ -604,65 +234,332 @@ def rolling_sum_numba(data, window):
             result[i] = cumulative_sum
         else:
             result[i] = np.nan
-    # Prepend NaNs for the initial values where the window is not full
     for i in range(window - 1):
         result[i] = np.nan
     return result
 
-def calculate_sr_levels(df, sr_params, upper_sr_col, lower_sr_col):
-    """
-    Calculate Support and Resistance (SR) levels and add them as new columns to the DataFrame.
-    Parameters:
-        df (pd.DataFrame): DataFrame containing historical price data.
-        sr_params (dict): Dictionary containing SR calculation parameters.
-        upper_sr_col (str): Column name for the upper SR levels.
-        lower_sr_col (str): Column name for the lower SR levels.
-    """
-    # Initialize SR columns with default values
-    df['upper_sr'] = 0.0
-    df['lower_sr'] = 0.0
 
-    # Extract SR parameters
-    period_for_sr = sr_params['period_for_sr']
-    touches_for_sr = sr_params['touches_for_sr']
-    slack_for_sr_atr_div = sr_params['slack_for_sr_atr_div']
-    atr_rejection_multiplier = sr_params['atr_rejection_multiplier']
-    min_height_of_sr_distance = sr_params['min_height_of_sr_distance']
-    max_height_of_sr_distance = sr_params['max_height_of_sr_distance']
+def calculate_indicators(df, pip, start_idx=0):
+    # Operate only on df from start_idx onwards
+    close_sub = df['close'].iloc[start_idx:]
+    high_sub = df['high'].iloc[start_idx:]
+    low_sub = df['low'].iloc[start_idx:]
+    open_sub = df['open'].iloc[start_idx:]
+    spread_sub = df['spread'].iloc[start_idx:]
 
-    # Prepare data arrays for Numba function
-    open_prices = df['open'].values.astype(np.float32)
-    high_prices = df['high'].values.astype(np.float32)
-    low_prices = df['low'].values.astype(np.float32)
-    close_prices = df['close'].values.astype(np.float32)
-    atr_values = df['ATR'].values.astype(np.float32)
+    # RSI
+    RSIs = [2, 7, 14, 21, 50]
+    for rsi_period in RSIs:
+        rsi_indicator = ta.momentum.RSIIndicator(close=close_sub, window=rsi_period)
+        df.loc[start_idx:, f'RSI_{rsi_period}'] = rsi_indicator.rsi().values.astype('float32')
 
-    upper_sr_array = np.zeros(len(df), dtype=np.float32)
-    lower_sr_array = np.zeros(len(df), dtype=np.float32)
+    # ATR
+    atr_indicator = ta.volatility.AverageTrueRange(high=high_sub, low=low_sub, close=close_sub, window=14)
+    df.loc[start_idx:, 'ATR'] = atr_indicator.average_true_range().values.astype('float32')
 
-    # Call Numba-accelerated function
-    calculate_sr_levels_numba(
-        open_prices, high_prices, low_prices, close_prices, atr_values,
-        upper_sr_array, lower_sr_array,
-        period_for_sr, touches_for_sr, slack_for_sr_atr_div,
-        atr_rejection_multiplier, min_height_of_sr_distance, max_height_of_sr_distance
+    # Bollinger Bands
+    bb_settings = [
+        (15, 1.5, 'BB15_1.5'),
+        (15, 2.0, 'BB15_2.0'),
+        (15, 2.5, 'BB15_2.5'),
+        (20, 1.5, 'BB20_1.5'),
+        (20, 2.0, 'BB20_2.0'),
+        (20, 2.5, 'BB20_2.5'),
+        (25, 1.5, 'BB25_1.5'),
+        (25, 2.0, 'BB25_2.0'),
+        (25, 2.5, 'BB25_2.5'),
+    ]
+
+    for period, deviation, label in bb_settings:
+        bollinger = ta.volatility.BollingerBands(close=close_sub, window=period, window_dev=deviation)
+        upper = bollinger.bollinger_hband().values.astype('float32')
+        mid = bollinger.bollinger_mavg().values.astype('float32')
+        lower = bollinger.bollinger_lband().values.astype('float32')
+        df.loc[start_idx:, f'{label}_Upper'] = upper
+        df.loc[start_idx:, f'{label}_Middle'] = mid
+        df.loc[start_idx:, f'{label}_Lower'] = lower
+        df.loc[start_idx:, f'{label}_Bool_Above'] = (df['close'].iloc[start_idx:].values > upper)
+        df.loc[start_idx:, f'{label}_Bool_Below'] = (df['close'].iloc[start_idx:].values < lower)
+
+    # MAs
+    moving_averages = {
+        'MA_7': 7,
+        'MA_21': 21,
+        'MA_50': 50,
+        'MA_200': 200
+    }
+
+    ma_results = {}
+    for ma_label, period in moving_averages.items():
+        ma_indicator = ta.trend.SMAIndicator(close=close_sub, window=period)
+        ma_data = ma_indicator.sma_indicator().values.astype('float32')
+        df.loc[start_idx:, ma_label] = ma_data
+        ma_results[ma_label] = ma_data
+
+    # GA
+    is_green = (df['close'].iloc[start_idx:].values > df['open'].iloc[start_idx:].values).astype('int8')
+    for window, column_name in [(50, 'GA_50'), (100, 'GA_100'), (200, 'GA_200'), (500, 'GA_500')]:
+        ga_vals = rolling_sum_numba(is_green, window) / window
+        df.loc[start_idx:, column_name] = ga_vals
+
+    # MA comp
+    for ma_label in ['MA_7', 'MA_21', 'MA_50']:
+        close_vals = df['close'].iloc[start_idx:].values
+        ma_vals = df[ma_label].iloc[start_idx:].values
+        comp = np.where(close_vals > ma_vals, 'above', np.where(close_vals < ma_vals, 'below', 'equal'))
+        df.loc[start_idx:, f'{ma_label}_comp'] = comp
+
+    # bid/ask
+    pip_val = pip
+    open_vals = df['open'].iloc[start_idx:].values
+    spread_vals = spread_sub.values
+    df.loc[start_idx:, 'bid'] = open_vals - spread_vals * pip_val / 2
+    df.loc[start_idx:, 'ask'] = open_vals + spread_vals * pip_val / 2
+
+
+def calculate_all_indicators(df, pip):
+    indicator_cols = get_indicator_columns()
+    incomplete_mask = df[indicator_cols].isna().any(axis=1)
+    if not incomplete_mask.any():
+        print("    Indicators: Already complete, skipping.")
+        return
+
+    first_incomplete_idx = np.where(incomplete_mask)[0][0]
+    if first_incomplete_idx == 0:
+        print("    Indicators: No data calculated before, calculating from start.")
+        start_idx = 0
+    else:
+        start_idx = max(first_incomplete_idx - 510, 0)
+        print(f"    Indicators: Partial missing data, starting from index {start_idx}")
+
+    calculate_indicators(df, pip, start_idx=start_idx)
+    print(f"    Indicators updated from index {start_idx} onwards.")
+
+
+def calculate_patterns(df, start_idx=0):
+    # entire df might be used, but focus from start_idx
+    doji_ratio = 0.1
+    upper_quarter_threshold = 0.75
+    lower_quarter_threshold = 0.25
+    wik_ratio_threshold = 0.25
+    marubozu_threshold = 2.5
+
+    # candle_color
+    df.loc[start_idx:, 'candle_color'] = np.where(
+        df['close'].iloc[start_idx:] > df['open'].iloc[start_idx:], 1,
+        np.where(df['close'].iloc[start_idx:] < df['open'].iloc[start_idx:], -1, 0)
+    ).astype(np.int8)
+
+    # compute candle measures
+    open_arr = df['open'].values
+    high_arr = df['high'].values
+    low_arr = df['low'].values
+    close_arr = df['close'].values
+    color_arr = df['candle_color'].values
+
+    body_size, candle_size, upper_wik_size, lower_wik_size, upper_wik_ratio, lower_wik_ratio, wik_ratio = compute_candle_measures(
+        open_arr, high_arr, low_arr, close_arr, color_arr
     )
 
-    df[upper_sr_col] = upper_sr_array
-    df[lower_sr_col] = lower_sr_array
+    df.loc[start_idx:, 'Body_Size'] = body_size[start_idx:]
+    df.loc[start_idx:, 'Candle_Size'] = candle_size[start_idx:]
+    df.loc[start_idx:, 'Upper_Wik_Size'] = upper_wik_size[start_idx:]
+    df.loc[start_idx:, 'Lower_Wik_Size'] = lower_wik_size[start_idx:]
+    df.loc[start_idx:, 'Upper_wik_ratio'] = upper_wik_ratio[start_idx:]
+    df.loc[start_idx:, 'Lower_wik_ratio'] = lower_wik_ratio[start_idx:]
+    df.loc[start_idx:, 'wik_ratio'] = wik_ratio[start_idx:]
 
-    return df
+    # patterns
+    df.loc[start_idx:, 'HH'] = (df['high'].shift(1) < df['high'])[start_idx:]
+    df.loc[start_idx:, 'LL'] = (df['low'].shift(1) > df['low'])[start_idx:]
+    df.loc[start_idx:, 'HHHC'] = (df['HH'] & (df['close'] > df['close'].shift(1)))[start_idx:]
+    df.loc[start_idx:, 'LLLC'] = (df['LL'] & (df['close'] < df['close'].shift(1)))[start_idx:]
+    df.loc[start_idx:, 'Same_Color'] = (df['candle_color'] == df['candle_color'].shift(1))[start_idx:]
 
-@njit(parallel=True)
+    body_center = (df['open'] + df['close']) / 2
+    relative_pos = (body_center - df['low']) / df['Candle_Size']
+    df.loc[start_idx:, 'Doji'] = ((df['Body_Size'] < df['Candle_Size'] * doji_ratio) &
+                                  (relative_pos >= lower_quarter_threshold) &
+                                  (relative_pos <= upper_quarter_threshold))[start_idx:]
+
+    df.loc[start_idx:, 'Marubozu'] = ((np.maximum(df['Upper_wik_ratio'], df['Lower_wik_ratio']) >= marubozu_threshold) &
+                                      (df['wik_ratio'] > 1.75) &
+                                      (df['candle_color'] != 0))[start_idx:]
+    df.loc[start_idx:, 'Bullish_Marubozu'] = (df['Marubozu'] & (df['candle_color'] == 1))[start_idx:]
+    df.loc[start_idx:, 'Bearish_Marubozu'] = (df['Marubozu'] & (df['candle_color'] == -1))[start_idx:]
+
+    df.loc[start_idx:, 'Hammer'] = ((df['wik_ratio'] <= wik_ratio_threshold) &
+                                    ((df['Upper_Wik_Size'] == 0) | ((df['Lower_Wik_Size'] / df['Upper_Wik_Size']) > 2)))[start_idx:]
+    df.loc[start_idx:, 'Inverted_Hammer'] = ((df['wik_ratio'] <= wik_ratio_threshold) &
+                                             ((df['Lower_Wik_Size'] == 0) | ((df['Upper_Wik_Size'] / df['Lower_Wik_Size']) > 2)))[start_idx:]
+
+    df.loc[start_idx:, 'upper_shadow'] = (df['Upper_Wik_Size'] > df['Body_Size'] * wik_ratio_threshold)[start_idx:]
+    df.loc[start_idx:, 'lower_shadow'] = (df['Lower_Wik_Size'] > df['Body_Size'] * wik_ratio_threshold)[start_idx:]
+    df.loc[start_idx:, 'upper_shadow_doji'] = (df['upper_shadow'] & df['Doji'])[start_idx:]
+    df.loc[start_idx:, 'lower_shadow_doji'] = (df['lower_shadow'] & df['Doji'])[start_idx:]
+
+    df.loc[start_idx:, 'Outside_Bar'] = (df['HH'].shift(1) & df['LL'].shift(1))[start_idx:]
+    df.loc[start_idx:, 'Inside_Bar'] = ((df['high'] < df['high'].shift(1)) & (df['low'] > df['low'].shift(1)))[start_idx:]
+
+    df.loc[start_idx:, 'Engulf'] = ((df['candle_color'] != df['candle_color'].shift(1)) &
+                                    (((df['candle_color'] == 1) &
+                                      (df['open'] <= df['close'].shift(1)) &
+                                      (df['close'] >= df['open'].shift(1))) |
+                                     ((df['candle_color'] == -1) &
+                                      (df['open'] >= df['close'].shift(1)) &
+                                      (df['close'] <= df['open'].shift(1)))))[start_idx:]
+    df.loc[start_idx:, 'Bullish_Engulfing'] = ((df['candle_color'].shift(1) == -1) &
+                                               (df['candle_color'] == 1) & df['Engulf'])[start_idx:]
+    df.loc[start_idx:, 'Bearish_Engulfing'] = ((df['candle_color'].shift(1) == 1) &
+                                               (df['candle_color'] == -1) & df['Engulf'])[start_idx:]
+    df.loc[start_idx:, 'Marubozu_Doji'] = (df['Marubozu'] & df['Doji'].shift(-1))[start_idx:]
+
+    df.loc[start_idx:, 'Bullish_Harami'] = ((df['candle_color'].shift(1) == -1) &
+                                            (df['candle_color'] == 1) & df['Inside_Bar'])[start_idx:]
+    df.loc[start_idx:, 'Bearish_Harami'] = ((df['candle_color'].shift(1) == 1) &
+                                            (df['candle_color'] == -1) & df['Inside_Bar'])[start_idx:]
+
+    df.loc[start_idx:, 'HHHL'] = ((df['high'] > df['high'].shift(1)) &
+                                  (df['low'] > df['low'].shift(1)))[start_idx:]
+    df.loc[start_idx:, 'LHLL'] = ((df['high'] < df['high'].shift(1)) &
+                                  (df['low'] < df['low'].shift(1)))[start_idx:]
+
+    df.loc[start_idx:, 'Kangaroo_Tail'] = (((df['candle_color'].shift(1) == 1) & df['LHLL'].shift(2) & df['HHHL'].shift(1)) |
+                                           ((df['candle_color'].shift(1) == -1) & df['HHHL'].shift(2) & df['LHLL'].shift(1)))[start_idx:]
+    df.loc[start_idx:, 'Kangaroo_Tail_Bullish'] = (df['Kangaroo_Tail'] & (df['candle_color'] == 1))[start_idx:]
+    df.loc[start_idx:, 'Kangaroo_Tail_Bearish'] = (df['Kangaroo_Tail'] & (df['candle_color'] == -1))[start_idx:]
+
+    df.loc[start_idx:, 'Partial_Kangaroo_Bullish'] = ((df['low'].shift(2) < df['low'].shift(3)) &
+                                                      (df['low'].shift(2) < df['low'].shift(1)))[start_idx:]
+    df.loc[start_idx:, 'Partial_Kangaroo_Bearish'] = ((df['high'].shift(2) > df['high'].shift(3)) &
+                                                      (df['high'].shift(2) > df['high'].shift(1)))[start_idx:]
+
+    df.loc[start_idx:, 'Morning_Star'] = ((df['candle_color'].shift(2) == -1) & (df['Doji'].shift(1)) &
+                                          (df['candle_color'] == 1))[start_idx:]
+    df.loc[start_idx:, 'Evening_Star'] = ((df['candle_color'].shift(2) == 1) & (df['Doji'].shift(1)) &
+                                          (df['candle_color'] == -1))[start_idx:]
+
+    df.loc[start_idx:, 'Three_White_Soldiers'] = ((df['candle_color'].shift(2) == 1) &
+                                                  (df['candle_color'].shift(1) == 1) &
+                                                  (df['candle_color'] == 1))[start_idx:]
+    df.loc[start_idx:, 'Three_Black_Crows'] = ((df['candle_color'].shift(2) == -1) &
+                                               (df['candle_color'].shift(1) == -1) &
+                                               (df['candle_color'] == -1))[start_idx:]
+    df.loc[start_idx:, 'Three_White_Soldiers_Doji'] = (df['Three_White_Soldiers'] & df['Doji'].shift(-1))[start_idx:]
+    df.loc[start_idx:, 'Three_Black_Crows_Doji'] = (df['Three_Black_Crows'] & df['Doji'].shift(-1))[start_idx:]
+
+    df.loc[start_idx:, 'Kicker'] = ((df['candle_color'].shift(1) == 1) & (df['candle_color'] == -1))[start_idx:]
+    df.loc[start_idx:, 'Kanazawa'] = ((df['candle_color'].shift(1) == -1) & (df['candle_color'] == 1))[start_idx:]
+    df.loc[start_idx:, 'Kicker_Doji'] = (df['Kicker'] & df['Doji'].shift(-1))[start_idx:]
+    df.loc[start_idx:, 'Kanazawa_Doji'] = (df['Kanazawa'] & df['Doji'].shift(-1))[start_idx:]
+
+    df.loc[start_idx:, 'Bullish_Harami_Doji'] = (df['Bearish_Harami'] & df['Doji'].shift(-1))[start_idx:]
+    df.loc[start_idx:, 'Bearish_Harami_Doji'] = (df['Bullish_Harami'] & df['Doji'].shift(-1))[start_idx:]
+
+    df.loc[start_idx:, 'Inside_Breakout_Bullish'] = ((df['Inside_Bar'].shift(2)) &
+                                                     (df['close'].shift(1) > df['high'].shift(3)))[start_idx:]
+    df.loc[start_idx:, 'Inside_Breakout_Bearish'] = ((df['Inside_Bar'].shift(2)) &
+                                                     (df['close'].shift(1) < df['low'].shift(3)))[start_idx:]
+
+    # counts
+    # Use full df because count_consecutive looks at full series
+    df['Same_Color_Count'] = count_consecutive(df, 'Same_Color')
+    df['Marubozu_Count'] = count_consecutive(df, 'Marubozu')
+    df['Bullish_Marubozu_Count'] = count_consecutive(df, 'Bullish_Marubozu')
+    df['Bearish_Marubozu_Count'] = count_consecutive(df, 'Bearish_Marubozu')
+    df['HH_Count'] = count_consecutive(df, 'HH')
+    df['LL_Count'] = count_consecutive(df, 'LL')
+    df['HHHC_Count'] = count_consecutive(df, 'HHHC')
+    df['LLLC_Count'] = count_consecutive(df, 'LLLC')
+
+    pattern_bool_cols = [c for c in df.columns if df[c].dtype == bool or df[c].dtype == np.bool_]
+    for c in pattern_bool_cols:
+        df[c] = df[c].astype(bool)
+
+    pattern_count_cols = [c for c in df.columns if c.endswith('_Count')]
+    for c in pattern_count_cols:
+        df[c] = df[c].fillna(0).astype(np.int8)
+
+
+def calculate_all_candle_patterns(df):
+    pattern_cols = get_pattern_columns()
+    incomplete_mask = df[pattern_cols].isna().any(axis=1)
+    if not incomplete_mask.any():
+        print("    Patterns: Already complete, skipping.")
+        return
+
+    first_incomplete_idx = np.where(incomplete_mask)[0][0]
+    if first_incomplete_idx == 0:
+        print("    Patterns: No pattern data calculated before, from start.")
+        start_idx = 0
+    else:
+        start_idx = max(first_incomplete_idx - 510, 0)
+        print(f"    Patterns: Partial missing data, start from index {start_idx}")
+
+    calculate_patterns(df, start_idx=start_idx)
+    print(f"    Patterns updated from index {start_idx} onwards.")
+
+
+def calculate_basic_patterns(df, start_idx=0):
+    df.loc[start_idx:, 'candle_color'] = np.where(
+        df['close'].iloc[start_idx:] > df['open'].iloc[start_idx:], 1,
+        np.where(df['close'].iloc[start_idx:] < df['open'].iloc[start_idx:], -1, 0)
+    ).astype(np.int8)
+
+    df.loc[start_idx:, 'Same_Color'] = (df['candle_color'] == df['candle_color'].shift(1))[start_idx:]
+    df.loc[start_idx:, 'HH'] = (df['high'] > df['high'].shift(1))[start_idx:]
+    df.loc[start_idx:, 'LL'] = (df['low'] < df['low'].shift(1))[start_idx:]
+    df.loc[start_idx:, 'HHHC'] = (df['HH'] & (df['close'] > df['close'].shift(1)))[start_idx:]
+    df.loc[start_idx:, 'LLLC'] = (df['LL'] & (df['close'] < df['close'].shift(1)))[start_idx:]
+
+    df['Same_Color_Count'] = count_consecutive(df, 'Same_Color')
+    df['HH_Count'] = count_consecutive(df, 'HH')
+    df['LL_Count'] = count_consecutive(df, 'LL')
+    df['HHHC_Count'] = count_consecutive(df, 'HHHC')
+    df['LLLC_Count'] = count_consecutive(df, 'LLLC')
+
+    pattern_bool_cols = [c for c in df.columns if df[c].dtype == bool]
+    for c in pattern_bool_cols:
+        df[c] = df[c].astype(bool)
+
+    pattern_count_cols = [c for c in df.columns if c.endswith('_Count')]
+    for c in pattern_count_cols:
+        df[c] = df[c].fillna(0).astype(np.int8)
+
+
+def calculate_all_basic_patterns(df):
+    basic_pattern_cols = [
+        'candle_color', 'Same_Color', 'Same_Color_Count', 'HH', 'LL', 'HHHC', 'LLLC', 'HH_Count', 'LL_Count', 'HHHC_Count', 'LLLC_Count'
+    ]
+
+    missing_cols = [col for col in basic_pattern_cols if col not in df.columns]
+    if missing_cols:
+        nan_df = pd.DataFrame({c: np.nan for c in missing_cols}, index=df.index)
+        df = pd.concat([df, nan_df], axis=1)
+
+    incomplete_mask = df[basic_pattern_cols].isna().any(axis=1)
+    if not incomplete_mask.any():
+        print("    Basic Patterns: Already complete, skipping.")
+        return
+
+    first_incomplete_idx = np.where(incomplete_mask)[0][0]
+    if first_incomplete_idx == 0:
+        print("    Basic Patterns: No data calculated before, from start.")
+        start_idx = 0
+    else:
+        start_idx = max(first_incomplete_idx - 510, 0)
+        print(f"    Basic Patterns: Partial missing data, start from index {start_idx}")
+
+    calculate_basic_patterns(df, start_idx=start_idx)
+    print(f"    Basic Patterns updated from index {start_idx} onwards.")
+
+
 def calculate_sr_levels_numba(
     open_prices, high_prices, low_prices, close_prices, atr_values,
     upper_sr_array, lower_sr_array,
     period_for_sr, touches_for_sr, slack_for_sr_atr_div,
     atr_rejection_multiplier, min_height_of_sr_distance, max_height_of_sr_distance
 ):
-    """
-    Numba-accelerated function to calculate SR levels.
-    """
     n = len(open_prices)
     for i in prange(period_for_sr + 1, n):
         atr = atr_values[i]
@@ -674,17 +571,15 @@ def calculate_sr_levels_numba(
 
         current_open = open_prices[i]
 
-        # Initialize HighSR and LowSR
         HighSR = current_open + min_height_of_sr_distance * uSlackForSR
         LowSR = current_open - min_height_of_sr_distance * uSlackForSR
 
-        # LocalMax and LocalMin in the recent window
         recent_highs = high_prices[i - period_for_sr:i]
         recent_lows = low_prices[i - period_for_sr:i]
         LocalMax = np.nanmax(recent_highs)
         LocalMin = np.nanmin(recent_lows)
 
-        # Upper SR Level
+        # Upper SR
         LoopCounter = 0
         upper_sr_level = 0.0
         while LoopCounter < max_height_of_sr_distance:
@@ -702,7 +597,7 @@ def calculate_sr_levels_numba(
                     upper_sr_level = 0
                     break
 
-        # Lower SR Level
+        # Lower SR
         LoopCounter = 0
         lower_sr_level = 0.0
         while LoopCounter < max_height_of_sr_distance:
@@ -723,14 +618,12 @@ def calculate_sr_levels_numba(
         upper_sr_array[i] = upper_sr_level
         lower_sr_array[i] = lower_sr_level
 
+
 @njit
 def count_touches_numba(
     current_hline, open_prices, high_prices, low_prices, close_prices, uRejectionFromSR,
     touches_for_sr, start_idx, end_idx, upper=True
 ):
-    """
-    Numba-accelerated function to count the number of touches to the given SR level.
-    """
     counter = 0
     half_rejection = uRejectionFromSR / 2.0
 
@@ -742,40 +635,125 @@ def count_touches_numba(
         candle_size = abs(high_price - low_price)
 
         if upper:
-            # Upper SR check
             if open_price < current_hline and close_price < current_hline:
-                if high_price > current_hline or (
-                    candle_size > uRejectionFromSR and (current_hline - high_price) < half_rejection
-                ):
+                if high_price > current_hline or (candle_size > uRejectionFromSR and (current_hline - high_price) < half_rejection):
                     counter += 1
                     if counter == touches_for_sr:
                         return True
         else:
-            # Lower SR check
             if open_price > current_hline and close_price > current_hline:
-                if low_price < current_hline or (
-                    candle_size > uRejectionFromSR and (low_price - current_hline) < half_rejection
-                ):
+                if low_price < current_hline or (candle_size > uRejectionFromSR and (low_price - current_hline) < half_rejection):
                     counter += 1
                     if counter == touches_for_sr:
                         return True
     return False
 
+
+def calculate_sr_levels(df, sr_params, upper_sr_col, lower_sr_col):
+    period_for_sr = sr_params['period_for_sr']
+    touches_for_sr = sr_params['touches_for_sr']
+    slack_for_sr_atr_div = sr_params['slack_for_sr_atr_div']
+    atr_rejection_multiplier = sr_params['atr_rejection_multiplier']
+    min_height_of_sr_distance = sr_params['min_height_of_sr_distance']
+    max_height_of_sr_distance = sr_params['max_height_of_sr_distance']
+
+    open_prices = df['open'].values.astype(np.float32)
+    high_prices = df['high'].values.astype(np.float32)
+    low_prices = df['low'].values.astype(np.float32)
+    close_prices = df['close'].values.astype(np.float32)
+    atr_values = df['ATR'].values.astype(np.float32)
+
+    upper_sr_array = np.zeros(len(df), dtype=np.float32)
+    lower_sr_array = np.zeros(len(df), dtype=np.float32)
+
+    calculate_sr_levels_numba(
+        open_prices, high_prices, low_prices, close_prices, atr_values,
+        upper_sr_array, lower_sr_array,
+        period_for_sr, touches_for_sr, slack_for_sr_atr_div,
+        atr_rejection_multiplier, min_height_of_sr_distance, max_height_of_sr_distance
+    )
+
+    df[upper_sr_col] = upper_sr_array
+    df[lower_sr_col] = lower_sr_array
+
+
+def calculate_all_sr_levels(df):
+    sr_cols = get_sr_columns()
+    incomplete_mask = df[sr_cols].isna().any(axis=1)
+    if not incomplete_mask.any():
+        print("    SR: Already complete, skipping.")
+        return
+
+    first_incomplete_idx = np.where(incomplete_mask)[0][0]
+    if first_incomplete_idx == 0:
+        print("    SR: No SR data calculated, calculating from start.")
+    else:
+        start_idx = max(first_incomplete_idx - 510, 0)
+        print(f"    SR: Partial missing data, starting from index {start_idx} (recalculating full)")
+
+    # We always recalculate SR from start for simplicity
+    period = [75, 200, 500]
+    touches = [3, 4, 5]
+    slack_div = [5, 10, 15]
+    rejection_multi = [0.5, 1.0, 1.5]
+    fixed_SR_params = {
+        'min_height_of_sr_distance': 3.0,
+        'max_height_of_sr_distance': 60.0,
+    }
+
+    for r in rejection_multi:
+        for t in slack_div:
+            for s in touches:
+                for l in period:
+                    config_id = f"SR{l}_{s}_{t}_{r}"
+                    upper_col = f"upper_{config_id}"
+                    lower_col = f"lower_{config_id}"
+                    sr_incomplete = df[[upper_col, lower_col]].isna().any(axis=1).any()
+                    if sr_incomplete:
+                        print(f"    Calculating SR for {config_id}")
+                        SR_PARAMS = {
+                            'period_for_sr': l,
+                            'touches_for_sr': s,
+                            'slack_for_sr_atr_div': t,
+                            'atr_rejection_multiplier': r
+                        }
+                        SR_PARAMS.update(fixed_SR_params)
+                        calculate_sr_levels(df, SR_PARAMS, upper_col, lower_col)
+                        df[[upper_col, lower_col]] = df[[upper_col, lower_col]].fillna(0)
+
+
+def get_relevant_columns_by_timeframe(tf_name):
+    # Get all sets of columns
+    required_columns, indicators_cols, sr_cols, pattern_cols = get_required_columns()
+
+    # For M1 and M5, we only need basic pattern columns
+    basic_pattern_cols = [
+        'candle_color','Same_Color','Same_Color_Count','HH','LL','HHHC','LLLC','HH_Count','LL_Count','HHHC_Count','LLLC_Count'
+    ]
+    
+    if tf_name in ['M1', 'M5']:
+        relevant_cols = basic_pattern_cols
+    else:
+        # For M15 and above, all are relevant: indicators, SR, and full patterns
+        relevant_cols = required_columns
+    
+    # Ensure uniqueness
+    relevant_cols = list(dict.fromkeys(relevant_cols))
+    return relevant_cols
+
+
 def process_symbol_timeframe(args):
-    """
-    Function to process a single symbol and timeframe. Designed for multiprocessing.
-    """
     symbol, tf_name, output_dir = args
     print(f"Processing symbol: {symbol}, Timeframe: {tf_name}")
     print(f"    Output directory: {output_dir}")
     print(f"time is {datetime.now()}")
+
     if 'JPY' in symbol:
         pip_digits = 2
     else:
         pip_digits = 4
     pip = 10 ** -pip_digits
 
-    # Define file path
     filename = f"{symbol}_{tf_name}.parquet"
     filepath = os.path.join(output_dir, filename)
 
@@ -792,72 +770,40 @@ def process_symbol_timeframe(args):
         print(f"    Error reading data file: {e}")
         return
 
-    # Ensure all required columns exist, if missing, create them with NaN
-    required_columns = get_required_columns()
-    for col in required_columns:
-        if col not in df.columns:
-            df[col] = np.nan
+    # Remove duplicate columns if any
+    df = df.loc[:, ~df.columns.duplicated()]
 
-    # Identify which rows are incomplete (NaN in required columns)
-    incomplete_mask = df[required_columns].isna().any(axis=1)
+    # Get only relevant columns for the current timeframe
+    relevant_cols = get_relevant_columns_by_timeframe(tf_name)
 
-    if not incomplete_mask.any():
-        print("    Indicators already calculated for all data.")
-        return
+    # Ensure all required columns exist
+    missing_cols = [col for col in relevant_cols if col not in df.columns]
+    if missing_cols:
+        nan_df = pd.DataFrame({c: np.nan for c in missing_cols}, index=df.index)
+        df = pd.concat([df, nan_df], axis=1)
 
-    # Find the first incomplete row
-    first_incomplete_idx = np.where(incomplete_mask)[0][0]
+    # Indicators
+    if tf_name in ['M15', 'M30', 'H1', 'H4', 'D1', 'W1']:
+        print(f"    Calculating indicators for {symbol} {tf_name}, time is {datetime.now()}")
+        calculate_all_indicators(df, pip)
 
-    # Start calculation 510 rows before first_incomplete_idx, if possible
-    start_idx = max(first_incomplete_idx - 510, 0)
-    df_to_calc = df.iloc[start_idx:].copy()
+    # SR
+    if tf_name in ['M15', 'M30', 'H1', 'H4', 'D1', 'W1']:
+        print(f"    Calculating SR levels for {symbol} {tf_name}, time is {datetime.now()}")
+        calculate_all_sr_levels(df)
 
-    # Calculate indicators on the subset
-    try:
-        df_to_calc = calculate_indicators(df_to_calc, pip)
-    except Exception as e:
-        print(f"    Error calculating indicators: {e}")
-        return
+    # Patterns
+    print(f"    Calculating patterns for {symbol} {tf_name}, time is {datetime.now()}")
+    if tf_name in ['M1', 'M5']:
+        calculate_all_basic_patterns(df)
+    else:
+        calculate_all_candle_patterns(df)
 
-    # Update main df with the newly calculated values
-    df.update(df_to_calc)
-
-    # Calculate SR levels for the entire DataFrame (or at least from start_idx if SR depends on history)
-    # If SR calculations depend on the entire history, it's simpler to recalculate for all data.
-    # If performance is a concern, you could do it from start_idx, but ensure the logic is correct.
-    for config in SR_configs:
-        period_for_sr, touches_for_sr, slack_for_sr_atr_div, atr_rejection_multiplier, config_id = config
-        
-        # Update SR_PARAMS with current configuration
-        SR_PARAMS = {
-            'period_for_sr': period_for_sr,
-            'touches_for_sr': touches_for_sr,
-            'slack_for_sr_atr_div': slack_for_sr_atr_div,
-            'atr_rejection_multiplier': atr_rejection_multiplier,
-        }
-        SR_PARAMS.update(fixed_SR_params)
-        
-        print(f"Calculating SR levels for configuration: {config_id}")
-        
-        try:
-            # Recalculate SR levels for all data or at least from start_idx
-            # Here we do for all to ensure integrity:
-            df = calculate_sr_levels(df.copy(), SR_PARAMS, f"upper_{config_id}", f"lower_{config_id}")
-            print(f"    Calculated SR levels for {config_id}")
-        except Exception as e:
-            print(f"    Error calculating SR levels for {config_id}: {e}")
-            continue  # Skip to the next configuration
-
-        # Handle potential NaN values resulting from SR calculation
-        df[[f"upper_{config_id}", f"lower_{config_id}"]] = df[[f"upper_{config_id}", f"lower_{config_id}"]].fillna(0)
-
-    # Save updated data to Parquet
     try:
         df.to_parquet(filepath, index=False)
-        print(f"    Updated data with indicators saved to {filepath}")
+        print(f"    Updated data saved to {filepath}")
     except Exception as e:
         print(f"    Error saving data to Parquet: {e}")
-
 
 
 def calculate_indicators_for_files():
@@ -866,18 +812,22 @@ def calculate_indicators_for_files():
         print(f"Data directory {output_dir} does not exist.")
         return
 
-    # Prepare arguments for multiprocessing
+    for symbol in currency_pairs:
+        for tf_name in timeframes:
+            process_symbol_timeframe((symbol, tf_name, output_dir))
+
+    # If you want multiprocessing, uncomment and adjust:
+    """
     tasks = []
     for symbol in currency_pairs:
         for tf_name in timeframes:
             tasks.append((symbol, tf_name, output_dir))
 
-    # Use multiprocessing Pool
-    #num_processes = max(cpu_count() - 1, 1)  # Leave one core free
-    num_processes = 2  # I have 10 cores, use 2 for now
+    num_processes = 2
     with Pool(processes=num_processes) as pool:
         pool.map(process_symbol_timeframe, tasks)
+    """
+
 
 if __name__ == "__main__":
-    #print(f"cpu_count is: {cpu_count()}")
     calculate_indicators_for_files()
