@@ -26,6 +26,11 @@ import numba
 from numba import njit, prange
 from multiprocessing import Pool, cpu_count
 
+# Recalculation Flags (Set to True to force full recalculation)
+FORCE_RECALC_INDICATORS = False
+FORCE_RECALC_SR = False
+FORCE_RECALC_PATTERNS = True
+
 drive = "/Volumes/TM"
 folder = "historical_data"
 
@@ -318,19 +323,25 @@ def calculate_indicators(df, pip, start_idx=0):
 
 
 def calculate_all_indicators(df, pip):
+    global FORCE_RECALC_INDICATORS  # Access the global flag
     indicator_cols = get_indicator_columns()
-    incomplete_mask = df[indicator_cols].isna().any(axis=1)
-    if not incomplete_mask.any():
-        print("    Indicators: Already complete, skipping.")
-        return
 
-    first_incomplete_idx = np.where(incomplete_mask)[0][0]
-    if first_incomplete_idx == 0:
-        print("    Indicators: No data calculated before, calculating from start.")
+    if FORCE_RECALC_INDICATORS:
+        print("    Indicators: Full recalculation requested. Calculating from start.")
         start_idx = 0
     else:
-        start_idx = max(first_incomplete_idx - 510, 0)
-        print(f"    Indicators: Partial missing data, starting from index {start_idx}")
+        incomplete_mask = df[indicator_cols].isna().any(axis=1)
+        if not incomplete_mask.any():
+            print("    Indicators: Already complete, skipping.")
+            return
+
+        first_incomplete_idx = np.where(incomplete_mask)[0][0]
+        if first_incomplete_idx == 0:
+            print("    Indicators: No data calculated before, calculating from start.")
+            start_idx = 0
+        else:
+            start_idx = max(first_incomplete_idx - 510, 0)
+            print(f"    Indicators: Partial missing data, starting from index {start_idx}")
 
     calculate_indicators(df, pip, start_idx=start_idx)
     print(f"    Indicators updated from index {start_idx} onwards.")
@@ -463,14 +474,14 @@ def calculate_patterns(df, start_idx=0):
 
     # counts
     # Use full df because count_consecutive looks at full series
-    df['Same_Color_Count'] = count_consecutive(df, 'Same_Color')
-    df['Marubozu_Count'] = count_consecutive(df, 'Marubozu')
-    df['Bullish_Marubozu_Count'] = count_consecutive(df, 'Bullish_Marubozu')
-    df['Bearish_Marubozu_Count'] = count_consecutive(df, 'Bearish_Marubozu')
-    df['HH_Count'] = count_consecutive(df, 'HH')
-    df['LL_Count'] = count_consecutive(df, 'LL')
-    df['HHHC_Count'] = count_consecutive(df, 'HHHC')
-    df['LLLC_Count'] = count_consecutive(df, 'LLLC')
+    df['Same_Color_Count'] = count_consecutive(df, SAME_COLOR)
+    df['Marubozu_Count'] = count_consecutive(df, MARUBOZU)
+    df['Bullish_Marubozu_Count'] = count_consecutive(df, BULLISH_MARUBOZU)
+    df['Bearish_Marubozu_Count'] = count_consecutive(df, BEARISH_MARUBOZU)
+    df['HH_Count'] = count_consecutive(df, HH)
+    df['LL_Count'] = count_consecutive(df, LL)
+    df['HHHC_Count'] = count_consecutive(df, HHHC)
+    df['LLLC_Count'] = count_consecutive(df, LLLC)
 
     pattern_bool_cols = [c for c in df.columns if df[c].dtype == bool or df[c].dtype == np.bool_]
     for c in pattern_bool_cols:
@@ -482,19 +493,25 @@ def calculate_patterns(df, start_idx=0):
 
 
 def calculate_all_candle_patterns(df):
+    global FORCE_RECALC_PATTERNS  # Access the global flag
     pattern_cols = get_pattern_columns()
-    incomplete_mask = df[pattern_cols].isna().any(axis=1)
-    if not incomplete_mask.any():
-        print("    Patterns: Already complete, skipping.")
-        return
 
-    first_incomplete_idx = np.where(incomplete_mask)[0][0]
-    if first_incomplete_idx == 0:
-        print("    Patterns: No pattern data calculated before, from start.")
+    if FORCE_RECALC_PATTERNS:
+        print("    Candle Patterns: Full recalculation requested. Calculating from start.")
         start_idx = 0
     else:
-        start_idx = max(first_incomplete_idx - 510, 0)
-        print(f"    Patterns: Partial missing data, start from index {start_idx}")
+        incomplete_mask = df[pattern_cols].isna().any(axis=1)
+        if not incomplete_mask.any():
+            print("    Patterns: Already complete, skipping.")
+            return
+
+        first_incomplete_idx = np.where(incomplete_mask)[0][0]
+        if first_incomplete_idx == 0:
+            print("    Patterns: No pattern data calculated before, from start.")
+            start_idx = 0
+        else:
+            start_idx = max(first_incomplete_idx - 510, 0)
+            print(f"    Patterns: Partial missing data, start from index {start_idx}")
 
     calculate_patterns(df, start_idx=start_idx)
     print(f"    Patterns updated from index {start_idx} onwards.")
@@ -512,11 +529,11 @@ def calculate_basic_patterns(df, start_idx=0):
     df.loc[start_idx:, 'HHHC'] = (df['HH'] & (df['close'] > df['close'].shift(1)))[start_idx:]
     df.loc[start_idx:, 'LLLC'] = (df['LL'] & (df['close'] < df['close'].shift(1)))[start_idx:]
 
-    df['Same_Color_Count'] = count_consecutive(df, 'Same_Color')
-    df['HH_Count'] = count_consecutive(df, 'HH')
-    df['LL_Count'] = count_consecutive(df, 'LL')
-    df['HHHC_Count'] = count_consecutive(df, 'HHHC')
-    df['LLLC_Count'] = count_consecutive(df, 'LLLC')
+    df['Same_Color_Count'] = count_consecutive(df, SAME_COLOR)
+    df['HH_Count'] = count_consecutive(df, HH)
+    df['LL_Count'] = count_consecutive(df, LL)
+    df['HHHC_Count'] = count_consecutive(df, HHHC)
+    df['LLLC_Count'] = count_consecutive(df, LLLC)
 
     pattern_bool_cols = [c for c in df.columns if df[c].dtype == bool]
     for c in pattern_bool_cols:
@@ -528,6 +545,7 @@ def calculate_basic_patterns(df, start_idx=0):
 
 
 def calculate_all_basic_patterns(df):
+    global FORCE_RECALC_PATTERNS  # Access the global flag
     basic_pattern_cols = [
         'candle_color', 'Same_Color', 'Same_Color_Count', 'HH', 'LL', 'HHHC', 'LLLC', 'HH_Count', 'LL_Count', 'HHHC_Count', 'LLLC_Count'
     ]
@@ -537,18 +555,22 @@ def calculate_all_basic_patterns(df):
         nan_df = pd.DataFrame({c: np.nan for c in missing_cols}, index=df.index)
         df = pd.concat([df, nan_df], axis=1)
 
-    incomplete_mask = df[basic_pattern_cols].isna().any(axis=1)
-    if not incomplete_mask.any():
-        print("    Basic Patterns: Already complete, skipping.")
-        return
-
-    first_incomplete_idx = np.where(incomplete_mask)[0][0]
-    if first_incomplete_idx == 0:
-        print("    Basic Patterns: No data calculated before, from start.")
+    if FORCE_RECALC_PATTERNS:
+        print("    Basic Patterns: Full recalculation requested. Calculating from start.")
         start_idx = 0
     else:
-        start_idx = max(first_incomplete_idx - 510, 0)
-        print(f"    Basic Patterns: Partial missing data, start from index {start_idx}")
+        incomplete_mask = df[basic_pattern_cols].isna().any(axis=1)
+        if not incomplete_mask.any():
+            print("    Basic Patterns: Already complete, skipping.")
+            return
+
+        first_incomplete_idx = np.where(incomplete_mask)[0][0]
+        if first_incomplete_idx == 0:
+            print("    Basic Patterns: No data calculated before, from start.")
+            start_idx = 0
+        else:
+            start_idx = max(first_incomplete_idx - 510, 0)
+            print(f"    Basic Patterns: Partial missing data, start from index {start_idx}")
 
     calculate_basic_patterns(df, start_idx=start_idx)
     print(f"    Basic Patterns updated from index {start_idx} onwards.")
@@ -678,20 +700,29 @@ def calculate_sr_levels(df, sr_params, upper_sr_col, lower_sr_col):
 
 
 def calculate_all_sr_levels(df):
+    global FORCE_RECALC_SR  # Access the global flag
     sr_cols = get_sr_columns()
-    incomplete_mask = df[sr_cols].isna().any(axis=1)
-    if not incomplete_mask.any():
-        print("    SR: Already complete, skipping.")
-        return
 
-    first_incomplete_idx = np.where(incomplete_mask)[0][0]
-    if first_incomplete_idx == 0:
-        print("    SR: No SR data calculated, calculating from start.")
+    if FORCE_RECALC_SR:
+        print("    SR Levels: Full recalculation requested. Calculating from start.")
+        # Reset SR columns to NaN to force recalculation
+        df[sr_cols] = np.nan
+        start_idx = 0
     else:
-        start_idx = max(first_incomplete_idx - 510, 0)
-        print(f"    SR: Partial missing data, starting from index {start_idx} (recalculating full)")
+        incomplete_mask = df[sr_cols].isna().any(axis=1)
+        if not incomplete_mask.any():
+            print("    SR: Already complete, skipping.")
+            return
 
-    # We always recalculate SR from start for simplicity
+        first_incomplete_idx = np.where(incomplete_mask)[0][0]
+        if first_incomplete_idx == 0:
+            print("    SR: No SR data calculated, calculating from start.")
+            start_idx = 0
+        else:
+            start_idx = max(first_incomplete_idx - 510, 0)
+            print(f"    SR: Partial missing data, starting from index {start_idx} (recalculating full)")
+
+    # We always recalculate SR PARAMS from start for simplicity
     period = [75, 200, 500]
     touches = [3, 4, 5]
     slack_div = [5, 10, 15]
@@ -709,7 +740,7 @@ def calculate_all_sr_levels(df):
                     upper_col = f"upper_{config_id}"
                     lower_col = f"lower_{config_id}"
                     sr_incomplete = df[[upper_col, lower_col]].isna().any(axis=1).any()
-                    if sr_incomplete:
+                    if sr_incomplete or FORCE_RECALC_SR:
                         print(f"    Calculating SR for {config_id}")
                         SR_PARAMS = {
                             'period_for_sr': l,
@@ -720,7 +751,6 @@ def calculate_all_sr_levels(df):
                         SR_PARAMS.update(fixed_SR_params)
                         calculate_sr_levels(df, SR_PARAMS, upper_col, lower_col)
                         df[[upper_col, lower_col]] = df[[upper_col, lower_col]].fillna(0)
-
 
 def get_relevant_columns_by_timeframe(tf_name):
     # Get all sets of columns

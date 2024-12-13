@@ -14,7 +14,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Global parameter for the filter date (DD.MM.YYYY)
-FILTER_DATE_STR = '01.01.2024'  # Modify this date as needed
+FILTER_DATE_STR = '01.01.2023'  # Modify this date as needed
 
 def convert_parquet_to_csv(source_dir, destination_dir, filter_date_str):
     """
