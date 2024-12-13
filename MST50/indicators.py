@@ -273,6 +273,7 @@ class BBIndicator(Indicator):
         else:
             return None, None
 
+    #TODO: this is wrong, it should be based on the middle band crossing (see in MST50/calculate_indicator_decisions.py)
     def calculate_bb_over(self, rates):
         """
         Determine trade decision based on BB_Over strategy using precomputed middle band.
@@ -294,6 +295,7 @@ class BBIndicator(Indicator):
             return None, None
 
 
+#TODO: update methdos: MA's align or crossover - see in MST50/calculate_indicator_decisions.py
 class MAIndicator(Indicator):
     def __init__(self, params):
         """
@@ -391,6 +393,7 @@ class GRIndicator(Indicator):
 
 
 
+# TODO: need to check calculations of div - I'm not sure if it's correct
 class RSIIndicator(Indicator):
     def __init__(self, params):
         """
@@ -1319,6 +1322,8 @@ class TrendIndicator(Indicator):
 
         return slope, intercept
 
+
+#TODO: compare with mql5 code, think if and how to implement the trendline breakout
     def claculuate_and_make_make_trade_decision(self, rates):
         """
         Make a trade decision based on trendline conditions.
