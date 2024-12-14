@@ -26,7 +26,7 @@ import numba
 from numba import njit, prange
 from multiprocessing import Pool, cpu_count
 
-from .calculate_history_indicators import (check_bb_return_long, check_bb_return_short, check_bb_over_long, check_bb_over_short,
+from MST50.calculate_indicator_decisions import (check_bb_return_long, check_bb_return_short, check_bb_over_long, check_bb_over_short,
                                              check_ma_crossover_long, check_ma_crossover_short, check_price_ma_crossover_long,   check_price_ma_crossover_short,
                                              check_sr_long, check_sr_short, check_breakout_long, check_breakout_short, check_fakeout_long, check_fakeout_short,
                                              check_bars_trend_long, check_bars_trend_short)
@@ -268,6 +268,8 @@ def get_inidicator_decision_columns():
     for period in periods:
         indicator_cols.append(f'Bars_Trend_long_{period}')
         indicator_cols.append(f'Bars_Trend_short_{period}')
+
+    return indicator_cols
 
 
 def get_traget_columns():
@@ -822,7 +824,7 @@ def calculate_all_sr_levels(df):
 
 def get_relevant_columns_by_timeframe(tf_name):
     # Get all sets of columns
-    required_columns, indicators_cols, sr_cols, pattern_cols = get_required_columns()
+    required_columns = get_required_columns()
 
     # For M1 and M5, we only need basic pattern columns
     basic_pattern_cols = [
