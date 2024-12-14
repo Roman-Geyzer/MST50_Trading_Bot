@@ -34,7 +34,7 @@ from .calculate_history_indicators import (check_bb_return_long, check_bb_return
 # Recalculation Flags (Set to True to force full recalculation)
 FORCE_RECALC_INDICATORS = False
 FORCE_RECALC_SR = False
-FORCE_RECALC_PATTERNS = False
+FORCE_RECALC_PATTERNS = True
 FORCE_RECALC_INDICATORS_DECISIONS = False
 FORCE_RECALC_TARGETS = False
 
@@ -92,8 +92,8 @@ def count_consecutive(df: pd.DataFrame, comparison_type: str) -> np.ndarray:
     if n == 0:
         return counts
 
-    counts[0] = 1
-    current_count = 1
+    counts[0] = 0
+    current_count = 0
 
     for i in range(1, n):
         condition = False
@@ -133,7 +133,7 @@ def count_consecutive(df: pd.DataFrame, comparison_type: str) -> np.ndarray:
         if condition:
             current_count += 1
         else:
-            current_count = 1
+            current_count = 0
 
         counts[i] = current_count
 
@@ -272,7 +272,15 @@ def get_inidicator_decision_columns():
 
 def get_traget_columns():
     pass
-    #TODO: Add target columns for indicators
+    feature_targets_bars = [5, 20, 50, 100]
+    feature_targets_params = ['max_price_change', 'min_price_change', 'max_min_price_ratio', 'min_max_price_ratio', 
+                            'above_price_area', 'below_price_area' , 'above_below_price_area_ratio' , 'below_above_price_area_ratio']
+    feature_targets = []
+    for bar in feature_targets_bars:
+        for param in feature_targets_params:
+            feature_targets.append(f'{param}_{bar}')
+    return feature_targets
+
 
 def get_required_columns():
     indicators = get_indicator_columns()
@@ -945,16 +953,90 @@ def calculate_all_indicator_decisions(df, pip, start_idx=0):
 
 
 
+def calculate_area_above(open_price, highs, lows):
+    """
+    Function to calculate the area above the open price
+    params:
+        open_price: open price of the candle
+        highs: high prices of the candles (array)
+        lows: low prices of the candles (array)
+    returns:
+        area_above: area above the open price
+
+    """
+    area_above = 0
+    for high, low in zip(highs, lows):
+        if low > open_price:
+            area_above += high
+        elif high > open_price:
+            above = high - open_price
+            below = open_price - low
+            ratio = above / (above + below)
+            area_above += high * ratio
+    area_above = (area_above / len(highs)) / open_price # normalize by dividing by the number of candles and open price
+    area_above = area_above * 100 # convert to percentage
+    area_above = max(0.0001, area_above) # make sure area is not 0
+    return area_above
 
 
-                        
+def calculate_area_below(open_price, highs, lows):
+    """
+    Function to calculate the area below the open price
+    params:
+        open_price: open price of the candle
+        highs: high prices of the candles (array)
+        lows: low prices of the candles (array)
+    returns:
+        area_below: area below the open price
+
+    """
+    area_below = 0
+    for high, low in zip(highs, lows):
+        if high < open_price:
+            area_below += low
+        elif low < open_price:
+            above = high - open_price
+            below = open_price - low
+            ratio = below / (above + below)
+            area_below += low * ratio
+    area_below = (area_below / len(lows)) / open_price # normalize by dividing by the number of candles and open price
+    area_below = area_below * 100 # convert to percentage
+    area_below = max(0.0001, area_below) # make sure area is not 0
+    return area_below                       
 
 
-def calculate_all_targets(df, pip):
+def calculate_all_targets(df, pip, start_idx=0):
     pass
     #TODO: Implement this function
     feature_targets_bars = [5, 20, 50, 100]
     feature_targets_params = ['max_price_change', 'min_price_change', 'max_min_price_ratio','min_max_price_ratio' ,  'above_price_area', 'below_price_area' , 'above_below_price_area_ratio' , 'below_above_price_area_ratio']
+    for bars in feature_targets_bars:
+        #max price change =  (highest high in the next bars - current open) / current open
+        df.loc[start_idx:, f'max_price_change_{bars}'] = (df['high'].rolling(window=5).max().shift(-4) - df['open']+pip) / df['open'] #pip added to avoid open = high and so 0% change
+        #min price change =  (lowest low in the next bars - current open) / current open
+        df.loc[start_idx:, f'min_price_change_{bars}'] = (df['low'].rolling(window=5).min().shift(-4) - df['open']-pip) / df['open'] #pip subtracted to avoid open = low and so 0% change
+        #max min price ratio = max price change / min price change
+        df.loc[start_idx:, f'max_min_price_ratio_{bars}'] = df[f'max_price_change_{bars}'] / df[f'min_price_change_{bars}']
+        #min max price ratio = min price change / max price change
+        df.loc[start_idx:, f'min_max_price_ratio_{bars}'] = df[f'min_price_change_{bars}'] / df[f'max_price_change_{bars}']
+        #area above open price
+        df.loc[start_idx:, f'above_price_area_{bars}'] = df.rolling(window=bars).apply(
+            lambda window: calculate_area_above(window['open'].iloc[0], window['high'].values, window['low'].values),
+            raw=False
+        )
+        #area below open price
+        df.loc[start_idx:, f'below_price_area_{bars}'] = df.rolling(window=bars).apply(
+            lambda window: calculate_area_below(window['open'].iloc[0], window['high'].values, window['low'].values),
+            raw=False
+        )
+        #above below price area ratio = area above open price / area below open price
+        df.loc[start_idx:, f'above_below_price_area_ratio_{bars}'] = df[f'above_price_area_{bars}'] / df[f'below_price_area_{bars}']
+        #below above price area ratio = area below open price / area above open price
+        df.loc[start_idx:, f'below_above_price_area_ratio_{bars}'] = df[f'below_price_area_{bars}'] / df[f'above_price_area_{bars}']
+
+
+
+
 
 def process_symbol_timeframe(args):
     symbol, tf_name, output_dir = args
@@ -1008,10 +1090,6 @@ def process_symbol_timeframe(args):
     # Indicator_decisions
         print(f"    Calculating indicator decisions for {symbol} {tf_name}, time is {datetime.now()}")
         calculate_all_indicator_decisions(df)
-    
-    # Targets
-        print(f"    Calculating targets for {symbol} {tf_name}, time is {datetime.now()}")
-        calculate_all_targets(df, pip)
 
     # Patterns
     print(f"    Calculating patterns for {symbol} {tf_name}, time is {datetime.now()}")
@@ -1019,6 +1097,11 @@ def process_symbol_timeframe(args):
         calculate_all_basic_patterns(df)
     else:
         calculate_all_candle_patterns(df)
+
+    # Targets
+    if tf_name in ['M15', 'M30', 'H1', 'H4', 'D1', 'W1']: # Only calculate targets for these timeframes    
+        print(f"    Calculating targets for {symbol} {tf_name}, time is {datetime.now()}")
+        calculate_all_targets(df, pip)
 
     try:
         df.to_parquet(filepath, index=False)
