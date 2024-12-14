@@ -26,10 +26,17 @@ import numba
 from numba import njit, prange
 from multiprocessing import Pool, cpu_count
 
+from .calculate_history_indicators import (check_bb_return_long, check_bb_return_short, check_bb_over_long, check_bb_over_short,
+                                             check_ma_crossover_long, check_ma_crossover_short, check_price_ma_crossover_long,   check_price_ma_crossover_short,
+                                             check_sr_long, check_sr_short, check_breakout_long, check_breakout_short, check_fakeout_long, check_fakeout_short,
+                                             check_bars_trend_long, check_bars_trend_short)
+
 # Recalculation Flags (Set to True to force full recalculation)
 FORCE_RECALC_INDICATORS = False
 FORCE_RECALC_SR = False
-FORCE_RECALC_PATTERNS = True
+FORCE_RECALC_PATTERNS = False
+FORCE_RECALC_INDICATORS_DECISIONS = False
+FORCE_RECALC_TARGETS = False
 
 drive = "/Volumes/TM"
 folder = "historical_data"
@@ -217,13 +224,64 @@ def get_pattern_columns():
     pattern_cols = list(dict.fromkeys(pattern_cols))
     return pattern_cols
 
+def get_inidicator_decision_columns():
+    #bb_decisions 
+    indicator_cols = []
+    periods= [15, 20, 25]
+    deviations= [1.5, 2.0, 2.5]
+    strategies = ['with_long', 'with_short', 'return_long', 'return_short', 'over_long', 'over_short']
+    for period in periods:
+        for deviation in deviations:
+            for strategy in strategies:
+                indicator_cols.append(f'BB{period}_{deviation}_{strategy}')
+
+    #ma_decisions
+    settings = ['7vs21vs50' , '21vs50vs200']
+    for setting in settings:
+        indicator_cols.append(f'MA_Cross_with_long_{setting}')
+        indicator_cols.append(f'MA_Cross_with_short_{setting}')
+    MAs = [7, 21, 50, 200]
+    for ma in MAs:
+        indicator_cols.append(f'MA_Cross_price_with_long_{ma}')
+        indicator_cols.append(f'MA_Cross_price_with_short_{ma}')
+    
+    # Range Decisions
+    period = [75, 200, 500]
+    touches = [3, 4, 5]
+    slack_div = [5, 10, 15]
+    rejection_multi = [0.5, 1.0, 1.5]
+    for r in rejection_multi:
+        for t in slack_div:
+            for s in touches:
+                for l in period:
+                    #     strategies = ['SR', 'Breakout', 'Fakeout'] 
+                    config_id = f"SR{l}_{s}_{t}_{r}"
+                    indicator_cols.append(f'SR_long_{config_id}')
+                    indicator_cols.append(f'SR_short_{config_id}')
+                    indicator_cols.append(f'Breakout_long_{config_id}')
+                    indicator_cols.append(f'Breakout_short_{config_id}')
+                    indicator_cols.append(f'Fakeout_long_{config_id}')
+                    indicator_cols.append(f'Fakeout_short_{config_id}')
+    
+    # Bars Trend
+    periods = [20, 50, 100]
+    for period in periods:
+        indicator_cols.append(f'Bars_Trend_long_{period}')
+        indicator_cols.append(f'Bars_Trend_short_{period}')
+
+
+def get_traget_columns():
+    pass
+    #TODO: Add target columns for indicators
 
 def get_required_columns():
     indicators = get_indicator_columns()
     sr = get_sr_columns()
     patterns = get_pattern_columns()
-    required_columns = list(dict.fromkeys(indicators + sr + patterns))
-    return required_columns, indicators, sr, patterns
+    indicators_decisions = get_inidicator_decision_columns()
+    targets = get_traget_columns()
+    required_columns = list(dict.fromkeys(indicators + sr + patterns + indicators_decisions + targets))
+    return required_columns
 
 
 @njit
@@ -283,6 +341,8 @@ def calculate_indicators(df, pip, start_idx=0):
         df.loc[start_idx:, f'{label}_Upper'] = upper
         df.loc[start_idx:, f'{label}_Middle'] = mid
         df.loc[start_idx:, f'{label}_Lower'] = lower
+        # Bool_Above and Bool_Below
+        # TODO: Check if this can be optimized (int8 or bool)
         df.loc[start_idx:, f'{label}_Bool_Above'] = (df['close'].iloc[start_idx:].values > upper)
         df.loc[start_idx:, f'{label}_Bool_Below'] = (df['close'].iloc[start_idx:].values < lower)
 
@@ -771,6 +831,130 @@ def get_relevant_columns_by_timeframe(tf_name):
     relevant_cols = list(dict.fromkeys(relevant_cols))
     return relevant_cols
 
+def calculate_all_indicator_decisions(df, pip, start_idx=0):
+    # TODO: Check if this can be optimized (int8 or bool)
+    # TODO: Implement this function
+    
+    # Bollinger Bands
+    bb_settings = [
+        (15, 1.5, 'BB15_1.5'),
+        (15, 2.0, 'BB15_2.0'),
+        (15, 2.5, 'BB15_2.5'),
+        (20, 1.5, 'BB20_1.5'),
+        (20, 2.0, 'BB20_2.0'),
+        (20, 2.5, 'BB20_2.5'),
+        (25, 1.5, 'BB25_1.5'),
+        (25, 2.0, 'BB25_2.0'),
+        (25, 2.5, 'BB25_2.5'),
+    ]
+
+    for period, deviation, label in bb_settings:
+        # bb with strategy - buy if previous candle closed above upper band, sell if closed below lower band
+        # make use of the precalculated {label}_Bool_Above , {label}_Bool_Below columns
+        # since logic is very simple forgo the use of check_bb_with_long and check_bb_with_short functions
+        df.loc[start_idx:, f'{label}_with_long'] = df[f'{label}_Bool_Above'].shift(1).astype('int8')
+        df.loc[start_idx:, f'{label}_with_short'] = df[f'{label}_Bool_Below'].shift(1).astype('int8')
+
+        # bb return_long and return_short
+        # use the check_bb_return_long , and check_bb_return_short functions
+        # parameters: previous bool below/above, previous previous bool below/above - i.e. last and last last bool below/above
+        df.loc[start_idx:, f'{label}_return_long'] = check_bb_return_long(df[f'{label}_Bool_Below'].shift(1).values, df[f'{label}_Bool_Below'].shift(2).values).astype('int8') 
+        df.loc[start_idx:, f'{label}_return_short'] = check_bb_return_short(df[f'{label}_Bool_Above'].shift(1).values, df[f'{label}_Bool_Above'].shift(2).values).astype('int8')
+
+        # bb over long and short
+        # use the check_bb_over_long , and check_bb_over_long functions
+        # parameters: prev close, prev prev close, prev middle band, prev prev middle band
+        df.loc[start_idx:, f'{label}_over_long'] = check_bb_over_long(df['close'].shift(1).values, df['close'].shift(2).values, df[f'{label}_Middle'].shift(1).values, df[f'{label}_Middle'].shift(2).values).astype('int8')
+        df.loc[start_idx:, f'{label}_over_short'] = check_bb_over_short(df['close'].shift(1).values, df['close'].shift(2).values, df[f'{label}_Middle'].shift(1).values, df[f'{label}_Middle'].shift(2).values).astype('int8')
+
+    # MA cross
+
+    # MA crossover strategy, use the check_ma_crossover_long, and check_ma_crossover_short functions
+    # parameters: prev_short_ma, prev_prev_short_ma, prev_medium_ma,prev_prev_medium_ma, prev_long_ma 
+    # for long:     Buy if short-term MA crosses above medium-term MA and medium-term MA is below long-term MA. - buy into strength after a pullback
+    # for short:    Sell if short-term MA crosses below medium-term MA and medium-term MA is above long-term MA. - sell into weakness after a bounce
+    settings = ['7vs21vs50' , '21vs50vs200']
+    for setting in settings:
+        short_ma, medium_ma, long_ma = setting.split('vs')
+        short_ma = int(short_ma)
+        medium_ma = int(medium_ma)
+        long_ma = int(long_ma)
+        df.loc[start_idx:, f'MA_Cross_with_long_{setting}'] = check_ma_crossover_long(df[f'MA_{short_ma}'].shift(1).values, df[f'MA_{short_ma}'].shift(2).values, df[f'MA_{medium_ma}'].shift(1).values, df[f'MA_{medium_ma}'].shift(2).values, df[f'MA_{long_ma}'].shift(1).values).astype('int8')
+        df.loc[start_idx:, f'MA_Cross_with_short_{setting}'] = check_ma_crossover_short(df[f'MA_{short_ma}'].shift(1).values, df[f'MA_{short_ma}'].shift(2).values, df[f'MA_{medium_ma}'].shift(1).values, df[f'MA_{medium_ma}'].shift(2).values, df[f'MA_{long_ma}'].shift(1).values).astype('int8')
+
+    # MA price cross
+    # parameters: prev close, prev prev close, prev ma, prev ma
+    MAs = [7, 21, 50, 200]
+    for ma in MAs:
+        df.loc[start_idx:, f'MA_Cross_price_with_long_{ma}'] = check_price_ma_crossover_long(df['close'].shift(1).values, df['close'].shift(2).values, df[f'MA_{ma}'].shift(1).values, df[f'MA_{ma}'].shift(2).values).astype('int8')
+        df.loc[start_idx:, f'MA_Cross_price_with_short_{ma}'] = check_price_ma_crossover_short(df['close'].shift(1).values, df['close'].shift(2).values, df[f'MA_{ma}'].shift(1).values, df[f'MA_{ma}'].shift(2).values).astype('int8')
+
+
+    # Range
+    period = [75, 200, 500]
+    touches = [3, 4, 5]
+    slack_div = [5, 10, 15]
+    rejection_multi = [0.5, 1.0, 1.5]
+    strategies = ['SR', 'Breakout', 'Fakeout'] 
+    for r in rejection_multi:
+        for s in slack_div:
+            for t in touches:
+                for p in period:
+                    config_id = f"SR{p}_{t}_{s}_{r}"
+                    upper_col = f"upper_{config_id}"
+                    lower_col = f"lower_{config_id}"
+
+                    strategy = 'SR'
+                    # check_sr_long(prev_lower_sr, prev_close, prev_ATR):
+                    df.loc[start_idx:, f'{strategy}_long_{config_id}'] = check_sr_long(df[lower_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
+                    df.loc[start_idx:, f'{strategy}_short_{config_id}'] = check_sr_short(df[upper_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
+                    
+                    strategy = 'Breakout'
+                    # check_breakout_long(prev_upper_sr, prev_close, prev_ATR):
+                    df.loc[start_idx:, f'{strategy}_long_{config_id}'] = check_breakout_long(df[upper_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
+                    df.loc[start_idx:, f'{strategy}_short_{config_id}'] = check_breakout_short(df[lower_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
+                    
+                    strategy = 'Fakeout'
+                    # check_fakeout_long(prev_rates, current_sr_buy_decision):
+                    # rates = last 4 candles, current_sr_buy_decision = SR buy decision
+                    # Define the number of candles to look back
+                    lookback = 4
+
+                    # Apply the function using a rolling window
+                    df[f'{strategy}_long_{config_id}'] = df.rolling(window=lookback).apply(
+                        lambda window: check_fakeout_long(window, window['current_sr_buy_decision'].iloc[-1]),
+                        raw=False
+                    ).astype('int8')
+                    df[f'{strategy}_short_{config_id}'] = df.rolling(window=lookback).apply(
+                        lambda window: check_fakeout_short(window, window['current_sr_sell_decision'].iloc[-1]),
+                        raw=False
+                    ).astype('int8')
+
+    # Bars Trend
+    # check_bars_trend_long(prev_rates): - prev_rates = will be called with last 20, 50 and 100 rates
+    # to send last 20, 50 and 100 rates, we will use the rolling window function
+    for period in [20, 50, 100]:
+        df[f'Bars_Trend_long_{period}'] = df.rolling(window=period).apply(
+            lambda window: check_bars_trend_long(window),
+            raw=False
+        ).astype('int8')
+        df[f'Bars_Trend_short_{period}'] = df.rolling(window=period).apply(
+            lambda window: check_bars_trend_short(window),
+            raw=False
+        ).astype('int8')
+
+
+
+
+
+                        
+
+
+def calculate_all_targets(df, pip):
+    pass
+    #TODO: Implement this function
+    feature_targets_bars = [5, 20, 50, 100]
+    feature_targets_params = ['max_price_change', 'min_price_change', 'max_min_price_ratio','min_max_price_ratio' ,  'above_price_area', 'below_price_area' , 'above_below_price_area_ratio' , 'below_above_price_area_ratio']
 
 def process_symbol_timeframe(args):
     symbol, tf_name, output_dir = args
@@ -818,9 +1002,16 @@ def process_symbol_timeframe(args):
         calculate_all_indicators(df, pip)
 
     # SR
-    if tf_name in ['M15', 'M30', 'H1', 'H4', 'D1', 'W1']:
         print(f"    Calculating SR levels for {symbol} {tf_name}, time is {datetime.now()}")
         calculate_all_sr_levels(df)
+
+    # Indicator_decisions
+        print(f"    Calculating indicator decisions for {symbol} {tf_name}, time is {datetime.now()}")
+        calculate_all_indicator_decisions(df)
+    
+    # Targets
+        print(f"    Calculating targets for {symbol} {tf_name}, time is {datetime.now()}")
+        calculate_all_targets(df, pip)
 
     # Patterns
     print(f"    Calculating patterns for {symbol} {tf_name}, time is {datetime.now()}")

@@ -67,14 +67,14 @@ def check_bb_over_short(prev_cndle_close, prev_prev_candle_close, prev_middle_ba
 #TODO: need to call for multiple lookback periods (7vs21vs50, 21vs50vs200)
 def check_ma_crossover_long(prev_short_ma, prev_prev_short_ma, prev_medium_ma,prev_prev_medium_ma, prev_long_ma  ):
     """
-    Determine trade decision based on MA_Crossover strategy using precomputed boolean columns.
+    Determine trade decision based on MA_Crossover strategy.
     Buy if short-term MA crosses above medium-term MA and medium-term MA is below long-term MA. - buy into strength after a pullback
     """
     return prev_short_ma > prev_medium_ma and prev_prev_short_ma < prev_prev_medium_ma and prev_medium_ma < prev_long_ma
 
 def check_ma_crossover_short(prev_short_ma, prev_prev_short_ma, prev_medium_ma,prev_prev_medium_ma, prev_long_ma  ):
     """
-    Determine trade decision based on MA_Crossover strategy using precomputed boolean columns.
+    Determine trade decision based on MA_Crossover strategy.
     Sell if short-term MA crosses below medium-term MA and medium-term MA is above long-term MA. - sell into weakness after a rally
     """
     return prev_short_ma < prev_medium_ma and prev_prev_short_ma > prev_prev_medium_ma and prev_medium_ma > prev_long_ma
@@ -83,14 +83,14 @@ def check_ma_crossover_short(prev_short_ma, prev_prev_short_ma, prev_medium_ma,p
 
 def check_price_ma_crossover_long(prev_candle_close, prev_prev_candle_close, prev_ma, prev_prev_ma):
     """
-    Determine trade decision based on Price_MA_Crossover strategy using precomputed boolean columns.
+    Determine trade decision based on Price_MA_Crossover strategy.
     Buy if price crosses above MA from below.
     """
     return prev_candle_close > prev_ma and prev_prev_candle_close < prev_prev_ma
 
 def check_price_ma_crossover_short(prev_candle_close, prev_prev_candle_close, prev_ma, prev_prev_ma):
     """
-    Determine trade decision based on Price_MA_Crossover strategy using precomputed boolean columns.
+    Determine trade decision based on Price_MA_Crossover strategy.
     Sell if price crosses below MA from above.
     """
     return prev_candle_close < prev_ma and prev_prev_candle_close > prev_prev_ma
@@ -230,7 +230,7 @@ def check_fakeout_long(prev_rates, current_sr_buy_decision):
                     return True
         
     return False
-
+#
 def check_fakeout_short(prev_rates, current_sr_sell_decision):
     """
     Determine trade decision based on Fakeout strategy using precomputed boolean columns.
@@ -272,7 +272,7 @@ def check_fakeout_short(prev_rates, current_sr_sell_decision):
 #                                                                   #
 #//////////////////////////// Bars Trend ///////////////////////////#
 
-# will call it with 20 and 100 lookback
+# will call it with 20,50 and 100 lookback
 def check_bars_trend_long(prev_rates):
     """
     Determine trade decision based on accepting reversal after a downtrend.
