@@ -29,7 +29,7 @@ from multiprocessing import Pool, cpu_count
 from MST50.calculate_indicator_decisions import (check_bb_return_long, check_bb_return_short, check_bb_over_long, check_bb_over_short,
                                              check_ma_crossover_long, check_ma_crossover_short, check_price_ma_crossover_long,   check_price_ma_crossover_short,
                                              check_sr_long, check_sr_short, check_breakout_long, check_breakout_short, check_fakeout_long, check_fakeout_short,
-                                             check_bars_trend_long, check_bars_trend_short)
+                                             check_bars_trend_long, check_bars_trend_short, check_bb_with_long, check_bb_with_short)
 
 # Recalculation Flags (Set to True to force full recalculation)
 FORCE_RECALC_INDICATORS = False
@@ -224,7 +224,7 @@ def get_pattern_columns():
     pattern_cols = list(dict.fromkeys(pattern_cols))
     return pattern_cols
 
-def get_inidicator_decision_columns():
+def get_indicator_decision_columns():
     #bb_decisions 
     indicator_cols = []
     periods= [15, 20, 25]
@@ -288,7 +288,7 @@ def get_required_columns():
     indicators = get_indicator_columns()
     sr = get_sr_columns()
     patterns = get_pattern_columns()
-    indicators_decisions = get_inidicator_decision_columns()
+    indicators_decisions = get_indicator_decision_columns()
     targets = get_traget_columns()
     required_columns = list(dict.fromkeys(indicators + sr + patterns + indicators_decisions + targets))
     return required_columns
@@ -841,7 +841,32 @@ def get_relevant_columns_by_timeframe(tf_name):
     relevant_cols = list(dict.fromkeys(relevant_cols))
     return relevant_cols
 
-def calculate_all_indicator_decisions(df, pip, start_idx=0):
+def calculate_all_indicator_decisions(df, start_idx=0):
+    global FORCE_RECALC_INDICATORS_DECISIONS  # Access the global flag
+    indicator_decision_cols = get_indicator_decision_columns()
+
+    if FORCE_RECALC_INDICATORS_DECISIONS:
+        print("    Indicator Decisions: Full recalculation requested. Calculating from start.")
+        start_idx = 0
+    else:
+        incomplete_mask = df[indicator_decision_cols].isna().any(axis=1)
+        if not incomplete_mask.any():
+            print("    Indicator Decisions: Already complete, skipping.")
+            return
+
+        first_incomplete_idx = np.where(incomplete_mask)[0][0]
+        if first_incomplete_idx == 0:
+            print("    Indicator Decisions: No data calculated before, calculating from start.")
+            start_idx = 0
+        else:
+            start_idx = max(first_incomplete_idx - 510, 0)
+            print(f"    Indicator Decisions: Partial missing data, starting from index {start_idx}")
+
+    calculate_indicator_decisions(df, start_idx=start_idx)
+
+
+
+def calculate_indicator_decisions(df, start_idx=0):
     # TODO: Check if this can be optimized (int8 or bool)
     # TODO: Implement this function
     
@@ -858,24 +883,37 @@ def calculate_all_indicator_decisions(df, pip, start_idx=0):
         (25, 2.5, 'BB25_2.5'),
     ]
 
-    for period, deviation, label in bb_settings:
+    for _, _, label in bb_settings:
+        # Define target column names
+        long_col = f'{label}_with_long'
+        short_col = f'{label}_with_short'
+        return_long_col = f'{label}_return_long'
+        return_short_col = f'{label}_return_short'
+        over_long_col = f'{label}_over_long'
+        over_short_col = f'{label}_over_short'
+        # Initialize columns with nullable boolean dtype if they don't exist
+        for col in [long_col, short_col, return_long_col, return_short_col, over_long_col, over_short_col]:
+            if col not in df.columns:
+                df[col] = pd.NA
+            df[col] = df[col].astype('boolean')
+
         # bb with strategy - buy if previous candle closed above upper band, sell if closed below lower band
         # make use of the precalculated {label}_Bool_Above , {label}_Bool_Below columns
-        # since logic is very simple forgo the use of check_bb_with_long and check_bb_with_short functions
-        df.loc[start_idx:, f'{label}_with_long'] = df[f'{label}_Bool_Above'].shift(1).astype('int8')
-        df.loc[start_idx:, f'{label}_with_short'] = df[f'{label}_Bool_Below'].shift(1).astype('int8')
+        df.loc[start_idx:, f'{label}_with_long'] = check_bb_with_long(df[f'{label}_Bool_Above'].shift(1).values)
+        df.loc[start_idx:, f'{label}_with_short'] = check_bb_with_short(df[f'{label}_Bool_Below'].shift(1).values)
+
 
         # bb return_long and return_short
         # use the check_bb_return_long , and check_bb_return_short functions
         # parameters: previous bool below/above, previous previous bool below/above - i.e. last and last last bool below/above
-        df.loc[start_idx:, f'{label}_return_long'] = check_bb_return_long(df[f'{label}_Bool_Below'].shift(1).values, df[f'{label}_Bool_Below'].shift(2).values).astype('int8') 
-        df.loc[start_idx:, f'{label}_return_short'] = check_bb_return_short(df[f'{label}_Bool_Above'].shift(1).values, df[f'{label}_Bool_Above'].shift(2).values).astype('int8')
+        df.loc[start_idx:, f'{label}_return_long'] = check_bb_return_long(df[f'{label}_Bool_Below'].shift(1).values, df[f'{label}_Bool_Below'].shift(2).values) 
+        df.loc[start_idx:, f'{label}_return_short'] = check_bb_return_short(df[f'{label}_Bool_Above'].shift(1).values, df[f'{label}_Bool_Above'].shift(2).values)
 
         # bb over long and short
         # use the check_bb_over_long , and check_bb_over_long functions
         # parameters: prev close, prev prev close, prev middle band, prev prev middle band
-        df.loc[start_idx:, f'{label}_over_long'] = check_bb_over_long(df['close'].shift(1).values, df['close'].shift(2).values, df[f'{label}_Middle'].shift(1).values, df[f'{label}_Middle'].shift(2).values).astype('int8')
-        df.loc[start_idx:, f'{label}_over_short'] = check_bb_over_short(df['close'].shift(1).values, df['close'].shift(2).values, df[f'{label}_Middle'].shift(1).values, df[f'{label}_Middle'].shift(2).values).astype('int8')
+        df.loc[start_idx:, f'{label}_over_long'] = check_bb_over_long(df['close'].shift(1).values, df['close'].shift(2).values, df[f'{label}_Middle'].shift(1).values, df[f'{label}_Middle'].shift(2).values)
+        df.loc[start_idx:, f'{label}_over_short'] = check_bb_over_short(df['close'].shift(1).values, df['close'].shift(2).values, df[f'{label}_Middle'].shift(1).values, df[f'{label}_Middle'].shift(2).values)
 
     # MA cross
 
@@ -884,20 +922,74 @@ def calculate_all_indicator_decisions(df, pip, start_idx=0):
     # for long:     Buy if short-term MA crosses above medium-term MA and medium-term MA is below long-term MA. - buy into strength after a pullback
     # for short:    Sell if short-term MA crosses below medium-term MA and medium-term MA is above long-term MA. - sell into weakness after a bounce
     settings = ['7vs21vs50' , '21vs50vs200']
+
     for setting in settings:
+
+        long_col = f'MA_Cross_with_long_{setting}'
+        short_col = f'MA_Cross_with_short_{setting}'
+        
+        # Initialize columns
+        for col in [long_col, short_col]:
+            if col not in df.columns:
+                df[col] = pd.NA
+            df[col] = df[col].astype('boolean')
+        
+        # Assign boolean values
+        df.loc[start_idx:, long_col] = check_ma_crossover_long(
+            df[f'MA_{int(setting.split("vs")[0])}'].shift(1).values,
+            df[f'MA_{int(setting.split("vs")[0])}'].shift(2).values,
+            df[f'MA_{int(setting.split("vs")[1])}'].shift(1).values,
+            df[f'MA_{int(setting.split("vs")[1])}'].shift(2).values,
+            df[f'MA_{int(setting.split("vs")[2])}'].shift(1).values
+        )
+        df.loc[start_idx:, short_col] = check_ma_crossover_short(
+            df[f'MA_{int(setting.split("vs")[0])}'].shift(1).values,
+            df[f'MA_{int(setting.split("vs")[0])}'].shift(2).values,
+            df[f'MA_{int(setting.split("vs")[1])}'].shift(1).values,
+            df[f'MA_{int(setting.split("vs")[1])}'].shift(2).values,
+            df[f'MA_{int(setting.split("vs")[2])}'].shift(1).values
+        )
+
         short_ma, medium_ma, long_ma = setting.split('vs')
         short_ma = int(short_ma)
         medium_ma = int(medium_ma)
         long_ma = int(long_ma)
-        df.loc[start_idx:, f'MA_Cross_with_long_{setting}'] = check_ma_crossover_long(df[f'MA_{short_ma}'].shift(1).values, df[f'MA_{short_ma}'].shift(2).values, df[f'MA_{medium_ma}'].shift(1).values, df[f'MA_{medium_ma}'].shift(2).values, df[f'MA_{long_ma}'].shift(1).values).astype('int8')
-        df.loc[start_idx:, f'MA_Cross_with_short_{setting}'] = check_ma_crossover_short(df[f'MA_{short_ma}'].shift(1).values, df[f'MA_{short_ma}'].shift(2).values, df[f'MA_{medium_ma}'].shift(1).values, df[f'MA_{medium_ma}'].shift(2).values, df[f'MA_{long_ma}'].shift(1).values).astype('int8')
+        df.loc[start_idx:, f'MA_Cross_with_long_{setting}'] = check_ma_crossover_long(df[f'MA_{short_ma}'].shift(1).values, df[f'MA_{short_ma}'].shift(2).values, df[f'MA_{medium_ma}'].shift(1).values, df[f'MA_{medium_ma}'].shift(2).values, df[f'MA_{long_ma}'].shift(1).values)
+        df.loc[start_idx:, f'MA_Cross_with_short_{setting}'] = check_ma_crossover_short(df[f'MA_{short_ma}'].shift(1).values, df[f'MA_{short_ma}'].shift(2).values, df[f'MA_{medium_ma}'].shift(1).values, df[f'MA_{medium_ma}'].shift(2).values, df[f'MA_{long_ma}'].shift(1).values)
 
     # MA price cross
     # parameters: prev close, prev prev close, prev ma, prev ma
     MAs = [7, 21, 50, 200]
     for ma in MAs:
-        df.loc[start_idx:, f'MA_Cross_price_with_long_{ma}'] = check_price_ma_crossover_long(df['close'].shift(1).values, df['close'].shift(2).values, df[f'MA_{ma}'].shift(1).values, df[f'MA_{ma}'].shift(2).values).astype('int8')
-        df.loc[start_idx:, f'MA_Cross_price_with_short_{ma}'] = check_price_ma_crossover_short(df['close'].shift(1).values, df['close'].shift(2).values, df[f'MA_{ma}'].shift(1).values, df[f'MA_{ma}'].shift(2).values).astype('int8')
+
+        long_col = f'MA_Cross_price_with_long_{ma}'
+        short_col = f'MA_Cross_price_with_short_{ma}'
+        
+        # Initialize columns
+        for col in [long_col, short_col]:
+            if col not in df.columns:
+                df[col] = pd.NA
+            df[col] = df[col].astype('boolean')
+        
+        # Assign boolean values
+        df.loc[start_idx:, long_col] = check_price_ma_crossover_long(
+            df['close'].shift(1).values,
+            df['close'].shift(2).values,
+            df[f'MA_{ma}'].shift(1).values,
+            df[f'MA_{ma}'].shift(2).values
+        )
+        df.loc[start_idx:, short_col] = check_price_ma_crossover_short(
+            df['close'].shift(1).values,
+            df['close'].shift(2).values,
+            df[f'MA_{ma}'].shift(1).values,
+            df[f'MA_{ma}'].shift(2).values
+        )
+        
+        df.loc[start_idx:, f'MA_Cross_price_with_long_{ma}'] = check_price_ma_crossover_long(df['close'].shift(1).values, df['close'].shift(2).values, df[f'MA_{ma}'].shift(1).values, df[f'MA_{ma}'].shift(2).values)
+        df.loc[start_idx:, f'MA_Cross_price_with_short_{ma}'] = check_price_ma_crossover_short(df['close'].shift(1).values, df['close'].shift(2).values, df[f'MA_{ma}'].shift(1).values, df[f'MA_{ma}'].shift(2).values)
+        #Ensure Columns Are of Boolean Type:
+        df[f'MA_Cross_price_with_long_{ma}'] = df[f'MA_Cross_price_with_long_{ma}'].astype(bool)
+        df[f'MA_Cross_price_with_short_{ma}'] = df[f'MA_Cross_price_with_short_{ma}'].astype(bool)
 
 
     # Range
@@ -910,132 +1002,230 @@ def calculate_all_indicator_decisions(df, pip, start_idx=0):
         for s in slack_div:
             for t in touches:
                 for p in period:
+                # Define column names
                     config_id = f"SR{p}_{t}_{s}_{r}"
-                    upper_col = f"upper_{config_id}"
-                    lower_col = f"lower_{config_id}"
+                    for strategy in strategies:
+                        long_col = f'{strategy}_long_{config_id}'
+                        short_col = f'{strategy}_short_{config_id}'
+                        
+                        # Initialize columns
+                        for col in [long_col, short_col]:
+                            if col not in df.columns:
+                                df[col] = pd.NA
+                            df[col] = df[col].astype('boolean')
+                    
+                    # Assign boolean values for SR and Breakout
+                    upper_col = f"upper_SR{p}_{t}_{s}_{r}"
+                    lower_col = f"lower_SR{p}_{t}_{s}_{r}"
 
                     strategy = 'SR'
                     # check_sr_long(prev_lower_sr, prev_close, prev_ATR):
-                    df.loc[start_idx:, f'{strategy}_long_{config_id}'] = check_sr_long(df[lower_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
-                    df.loc[start_idx:, f'{strategy}_short_{config_id}'] = check_sr_short(df[upper_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
+                    df.loc[start_idx:, f'{strategy}_long_{config_id}'] = check_sr_long(df[lower_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values)
+                    df.loc[start_idx:, f'{strategy}_short_{config_id}'] = check_sr_short(df[upper_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values)
                     
                     strategy = 'Breakout'
                     # check_breakout_long(prev_upper_sr, prev_close, prev_ATR):
-                    df.loc[start_idx:, f'{strategy}_long_{config_id}'] = check_breakout_long(df[upper_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
-                    df.loc[start_idx:, f'{strategy}_short_{config_id}'] = check_breakout_short(df[lower_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values).astype('int8')
+                    df.loc[start_idx:, f'{strategy}_long_{config_id}'] = check_breakout_long(df[upper_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values)
+                    df.loc[start_idx:, f'{strategy}_short_{config_id}'] = check_breakout_short(df[lower_col].shift(1).values, df['close'].shift(1).values, df['ATR'].shift(1).values)
                     
+
                     strategy = 'Fakeout'
                     # check_fakeout_long(prev_rates, current_sr_buy_decision):
                     # rates = last 4 candles, current_sr_buy_decision = SR buy decision
                     # Define the number of candles to look back
                     lookback = 4
+                    # Fakeout Long
+                    df.loc[start_idx:, f'Fakeout_long_{config_id}'] = check_fakeout_long(
+                        df['low'].shift(1).values,
+                        df['low'].shift(2).values,
+                        df['low'].shift(3).values,
+                        df['low'].shift(4).values,
+                        df[lower_col].shift(1).values,
+                        df[f'SR_long_{config_id}'].values,
+                        df['ATR'].shift(1).values
+                    )
 
-                    # Apply the function using a rolling window
-                    df[f'{strategy}_long_{config_id}'] = df.rolling(window=lookback).apply(
-                        lambda window: check_fakeout_long(window, window['current_sr_buy_decision'].iloc[-1]),
-                        raw=False
-                    ).astype('int8')
-                    df[f'{strategy}_short_{config_id}'] = df.rolling(window=lookback).apply(
-                        lambda window: check_fakeout_short(window, window['current_sr_sell_decision'].iloc[-1]),
-                        raw=False
-                    ).astype('int8')
-
+                    # Fakeout Short
+                    df.loc[start_idx:, f'Fakeout_short_{config_id}'] = check_fakeout_short(
+                        df['high'].shift(1).values,
+                        df['high'].shift(2).values,
+                        df['high'].shift(3).values,
+                        df['high'].shift(4).values,
+                        df[upper_col].shift(1).values,
+                        df[f'SR_short_{config_id}'].values,
+                        df['ATR'].shift(1).values
+                    )
+                    #Ensure Columns Are of Boolean Type:
+                    df[f'SR_long_{config_id}'] = df[f'SR_long_{config_id}'].astype(bool)
+                    df[f'SR_short_{config_id}'] = df[f'SR_short_{config_id}'].astype(bool)
+                    df[f'Breakout_long_{config_id}'] = df[f'Breakout_long_{config_id}'].astype(bool)
+                    df[f'Breakout_short_{config_id}'] = df[f'Breakout_short_{config_id}'].astype(bool)
+                    df[f'Fakeout_long_{config_id}'] = df[f'Fakeout_long_{config_id}'].astype(bool)
+                    df[f'Fakeout_short_{config_id}'] = df[f'Fakeout_short_{config_id}'].astype(bool)
     # Bars Trend
     # check_bars_trend_long(prev_rates): - prev_rates = will be called with last 20, 50 and 100 rates
-    # to send last 20, 50 and 100 rates, we will use the rolling window function
+    # to send last 20, 50 and 100 rates, we will use the rolling window function - with close prices
     for period in [20, 50, 100]:
-        df[f'Bars_Trend_long_{period}'] = df.rolling(window=period).apply(
-            lambda window: check_bars_trend_long(window),
-            raw=False
-        ).astype('int8')
-        df[f'Bars_Trend_short_{period}'] = df.rolling(window=period).apply(
-            lambda window: check_bars_trend_short(window),
-            raw=False
-        ).astype('int8')
+        df[f'Bars_Trend_long_{period}'] = df['close'].rolling(window=period).apply(
+            check_bars_trend_long, raw=True
+        )
+        df[f'Bars_Trend_short_{period}'] = df['close'].rolling(window=period).apply(
+            check_bars_trend_short, raw=True
+        )
+        
+        # Convert to boolean
+        df[f'Bars_Trend_long_{period}'] = df[f'Bars_Trend_long_{period}'].astype(bool)
+        df[f'Bars_Trend_short_{period}'] = df[f'Bars_Trend_short_{period}'].astype(bool)
 
 
 
-def calculate_area_above(open_price, highs, lows):
+
+@njit
+def calculate_area_above_numba(open_price, highs, lows):
     """
-    Function to calculate the area above the open price
+    Function to calculate the area above the open price using Numba
     params:
         open_price: open price of the candle
         highs: high prices of the candles (array)
         lows: low prices of the candles (array)
     returns:
         area_above: area above the open price
-
     """
-    area_above = 0
-    for high, low in zip(highs, lows):
-        if low > open_price:
-            area_above += high
-        elif high > open_price:
-            above = high - open_price
-            below = open_price - low
-            ratio = above / (above + below)
-            area_above += high * ratio
-    area_above = (area_above / len(highs)) / open_price # normalize by dividing by the number of candles and open price
-    area_above = area_above * 100 # convert to percentage
-    area_above = max(0.0001, area_above) # make sure area is not 0
+    area_above = 0.0
+    n = len(highs)
+    for i in range(n):
+        if lows[i] > open_price:
+            area_above += highs[i]
+        elif highs[i] > open_price:
+            above = highs[i] - open_price
+            below = open_price - lows[i]
+            if (above + below) != 0:
+                ratio = above / (above + below)
+            else:
+                ratio = 0.0
+            area_above += highs[i] * ratio
+    if n > 0:
+        area_above = (area_above / n) / open_price
+    else:
+        area_above = 0.0
+    area_above = area_above * 100
+    if area_above < 0.0001:
+        area_above = 0.0001
     return area_above
 
-
-def calculate_area_below(open_price, highs, lows):
+@njit
+def calculate_area_below_numba(open_price, highs, lows):
     """
-    Function to calculate the area below the open price
+    Function to calculate the area below the open price using Numba
     params:
         open_price: open price of the candle
         highs: high prices of the candles (array)
         lows: low prices of the candles (array)
-    returns:
-        area_below: area below the open price
-
     """
-    area_below = 0
-    for high, low in zip(highs, lows):
-        if high < open_price:
-            area_below += low
-        elif low < open_price:
-            above = high - open_price
-            below = open_price - low
-            ratio = below / (above + below)
-            area_below += low * ratio
-    area_below = (area_below / len(lows)) / open_price # normalize by dividing by the number of candles and open price
-    area_below = area_below * 100 # convert to percentage
-    area_below = max(0.0001, area_below) # make sure area is not 0
-    return area_below                       
+    area_below = 0.0
+    n = len(highs)
+    for i in range(n):
+        if highs[i] < open_price:
+            area_below += lows[i]
+        elif lows[i] < open_price:
+            above = highs[i] - open_price
+            below = open_price - lows[i]
+            if (above + below) != 0:
+                ratio = below / (above + below)
+            else:
+                ratio = 0.0
+            area_below += lows[i] * ratio
+    if n > 0:
+        area_below = (area_below / n) / open_price
+    else:
+        area_below = 0.0
+    area_below = area_below * 100
+    if area_below < 0.0001:
+        area_below = 0.0001
+    return area_below
 
 
-def calculate_all_targets(df, pip, start_idx=0):
-    pass
-    #TODO: Implement this function
+def calculate_all_targets(df, pip):
+    global FORCE_RECALC_TARGETS  # Access the global flag
+    feature_targets_cols = get_traget_columns()
+
+    if FORCE_RECALC_TARGETS:
+        print("    Targets: Full recalculation requested. Calculating from start.")
+        start_idx = 0
+
+    else:
+        incomplete_mask = df[feature_targets_cols].isna().any(axis=1)
+        if not incomplete_mask.any():
+            print("    Targets: Already complete, skipping.")
+            return
+
+        first_incomplete_idx = np.where(incomplete_mask)[0][0]
+        if first_incomplete_idx == 0:
+            print("    Targets: No data calculated before, calculating from start.")
+            start_idx = 0
+        else:
+            start_idx = max(first_incomplete_idx - 510, 0)
+            print(f"    Targets: Partial missing data, starting from index {start_idx}")
+
+    calculate_targets(df, start_idx=start_idx, pip=pip)
+
+
+
+
+def calculate_targets(df, start_idx=0, pip=0.0001):
     feature_targets_bars = [5, 20, 50, 100]
-    feature_targets_params = ['max_price_change', 'min_price_change', 'max_min_price_ratio','min_max_price_ratio' ,  'above_price_area', 'below_price_area' , 'above_below_price_area_ratio' , 'below_above_price_area_ratio']
-    for bars in feature_targets_bars:
-        #max price change =  (highest high in the next bars - current open) / current open
-        df.loc[start_idx:, f'max_price_change_{bars}'] = (df['high'].rolling(window=5).max().shift(-4) - df['open']+pip) / df['open'] #pip added to avoid open = high and so 0% change
-        #min price change =  (lowest low in the next bars - current open) / current open
-        df.loc[start_idx:, f'min_price_change_{bars}'] = (df['low'].rolling(window=5).min().shift(-4) - df['open']-pip) / df['open'] #pip subtracted to avoid open = low and so 0% change
-        #max min price ratio = max price change / min price change
-        df.loc[start_idx:, f'max_min_price_ratio_{bars}'] = df[f'max_price_change_{bars}'] / df[f'min_price_change_{bars}']
-        #min max price ratio = min price change / max price change
-        df.loc[start_idx:, f'min_max_price_ratio_{bars}'] = df[f'min_price_change_{bars}'] / df[f'max_price_change_{bars}']
-        #area above open price
-        df.loc[start_idx:, f'above_price_area_{bars}'] = df.rolling(window=bars).apply(
-            lambda window: calculate_area_above(window['open'].iloc[0], window['high'].values, window['low'].values),
-            raw=False
-        )
-        #area below open price
-        df.loc[start_idx:, f'below_price_area_{bars}'] = df.rolling(window=bars).apply(
-            lambda window: calculate_area_below(window['open'].iloc[0], window['high'].values, window['low'].values),
-            raw=False
-        )
-        #above below price area ratio = area above open price / area below open price
-        df.loc[start_idx:, f'above_below_price_area_ratio_{bars}'] = df[f'above_price_area_{bars}'] / df[f'below_price_area_{bars}']
-        #below above price area ratio = area below open price / area above open price
-        df.loc[start_idx:, f'below_above_price_area_ratio_{bars}'] = df[f'below_price_area_{bars}'] / df[f'above_price_area_{bars}']
+    feature_targets_params = [
+        'max_price_change', 'min_price_change',
+        'max_min_price_ratio', 'min_max_price_ratio',
+        'above_price_area', 'below_price_area',
+        'above_below_price_area_ratio', 'below_above_price_area_ratio'
+    ]
 
+    # Ensure column order
+    df[['open', 'high', 'low']] = df[['open', 'high', 'low']].reindex(columns=['open', 'high', 'low'])
+
+    for bars in feature_targets_bars:
+        # Max price change
+        df.loc[start_idx:, f'max_price_change_{bars}'] = (
+            (df['high'].rolling(window=bars).max().shift(-(bars - 1)) - df['open'] + pip) / df['open']
+        )
+
+        # Min price change
+        df.loc[start_idx:, f'min_price_change_{bars}'] = (
+            (df['low'].rolling(window=bars).min().shift(-(bars - 1)) - df['open'] - pip) / df['open']
+        )
+
+        # Max-Min price ratio
+        df.loc[start_idx:, f'max_min_price_ratio_{bars}'] = (
+            df[f'max_price_change_{bars}'] / df[f'min_price_change_{bars}']
+        )
+
+        # Min-Max price ratio
+        df.loc[start_idx:, f'min_max_price_ratio_{bars}'] = (
+            df[f'min_price_change_{bars}'] / df[f'max_price_change_{bars}']
+        )
+
+        # Area above open price
+        df.loc[start_idx:, f'above_price_area_{bars}'] = df[['open', 'high', 'low']].rolling(window=bars).apply(
+            lambda window_flat: calculate_area_above_numba(window_flat[0], window_flat[1::3], window_flat[2::3]),
+            raw=True
+        )
+
+        # Area below open price
+        df.loc[start_idx:, f'below_price_area_{bars}'] = df[['open', 'high', 'low']].rolling(window=bars).apply(
+            lambda window_flat: calculate_area_below_numba(window_flat[0], window_flat[1::3], window_flat[2::3]),
+            raw=True
+        )
+
+        # Above-Below price area ratio
+        df.loc[start_idx:, f'above_below_price_area_ratio_{bars}'] = (
+            df[f'above_price_area_{bars}'] / df[f'below_price_area_{bars}']
+        )
+
+        # Below-Above price area ratio
+        df.loc[start_idx:, f'below_above_price_area_ratio_{bars}'] = (
+            df[f'below_price_area_{bars}'] / df[f'above_price_area_{bars}']
+        )
 
 
 
